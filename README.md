@@ -85,6 +85,14 @@ npm run typecheck
 npm run build
 ```
 
+## CI
+
+`main`・`develop`へのpushとPull RequestでGitHub Actionsの通常CIが動きます。
+
+- Rust: `fmt`、Clippy、ワークスペーステスト
+- Vue: 依存関係の固定インストール、型チェック、本番ビルド
+- Packaging: インストール・リリース用シェルの構文確認
+
 ## GitHubからインストール
 
 `v0.1.0`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け

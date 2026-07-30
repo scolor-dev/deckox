@@ -113,6 +113,15 @@ npm run typecheck
 npm run build</code></pre>
       </section>
 
+      <section class="section" aria-labelledby="ci-title">
+        <h2 id="ci-title">通常CI</h2>
+        <p><code>main</code>・<code>develop</code>へのpushとPull Requestで、GitHub Actionsの<code>CI</code> Workflowが動作します。</p>
+        <dl class="definition-list">
+          <dt>Rust</dt><dd>フォーマット、Clippy、ワークスペーステスト、インストール用シェルの構文を確認</dd>
+          <dt>Vue</dt><dd><code>npm ci</code>で依存関係を固定し、型チェックと本番ビルドを実行</dd>
+        </dl>
+      </section>
+
       <section class="section" aria-labelledby="docker-title">
         <h2 id="docker-title">Docker Compose</h2>
         <pre><code>docker compose up --build</code></pre>
