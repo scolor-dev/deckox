@@ -129,14 +129,12 @@ async fn health() -> Json<HealthResponse> {
 async fn agent_status() -> Json<AgentStatus> {
     let hostname = tokio::fs::read_to_string("/etc/hostname")
         .await
-        .map(|value| value.trim().to_owned())
-        .unwrap_or_else(|_| "unknown".to_owned());
+        .map_or_else(|_| "unknown".to_owned(), |value| value.trim().to_owned());
 
     let uptime_seconds = tokio::fs::read_to_string("/proc/uptime")
         .await
         .ok()
-        .and_then(|value| value.split_whitespace().next()?.parse::<f64>().ok())
-        .map(|seconds| seconds as u64);
+        .and_then(|value| system::parse_uptime(&value).ok());
 
     Json(AgentStatus {
         status: "running".to_owned(),

@@ -77,10 +77,12 @@ npm run build
 ```bash
 cargo fmt --all --check
 cargo test --workspace
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets --all-features --locked -- \
+  -D warnings -W clippy::pedantic -W clippy::nursery
 
 cd apps/web
 npm ci
+npm run lint
 npm run typecheck
 npm run build
 ```
@@ -89,8 +91,8 @@ npm run build
 
 `main`・`develop`へのpushとPull RequestでGitHub Actionsの通常CIが動きます。
 
-- Rust: `fmt`、Clippy、ワークスペーステスト
-- Vue: 依存関係の固定インストール、型チェック、本番ビルド
+- Rust: `fmt`、厳格なClippy、ワークスペーステスト
+- Vue: 依存関係の固定インストール、ESLint、型チェック、本番ビルド
 - Packaging: インストール・リリース用シェルの構文確認
 
 ## GitHubからインストール

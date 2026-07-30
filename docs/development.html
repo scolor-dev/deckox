@@ -105,10 +105,12 @@ allowed = [
         <h2 id="test-title">検証コマンド</h2>
         <pre><code>cargo fmt --all --check
 cargo test --workspace
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets --all-features --locked -- \
+  -D warnings -W clippy::pedantic -W clippy::nursery
 
 cd apps/web
 npm ci
+npm run lint
 npm run typecheck
 npm run build</code></pre>
       </section>
@@ -117,8 +119,8 @@ npm run build</code></pre>
         <h2 id="ci-title">通常CI</h2>
         <p><code>main</code>・<code>develop</code>へのpushとPull Requestで、GitHub Actionsの<code>CI</code> Workflowが動作します。</p>
         <dl class="definition-list">
-          <dt>Rust</dt><dd>フォーマット、Clippy、ワークスペーステスト、インストール用シェルの構文を確認</dd>
-          <dt>Vue</dt><dd><code>npm ci</code>で依存関係を固定し、型チェックと本番ビルドを実行</dd>
+          <dt>Rust</dt><dd>フォーマット、<code>pedantic</code>・<code>nursery</code>を含むClippy、ワークスペーステスト、インストール用シェルの構文を確認</dd>
+          <dt>Vue</dt><dd><code>npm ci</code>で依存関係を固定し、ESLint、型チェック、本番ビルドを実行</dd>
         </dl>
       </section>
 

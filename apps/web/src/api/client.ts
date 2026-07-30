@@ -81,12 +81,11 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  headers.set("Accept", "application/json");
   const response = await fetch(path, {
     ...init,
-    headers: {
-      Accept: "application/json",
-      ...init?.headers,
-    },
+    headers,
   });
   const body = await response.json().catch(() => null) as
     | { code?: string; message?: string }
@@ -94,7 +93,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     throw new ApiError(
-      body?.message ?? `APIリクエストに失敗しました (${response.status})`,
+      body?.message ?? `APIリクエストに失敗しました (${String(response.status)})`,
       response.status,
       body?.code,
     );
@@ -128,8 +127,7 @@ export function formatUptime(seconds: number | null | undefined): string {
   const days = Math.floor(seconds / 86_400);
   const hours = Math.floor((seconds % 86_400) / 3_600);
   const minutes = Math.floor((seconds % 3_600) / 60);
-  if (days > 0) return `${days}日 ${hours}時間`;
-  if (hours > 0) return `${hours}時間 ${minutes}分`;
-  return `${minutes}分`;
+  if (days > 0) return `${String(days)}日 ${String(hours)}時間`;
+  if (hours > 0) return `${String(hours)}時間 ${String(minutes)}分`;
+  return `${String(minutes)}分`;
 }
-

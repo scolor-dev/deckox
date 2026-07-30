@@ -78,7 +78,7 @@ mod tests {
 
         assert_eq!(mounts.len(), 2);
         assert_eq!(mounts[0].filesystem_type, "ext4");
-        assert_eq!(mounts[0].usage_percent, 40.0);
+        assert!((mounts[0].usage_percent - 40.0).abs() < f64::EPSILON);
         assert_eq!(mounts[1].mount_point, "/boot/efi");
     }
 }

@@ -72,21 +72,42 @@ onMounted(refresh);
     <header class="view-header">
       <div>
         <h1>サービス</h1>
-        <p class="subtitle">全{{ services.length }}件のうち{{ runningCount }}件が稼働中</p>
+        <p class="subtitle">
+          全{{ services.length }}件のうち{{ runningCount }}件が稼働中
+        </p>
       </div>
-      <button class="button" type="button" :disabled="loading" @click="refresh">
+      <button
+        class="button"
+        type="button"
+        :disabled="loading"
+        @click="refresh"
+      >
         {{ loading ? "読込中…" : "更新" }}
       </button>
     </header>
 
-    <div v-if="error" class="notice error">{{ error }}</div>
-    <div v-if="message" class="notice success">{{ message }}</div>
+    <div
+      v-if="error"
+      class="notice error"
+    >
+      {{ error }}
+    </div>
+    <div
+      v-if="message"
+      class="notice success"
+    >
+      {{ message }}
+    </div>
 
     <section class="table-panel">
       <div class="table-toolbar">
         <label class="search">
           <span class="sr-only">サービスを検索</span>
-          <input v-model="query" type="search" placeholder="サービス名または説明を検索">
+          <input
+            v-model="query"
+            type="search"
+            placeholder="サービス名または説明を検索"
+          >
         </label>
         <span class="table-count">{{ filteredServices.length }}件</span>
       </div>
@@ -95,9 +116,26 @@ onMounted(refresh);
         <table>
           <thead><tr><th>サービス</th><th>状態</th><th>自動起動</th><th>操作</th></tr></thead>
           <tbody>
-            <tr v-if="loading && services.length === 0"><td colspan="4" class="empty">サービスを読み込んでいます…</td></tr>
-            <tr v-else-if="filteredServices.length === 0"><td colspan="4" class="empty">該当するサービスはありません。</td></tr>
-            <tr v-for="service in filteredServices" :key="service.id">
+            <tr v-if="loading && services.length === 0">
+              <td
+                colspan="4"
+                class="empty"
+              >
+                サービスを読み込んでいます…
+              </td>
+            </tr>
+            <tr v-else-if="filteredServices.length === 0">
+              <td
+                colspan="4"
+                class="empty"
+              >
+                該当するサービスはありません。
+              </td>
+            </tr>
+            <tr
+              v-for="service in filteredServices"
+              :key="service.id"
+            >
               <td>
                 <strong class="service-name">{{ service.id }}</strong>
                 <small>{{ service.description || "説明なし" }}</small>
@@ -110,12 +148,39 @@ onMounted(refresh);
               </td>
               <td><span class="unit-state">{{ unitStateLabel(service.unit_file_state) }}</span></td>
               <td>
-                <div v-if="service.control_allowed" class="actions">
-                  <button class="action-button" type="button" :disabled="pending !== null || service.active_state === 'active'" @click="runAction(service, 'start')">起動</button>
-                  <button class="action-button" type="button" :disabled="pending !== null || service.active_state !== 'active'" @click="runAction(service, 'restart')">再起動</button>
-                  <button class="action-button danger" type="button" :disabled="pending !== null || service.active_state !== 'active'" @click="runAction(service, 'stop')">停止</button>
+                <div
+                  v-if="service.control_allowed"
+                  class="actions"
+                >
+                  <button
+                    class="action-button"
+                    type="button"
+                    :disabled="pending !== null || service.active_state === 'active'"
+                    @click="runAction(service, 'start')"
+                  >
+                    起動
+                  </button>
+                  <button
+                    class="action-button"
+                    type="button"
+                    :disabled="pending !== null || service.active_state !== 'active'"
+                    @click="runAction(service, 'restart')"
+                  >
+                    再起動
+                  </button>
+                  <button
+                    class="action-button danger"
+                    type="button"
+                    :disabled="pending !== null || service.active_state !== 'active'"
+                    @click="runAction(service, 'stop')"
+                  >
+                    停止
+                  </button>
                 </div>
-                <span v-else class="locked">閲覧のみ</span>
+                <span
+                  v-else
+                  class="locked"
+                >閲覧のみ</span>
               </td>
             </tr>
           </tbody>

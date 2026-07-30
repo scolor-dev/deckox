@@ -200,10 +200,10 @@ async fn proxy_service_request(
             .into_response();
     }
 
-    let path = match action {
-        Some(action) => format!("/v1/services/{service_id}/{action}"),
-        None => format!("/v1/services/{service_id}"),
-    };
+    let path = action.map_or_else(
+        || format!("/v1/services/{service_id}"),
+        |action| format!("/v1/services/{service_id}/{action}"),
+    );
     proxy_agent(client, method, &path).await
 }
 

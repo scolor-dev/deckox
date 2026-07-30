@@ -19,7 +19,7 @@ pub struct AgentResponse {
 }
 
 impl AgentClient {
-    pub fn new(socket_path: PathBuf) -> Self {
+    pub const fn new(socket_path: PathBuf) -> Self {
         Self { socket_path }
     }
 
