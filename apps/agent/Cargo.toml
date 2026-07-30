@@ -8,6 +8,8 @@ license.workspace = true
 [dependencies]
 axum.workspace = true
 deckox-protocol.workspace = true
+hex.workspace = true
+rand.workspace = true
 serde.workspace = true
 tokio.workspace = true
 toml.workspace = true

@@ -8,6 +8,8 @@ use tokio::{
     net::UnixStream,
 };
 
+use crate::request_context::{AGENT_REQUEST_ID_HEADER, RequestId};
+
 #[derive(Clone)]
 pub struct AgentClient {
     socket_path: PathBuf,
@@ -23,7 +25,12 @@ impl AgentClient {
         Self { socket_path }
     }
 
-    pub async fn request(&self, method: &str, path: &str) -> Result<AgentResponse, String> {
+    pub async fn request(
+        &self,
+        method: &str,
+        path: &str,
+        request_id: &RequestId,
+    ) -> Result<AgentResponse, String> {
         let mut stream = tokio::time::timeout(
             Duration::from_secs(2),
             UnixStream::connect(&self.socket_path),
@@ -32,8 +39,10 @@ impl AgentClient {
         .map_err(|_| "agent connection timed out".to_owned())?
         .map_err(|error| format!("agent unavailable: {error}"))?;
 
-        let request =
-            format!("{method} {path} HTTP/1.1\r\nHost: agent\r\nConnection: close\r\n\r\n");
+        let request = format!(
+            "{method} {path} HTTP/1.1\r\nHost: agent\r\n{AGENT_REQUEST_ID_HEADER}: {}\r\nConnection: close\r\n\r\n",
+            request_id.0
+        );
         stream
             .write_all(request.as_bytes())
             .await
@@ -48,8 +57,12 @@ impl AgentClient {
         parse_response(&response)
     }
 
-    pub async fn get_json<T: DeserializeOwned>(&self, path: &str) -> Result<T, String> {
-        let response = self.request("GET", path).await?;
+    pub async fn get_json<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        request_id: &RequestId,
+    ) -> Result<T, String> {
+        let response = self.request("GET", path, request_id).await?;
         if !response.status.is_success() {
             return Err(format!(
                 "Agent API returned HTTP {}",

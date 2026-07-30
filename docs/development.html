@@ -56,9 +56,13 @@ scripts/
         <p>最初のターミナルでAgentを起動します。</p>
         <pre><code>DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
 cargo run --package deckox-agent</code></pre>
-        <p>次のターミナルでServerを起動します。Vueの本番ビルドを配信する場合は<code>DECKOX_WEB_DIR</code>を指定します。</p>
+        <p>開発用パスワードのハッシュを作り、次のターミナルでServerを起動します。Vueの本番ビルドを配信する場合は<code>DECKOX_WEB_DIR</code>を指定します。</p>
+        <pre><code>printf '%s' '開発用パスワード' \
+  | cargo run --quiet --package deckox-server -- hash-password \
+  &gt; /tmp/deckox-admin-password.hash</code></pre>
         <pre><code>DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
 DECKOX_WEB_DIR="$PWD/apps/web/dist" \
+DECKOX_ADMIN_PASSWORD_HASH_FILE=/tmp/deckox-admin-password.hash \
 cargo run --package deckox-server</code></pre>
       </section>
 
@@ -83,6 +87,9 @@ npm run build</code></pre>
             <tr><td><code>DECKOX_AGENT_CONFIG</code></td><td><code>/etc/deckox/agent.toml</code></td><td>Agent</td></tr>
             <tr><td><code>DECKOX_AGENT_SOCKET</code></td><td><code>/run/deckox/agent.sock</code></td><td>Server / Agent</td></tr>
             <tr><td><code>DECKOX_WEB_DIR</code></td><td><code>/usr/local/share/deckox/web</code></td><td>Server</td></tr>
+            <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code></td><td><code>/etc/deckox/admin-password.hash</code></td><td>Server</td></tr>
+            <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH</code></td><td>なし</td><td>Server（開発・コンテナ向け）</td></tr>
+            <tr><td><code>DECKOX_SECURE_COOKIE</code></td><td><code>false</code></td><td>Server。HTTPS終端時に<code>true</code></td></tr>
             <tr><td><code>RUST_LOG</code></td><td>各プロセスの<code>info</code></td><td>Server / Agent</td></tr>
           </tbody>
         </table>
@@ -127,7 +134,7 @@ npm run build</code></pre>
       <section class="section" aria-labelledby="docker-title">
         <h2 id="docker-title">Docker Compose</h2>
         <pre><code>docker compose up --build</code></pre>
-        <p>ComposeはServer–Agent通信とUIを確認するための開発構成です。</p>
+        <p>ComposeはServer–Agent通信とUIを確認するための開発構成です。<code>http://127.0.0.1:8080/</code>を開き、固定の開発用パスワード<code>deckox</code>でログインします。</p>
         <aside class="note warning"><strong>制限:</strong> コンテナ内のAgentはLinuxホストのsystemdを管理できません。本番のLinux管理用途ではsystemdサービスとして導入します。</aside>
       </section>
       <footer class="footer">Deckox Docs · Development</footer>

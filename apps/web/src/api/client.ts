@@ -70,6 +70,10 @@ export interface CommandResult {
   message: string | null;
 }
 
+export interface AuthStatus {
+  authenticated: boolean;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -80,18 +84,26 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  notifyUnauthorized = true,
+): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
   const response = await fetch(path, {
     ...init,
     headers,
+    credentials: "same-origin",
   });
   const body = await response.json().catch(() => null) as
     | { code?: string; message?: string }
     | null;
 
   if (!response.ok) {
+    if (response.status === 401 && notifyUnauthorized) {
+      window.dispatchEvent(new Event("deckox:unauthorized"));
+    }
     throw new ApiError(
       body?.message ?? `APIリクエストに失敗しました (${String(response.status)})`,
       response.status,
@@ -103,6 +115,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  authSession: () => request<AuthStatus>("/api/v1/auth/session", undefined, false),
+  login: (password: string) =>
+    request<AuthStatus>(
+      "/api/v1/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ password }),
+        headers: { "Content-Type": "application/json" },
+      },
+      false,
+    ),
+  logout: () => request<AuthStatus>("/api/v1/auth/logout", { method: "POST" }),
   serverStatus: () => request<ServerStatus>("/api/v1/status"),
   systemInfo: () => request<SystemInfo>("/api/v1/system"),
   systemMetrics: () => request<SystemMetrics>("/api/v1/system/metrics"),

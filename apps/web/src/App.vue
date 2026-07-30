@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { api, type ServerStatus } from "./api/client";
+import LoginView from "./views/LoginView.vue";
 import OverviewView from "./views/OverviewView.vue";
 import ServicesView from "./views/ServicesView.vue";
 import StorageView from "./views/StorageView.vue";
@@ -10,6 +11,8 @@ type Page = "overview" | "services" | "storage";
 const activePage = ref<Page>("overview");
 const status = ref<ServerStatus | null>(null);
 const menuOpen = ref(false);
+const authChecking = ref(true);
+const authenticated = ref(false);
 
 const activeComponent = computed(() => ({
   overview: OverviewView,
@@ -37,11 +40,66 @@ async function refreshStatus() {
   }
 }
 
-onMounted(refreshStatus);
+async function checkAuthentication() {
+  try {
+    const session = await api.authSession();
+    authenticated.value = session.authenticated;
+    if (session.authenticated) await refreshStatus();
+  } catch {
+    authenticated.value = false;
+  } finally {
+    authChecking.value = false;
+  }
+}
+
+function handleAuthenticated() {
+  authenticated.value = true;
+  void refreshStatus();
+}
+
+function handleUnauthorized() {
+  authenticated.value = false;
+  status.value = null;
+  menuOpen.value = false;
+}
+
+async function logout() {
+  try {
+    await api.logout();
+  } finally {
+    handleUnauthorized();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("deckox:unauthorized", handleUnauthorized);
+  void checkAuthentication();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("deckox:unauthorized", handleUnauthorized);
+});
 </script>
 
 <template>
-  <div class="shell">
+  <main
+    v-if="authChecking"
+    class="auth-page"
+  >
+    <p class="auth-loading">
+      認証状態を確認しています…
+    </p>
+  </main>
+
+  <LoginView
+    v-else-if="!authenticated"
+    @authenticated="handleAuthenticated"
+  />
+
+  <div
+    v-else
+    class="shell"
+  >
     <header class="mobile-bar">
       <div class="brand">
         <span class="brand-mark">D</span><span>Deckox</span>
@@ -93,7 +151,14 @@ onMounted(refreshStatus);
         </div>
       </div>
       <div class="sidebar-footer">
-        バージョン {{ status?.version ?? "0.1.0" }}
+        <button
+          class="logout-button"
+          type="button"
+          @click="logout"
+        >
+          ログアウト
+        </button>
+        <span>バージョン {{ status?.version ?? "0.1.0" }}</span>
       </div>
     </aside>
 

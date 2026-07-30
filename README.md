@@ -48,9 +48,14 @@ cargo run --package deckox-server
 試す場合は、両方に同じ一時ソケットを指定します。
 
 ```bash
+printf '%s' '開発用パスワード' \
+  | cargo run --quiet --package deckox-server -- hash-password \
+  > /tmp/deckox-admin-password.hash
+
 DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock cargo run --package deckox-agent
 DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
 DECKOX_WEB_DIR="$PWD/apps/web/dist" \
+DECKOX_ADMIN_PASSWORD_HASH_FILE=/tmp/deckox-admin-password.hash \
 cargo run --package deckox-server
 ```
 
@@ -145,6 +150,19 @@ systemctl status deckox-server deckox-agent
 journalctl -u deckox-server -u deckox-agent -f
 ```
 
+初回インストール時には、ランダムな管理者パスワードがターミナルへ一度だけ
+表示されます。更新時は既存のパスワードが維持されます。パスワードを再設定
+する場合:
+
+```bash
+printf '%s' '新しいパスワード' \
+  | sudo /usr/local/bin/deckox-server hash-password \
+  | sudo tee /etc/deckox/admin-password.hash >/dev/null
+sudo chown root:deckox /etc/deckox/admin-password.hash
+sudo chmod 0640 /etc/deckox/admin-password.hash
+sudo systemctl restart deckox-server
+```
+
 Serverは既定で`127.0.0.1:8080`だけに待ち受けます。別端末から一時的に
 確認する場合は、SSHトンネルを利用します。
 
@@ -171,8 +189,9 @@ Environment=DECKOX_LISTEN_ADDR=192.168.1.21:8080
 sudo systemctl restart deckox-server
 ```
 
-同じLANの端末から`http://192.168.1.21:8080/`を開けます。現在は認証と
-TLSが未実装なので、ルーターのポート転送や外部公開には使用しないでください。
+同じLANの端末から`http://192.168.1.21:8080/`を開き、管理者パスワードで
+ログインできます。TLS終端は未実装なので、信頼できるLANまたはSSHトンネル
+内だけで利用し、ルーターのポート転送や外部公開には使用しないでください。
 
 配置先:
 
@@ -203,6 +222,9 @@ Docker Composeは開発・UI確認用にも利用できます。
 docker compose up --build
 ```
 
+`http://127.0.0.1:8080/`を開き、開発用パスワード`deckox`でログインします。
+これはローカル開発専用の固定値です。
+
 コンテナ内のAgentはLinuxホストのsystemdなどを管理できません。Linux全体を
 管理する本番用途では、systemdサービスとしてインストールしてください。
 
@@ -212,5 +234,7 @@ docker compose up --build
 `deckox-agent`は別プロセスとし、外部TCPポートを公開せずUnixソケットだけで
 Serverと通信します。
 
-現在のAgentは状態取得だけを提供します。今後のシステム操作APIでは、任意の
-シェルコマンドを受け付けず、許可済みの型付き操作だけを実装します。
+Serverは単一管理者のArgon2idパスワード認証と、12時間のメモリ内セッション
+を提供します。CookieはHttpOnly・SameSite=Strictです。サービス操作と認証
+イベントはリクエストID付きでjournalへ記録します。Agentは任意のシェル
+コマンドを受け付けず、許可済みの型付き操作だけを実行します。

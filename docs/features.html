@@ -41,6 +41,9 @@
           <thead><tr><th>Endpoint</th><th>状態</th><th>レスポンス</th></tr></thead>
           <tbody>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/healthz</code></span></td><td><span class="status done">実装済み</span></td><td><code>{"status":"ok"}</code></td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/auth/login</code></span></td><td><span class="status done">実装済み</span></td><td>単一管理者のログインとセッションCookie発行</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/auth/session</code></span></td><td><span class="status done">実装済み</span></td><td>現在の認証状態</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/auth/logout</code></span></td><td><span class="status done">実装済み</span></td><td>セッションを無効化</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>Serverの名前・バージョン・状態とAgent状態。Agent障害時は<code>degraded</code></td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>Agentのシステム情報APIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのリソースメトリクスAPIを中継</td></tr>
@@ -79,6 +82,7 @@
         <h2 id="web-title">管理画面</h2>
         <div class="grid">
           <article class="card"><span class="status done">実装済み</span><h3>システム概要</h3><p>OS・カーネル・稼働時間と、CPU・メモリ・ロードアベレージを表示します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>管理者ログイン</h3><p>セッション確認、ログイン、ログアウト、APIの401応答時のログイン画面復帰を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
@@ -106,9 +110,9 @@
       <section class="section" aria-labelledby="not-title">
         <h2 id="not-title">現時点で未実装のもの</h2>
         <div class="grid">
-          <article class="card"><span class="status missing">未実装</span><h3>認証・認可</h3><p>ログイン、セッション、ロール、CSRF対策はありません。</p></article>
+          <article class="card"><span class="status missing">未実装</span><h3>高度な認可</h3><p>複数ユーザー、ロール、MFAはありません。現在は単一管理者だけです。</p></article>
           <article class="card"><span class="status missing">未実装</span><h3>その他のLinux操作</h3><p>Docker、ファイル、ネットワーク、パッケージの変更操作はありません。</p></article>
-          <article class="card"><span class="status missing">未実装</span><h3>永続化</h3><p>データベース、設定保存、監査ログはありません。</p></article>
+          <article class="card"><span class="status missing">未実装</span><h3>永続化</h3><p>データベースと監査ログの専用保存・閲覧画面はありません。必要な操作イベントはjournalへ記録します。</p></article>
           <article class="card"><span class="status missing">未実装</span><h3>TLS終端</h3><p>Server自身によるHTTPS提供はありません。</p></article>
         </div>
       </section>

@@ -5,13 +5,14 @@ REPOSITORY="${DECKOX_REPOSITORY:-scolor-dev/deckox}"
 VERSION="${DECKOX_VERSION:-latest}"
 LOCAL_ARCHIVE="${DECKOX_ARCHIVE:-}"
 BASE_URL="https://github.com/${REPOSITORY}/releases"
+initial_password=""
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "deckox installer must run as root (use sudo)" >&2
   exit 1
 fi
 
-for command in awk cp getent groupadd install mktemp systemctl tar uname useradd; do
+for command in awk cp getent groupadd install mktemp od systemctl tar tr uname useradd; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "required command not found: $command" >&2
     exit 1
@@ -83,7 +84,8 @@ if ! id deckox >/dev/null 2>&1; then
     --shell /usr/sbin/nologin deckox
 fi
 
-install -d -m 0750 -o deckox -g deckox /etc/deckox /var/lib/deckox
+install -d -m 0750 -o root -g deckox /etc/deckox
+install -d -m 0750 -o deckox -g deckox /var/lib/deckox
 install -d -m 0755 /usr/local/share/deckox/web
 install -m 0755 "${work_dir}/release/bin/deckox-server" /usr/local/bin/deckox-server
 install -m 0755 "${work_dir}/release/bin/deckox-agent" /usr/local/bin/deckox-agent
@@ -96,6 +98,14 @@ fi
 if [ ! -f /etc/deckox/agent.toml ]; then
   install -m 0640 -o root -g deckox \
     "${work_dir}/release/config/agent.toml" /etc/deckox/agent.toml
+fi
+if [ ! -f /etc/deckox/admin-password.hash ]; then
+  initial_password="$(od -An -N 12 -tx1 /dev/urandom | tr -d ' \n')"
+  printf '%s' "$initial_password" \
+    | /usr/local/bin/deckox-server hash-password \
+    > "${work_dir}/admin-password.hash"
+  install -m 0640 -o root -g deckox \
+    "${work_dir}/admin-password.hash" /etc/deckox/admin-password.hash
 fi
 
 install -m 0644 "${work_dir}/release/systemd/deckox-agent.service" \
@@ -111,5 +121,11 @@ systemctl restart deckox-server.service
 echo
 echo "Deckox has been installed."
 echo "Deckox is listening on http://127.0.0.1:8080/"
-echo "For remote access, configure authentication/TLS or use an SSH tunnel."
+if [ -n "$initial_password" ]; then
+  echo "Initial administrator password: ${initial_password}"
+  echo "Store this password now. It is not shown again."
+else
+  echo "The existing administrator password was preserved."
+fi
+echo "For remote access, use an SSH tunnel or a trusted LAN."
 echo "Check status with: systemctl status deckox-server deckox-agent"

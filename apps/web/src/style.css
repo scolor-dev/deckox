@@ -123,9 +123,82 @@ nav button.active::before {
   white-space: nowrap;
 }
 
-.sidebar-footer { padding: 10px 12px 0; color: #9ba0a8; font-size: 10px; }
+.sidebar-footer {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 0;
+  color: #9ba0a8;
+  font-size: 10px;
+}
+.logout-button {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  color: #666d76;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+}
+.logout-button:hover { color: #174f88; text-decoration: underline; }
 .mobile-bar { display: none; }
 .main-content { min-width: 0; }
+
+.auth-page {
+  display: grid;
+  min-height: 100vh;
+  padding: 24px;
+  place-items: center;
+}
+
+.auth-loading { color: #747b85; font-size: 13px; }
+
+.login-card {
+  width: min(380px, 100%);
+  padding: 30px;
+  border: 1px solid #dfe2e6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.login-brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 30px;
+}
+.login-brand > div { display: grid; line-height: 1.35; }
+.login-brand strong { color: #172033; font-size: 16px; }
+.login-brand small { color: #8a9099; font-size: 10px; }
+.login-card h1 { font-size: 21px; }
+.login-card > p { margin: 5px 0 22px; color: #747b85; font-size: 12px; }
+.login-card form { display: grid; gap: 8px; }
+.login-card label { color: #3f454d; font-size: 12px; font-weight: 600; }
+.login-card input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #cbd0d6;
+  border-radius: 4px;
+  outline: none;
+  color: #25282d;
+  background: #fff;
+}
+.login-card input:focus { border-color: #4f83b6; box-shadow: 0 0 0 2px #dceaf7; }
+.login-error {
+  margin: 4px 0 0;
+  color: #8c2727;
+  font-size: 12px;
+}
+.primary-button {
+  margin-top: 10px;
+  padding: 9px 14px;
+  border: 1px solid #1f568c;
+  border-radius: 4px;
+  color: #fff;
+  background: #2466a8;
+  cursor: pointer;
+  font-weight: 600;
+}
+.primary-button:hover:not(:disabled) { background: #1f5b96; }
 
 .view {
   width: min(1180px, 100%);
