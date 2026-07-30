@@ -63,7 +63,7 @@
     <text x="22" y="35" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="16" font-weight="700">現在の境界</text>
     <line x1="22" y1="53" x2="582" y2="53" stroke="#1d2c40"/>
     <circle cx="31" cy="82" r="4" fill="#5eead4"/>
-    <text x="46" y="87" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">公開APIは管理者セッションで保護</text>
+    <text x="46" y="87" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">Linux管理APIは管理者セッションで保護</text>
     <circle cx="31" cy="116" r="4" fill="#5eead4"/>
     <text x="46" y="121" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">Agentは /run/deckox/agent.sock のみで待受</text>
     <circle cx="31" cy="150" r="4" fill="#fbbf24"/>

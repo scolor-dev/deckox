@@ -37,15 +37,9 @@ scripts/
 
 ## ローカル開発
 
-Rust側:
-
-```bash
-cargo run --package deckox-agent
-cargo run --package deckox-server
-```
-
-通常のLinuxではAgentが`/run/deckox/agent.sock`を使用します。一般ユーザーで
-試す場合は、両方に同じ一時ソケットを指定します。
+Rust側はAgent用のUnixソケットと、Server用の管理者パスワードハッシュが
+必要です。通常のLinuxではAgentが`/run/deckox/agent.sock`を使用します。
+一般ユーザーで試す場合は、両方に同じ一時ソケットを指定します。
 
 ```bash
 printf '%s' '開発用パスワード' \

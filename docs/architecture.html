@@ -69,7 +69,7 @@
           <dt>Transport</dt><dd>HTTP over Unix domain socket</dd>
           <dt>Socket</dt><dd><code>/run/deckox/agent.sock</code></dd>
           <dt>Permission</dt><dd><code>0660</code>。systemdでは<code>deckox</code>グループを使用</dd>
-          <dt>Timeout</dt><dd>接続とレスポンス読み取りにそれぞれ2秒</dd>
+          <dt>Timeout</dt><dd>接続は2秒、レスポンス読み取りは35秒。Agent内のsystemd操作は30秒で打ち切る</dd>
           <dt>Failure</dt><dd>Agentへ接続できない場合、Server状態APIは<code>degraded</code>とエラー内容を返す</dd>
         </dl>
       </section>
@@ -88,7 +88,7 @@
 /etc/systemd/system/
 ├── deckox-server.service
 └── deckox-agent.service</code></pre>
-        <p>設定ファイルの配置場所は確保されていますが、現在のバイナリ設定は環境変数から読み込まれます。</p>
+        <p>Agentは<code>agent.toml</code>を読み込み、ソケットの場所を環境変数で上書きできます。Serverは現在、環境変数から設定を読み込み、<code>server.toml</code>は将来の設定場所として予約されています。</p>
       </section>
 
       <section class="section" aria-labelledby="security-title">
