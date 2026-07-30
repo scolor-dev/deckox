@@ -158,7 +158,7 @@ onBeforeUnmount(() => {
         >
           ログアウト
         </button>
-        <span>バージョン {{ status?.version ?? "0.1.0" }}</span>
+        <span>バージョン {{ status?.version ?? "0.2.0" }}</span>
       </div>
     </aside>
 
