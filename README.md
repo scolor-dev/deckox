@@ -120,12 +120,49 @@ curl -fsSL \
   | sudo DECKOX_VERSION=v0.1.0 sh
 ```
 
+ローカルで作成した配布物を検証する場合は、アーカイブと同じ場所に
+`.sha256`ファイルを置いて指定できます。
+
+```bash
+sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
+  sh install.sh
+```
+
 インストール後:
 
 ```bash
 systemctl status deckox-server deckox-agent
 journalctl -u deckox-server -u deckox-agent -f
 ```
+
+Serverは既定で`127.0.0.1:8080`だけに待ち受けます。別端末から一時的に
+確認する場合は、SSHトンネルを利用します。
+
+```bash
+ssh -L 8080:127.0.0.1:8080 user@server
+```
+
+LAN内の端末から常時アクセスする場合は、サーバーのLANアドレスだけへ
+待受先を上書きします。次の例ではサーバーのアドレスを`192.168.1.21`と
+しています。
+
+```bash
+sudo systemctl edit deckox-server
+```
+
+```ini
+[Service]
+Environment=DECKOX_LISTEN_ADDR=192.168.1.21:8080
+```
+
+保存後に反映します。
+
+```bash
+sudo systemctl restart deckox-server
+```
+
+同じLANの端末から`http://192.168.1.21:8080/`を開けます。現在は認証と
+TLSが未実装なので、ルーターのポート転送や外部公開には使用しないでください。
 
 配置先:
 

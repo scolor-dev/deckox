@@ -21,6 +21,17 @@ const runningCount = computed(
   () => services.value.filter((service) => service.active_state === "active").length,
 );
 
+function activeStateLabel(state: string) {
+  return state === "active" ? "稼働中" : state === "failed" ? "異常" : "停止中";
+}
+
+function unitStateLabel(state: string | null) {
+  if (state === "enabled") return "有効";
+  if (state === "disabled") return "無効";
+  if (state === "static") return "固定";
+  return state ?? "—";
+}
+
 async function refresh() {
   loading.value = true;
   error.value = null;
@@ -60,11 +71,10 @@ onMounted(refresh);
   <div class="view">
     <header class="view-header">
       <div>
-        <p class="eyebrow">SYSTEMD SERVICES</p>
         <h1>サービス</h1>
-        <p class="subtitle">{{ runningCount }} / {{ services.length }} active</p>
+        <p class="subtitle">全{{ services.length }}件のうち{{ runningCount }}件が稼働中</p>
       </div>
-      <button class="button secondary" type="button" :disabled="loading" @click="refresh">
+      <button class="button" type="button" :disabled="loading" @click="refresh">
         {{ loading ? "読込中…" : "更新" }}
       </button>
     </header>
@@ -78,7 +88,7 @@ onMounted(refresh);
           <span class="sr-only">サービスを検索</span>
           <input v-model="query" type="search" placeholder="サービス名または説明を検索">
         </label>
-        <span class="table-count">{{ filteredServices.length }} services</span>
+        <span class="table-count">{{ filteredServices.length }}件</span>
       </div>
 
       <div class="table-scroll">
@@ -94,11 +104,11 @@ onMounted(refresh);
               </td>
               <td>
                 <span :class="['state-badge', service.active_state === 'active' ? 'active' : 'inactive']">
-                  {{ service.active_state }}
+                  {{ activeStateLabel(service.active_state) }}
                 </span>
                 <small>{{ service.sub_state }}</small>
               </td>
-              <td><span class="unit-state">{{ service.unit_file_state ?? "—" }}</span></td>
+              <td><span class="unit-state">{{ unitStateLabel(service.unit_file_state) }}</span></td>
               <td>
                 <div v-if="service.control_allowed" class="actions">
                   <button class="action-button" type="button" :disabled="pending !== null || service.active_state === 'active'" @click="runAction(service, 'start')">起動</button>
@@ -118,4 +128,3 @@ onMounted(refresh);
     </aside>
   </div>
 </template>
-

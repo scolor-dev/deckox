@@ -21,7 +21,7 @@ use crate::agent_client::AgentClient;
 
 mod agent_client;
 
-const DEFAULT_LISTEN_ADDR: &str = "0.0.0.0:8080";
+const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:8080";
 const DEFAULT_AGENT_SOCKET: &str = "/run/deckox/agent.sock";
 const DEFAULT_WEB_DIR: &str = "/usr/local/share/deckox/web";
 

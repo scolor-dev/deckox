@@ -76,6 +76,9 @@ sudo sh install.sh</code></pre>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
   | sudo DECKOX_VERSION=v0.1.0 sh</code></pre>
+        <p>ローカル配布物を検証する場合は、アーカイブと同じ場所に<code>.sha256</code>ファイルを置いて指定します。</p>
+        <pre><code>sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
+  sh install.sh</code></pre>
       </section>
 
       <section class="section" aria-labelledby="actions-title">
@@ -94,8 +97,15 @@ sudo sh install.sh</code></pre>
         <h2 id="operate-title">導入後の確認</h2>
         <pre><code>systemctl status deckox-server deckox-agent
 journalctl -u deckox-server -u deckox-agent -f</code></pre>
-        <p>既定ではServerが<code>0.0.0.0:8080</code>で待ち受けます。</p>
-        <aside class="note warning"><strong>公開禁止:</strong> 現在は認証とTLSが未実装です。信頼できないネットワークへ8080番を公開しないでください。</aside>
+        <p>既定ではServerが<code>127.0.0.1:8080</code>で待ち受けます。別端末から一時的に確認する場合は、<code>ssh -L 8080:127.0.0.1:8080 user@server</code>でトンネルを作成します。</p>
+        <h3>LAN内の端末から常時アクセスする</h3>
+        <p>サーバーのLANアドレスを確認し、そのアドレスだけへsystemdの待受設定を上書きします。次の例では<code>192.168.1.21</code>を使用します。</p>
+        <pre><code>sudo systemctl edit deckox-server</code></pre>
+        <pre><code>[Service]
+Environment=DECKOX_LISTEN_ADDR=192.168.1.21:8080</code></pre>
+        <pre><code>sudo systemctl restart deckox-server</code></pre>
+        <p>同じLANのMacやWindows PCから<code>http://192.168.1.21:8080/</code>を開きます。DHCPを利用している場合は、ルーター側でサーバーのアドレスを予約してください。</p>
+        <aside class="note warning"><strong>外部公開禁止:</strong> 現在は認証とTLSが未実装です。認証付きリバースプロキシなどを用意するまで待受アドレスを外部向けに変更しないでください。</aside>
       </section>
 
       <section class="section" aria-labelledby="agent-config-title">

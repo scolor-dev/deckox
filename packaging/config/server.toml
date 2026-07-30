@@ -1,7 +1,6 @@
 # Deckox Server configuration
 # Environment variables are used by the first release. This file reserves the
 # stable configuration location for upcoming settings.
-listen_addr = "0.0.0.0:8080"
+listen_addr = "127.0.0.1:8080"
 agent_socket = "/run/deckox/agent.sock"
 web_dir = "/usr/local/share/deckox/web"
-

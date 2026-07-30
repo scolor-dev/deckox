@@ -3,6 +3,7 @@ set -eu
 
 REPOSITORY="${DECKOX_REPOSITORY:-scolor-dev/deckox}"
 VERSION="${DECKOX_VERSION:-latest}"
+LOCAL_ARCHIVE="${DECKOX_ARCHIVE:-}"
 BASE_URL="https://github.com/${REPOSITORY}/releases"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -10,12 +11,16 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-for command in awk curl getent groupadd install mktemp systemctl tar uname useradd; do
+for command in awk cp getent groupadd install mktemp systemctl tar uname useradd; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "required command not found: $command" >&2
     exit 1
   fi
 done
+if [ -z "$LOCAL_ARCHIVE" ] && ! command -v curl >/dev/null 2>&1; then
+  echo "required command not found: curl" >&2
+  exit 1
+fi
 
 case "$(uname -m)" in
   x86_64|amd64) target="x86_64-unknown-linux-musl" ;;
@@ -36,11 +41,21 @@ fi
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT INT TERM
 
-echo "Downloading Deckox ${VERSION} for ${target}..."
-curl --fail --location --proto '=https' --tlsv1.2 \
-  --output "${work_dir}/${asset}" "$download_url"
-curl --fail --location --proto '=https' --tlsv1.2 \
-  --output "${work_dir}/${asset}.sha256" "${download_url}.sha256"
+if [ -n "$LOCAL_ARCHIVE" ]; then
+  if [ ! -f "$LOCAL_ARCHIVE" ] || [ ! -f "${LOCAL_ARCHIVE}.sha256" ]; then
+    echo "local archive and checksum are required: ${LOCAL_ARCHIVE}{,.sha256}" >&2
+    exit 1
+  fi
+  echo "Installing local Deckox archive for ${target}..."
+  cp "$LOCAL_ARCHIVE" "${work_dir}/${asset}"
+  cp "${LOCAL_ARCHIVE}.sha256" "${work_dir}/${asset}.sha256"
+else
+  echo "Downloading Deckox ${VERSION} for ${target}..."
+  curl --fail --location --proto '=https' --tlsv1.2 \
+    --output "${work_dir}/${asset}" "$download_url"
+  curl --fail --location --proto '=https' --tlsv1.2 \
+    --output "${work_dir}/${asset}.sha256" "${download_url}.sha256"
+fi
 
 expected="$(awk '{print $1}' "${work_dir}/${asset}.sha256")"
 if command -v sha256sum >/dev/null 2>&1; then
@@ -89,9 +104,12 @@ install -m 0644 "${work_dir}/release/systemd/deckox-server.service" \
   /etc/systemd/system/deckox-server.service
 
 systemctl daemon-reload
-systemctl enable --now deckox-agent.service deckox-server.service
+systemctl enable deckox-agent.service deckox-server.service
+systemctl restart deckox-agent.service
+systemctl restart deckox-server.service
 
 echo
 echo "Deckox has been installed."
-echo "Open http://$(hostname 2>/dev/null || echo server):8080/"
+echo "Deckox is listening on http://127.0.0.1:8080/"
+echo "For remote access, configure authentication/TLS or use an SSH tunnel."
 echo "Check status with: systemctl status deckox-server deckox-agent"

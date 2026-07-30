@@ -31,7 +31,7 @@ cp -R apps/web/dist/. "$stage_dir/web/"
 cp packaging/config/*.toml "$stage_dir/config/"
 cp packaging/systemd/*.service "$stage_dir/systemd/"
 
-tar -czf "$archive" -C "$output_dir" "deckox-${target}"
+COPYFILE_DISABLE=1 tar -czf "$archive" -C "$stage_dir" .
 
 if command -v sha256sum >/dev/null 2>&1; then
   sha256sum "$archive" > "${archive}.sha256"
