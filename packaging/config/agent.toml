@@ -1,0 +1,8 @@
+# Deckox Agent configuration
+# The Agent listens only on this local Unix socket.
+socket = "/run/deckox/agent.sock"
+
+# Service state can always be read. Start, stop, and restart are permitted only
+# for service IDs listed here. Deckox's own services are always rejected.
+[services]
+allowed = []

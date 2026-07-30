@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="DeckoxのRust、Vue、Unixソケットを使ったローカル開発方法">
+  <title>Deckox Docs — 開発</title>
+  <link rel="stylesheet" href="assets/docs.css">
+  <script src="assets/docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <div class="mobile-header">
+    <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Docs</small></span></a>
+    <button class="menu-button" type="button" data-menu-button aria-expanded="false" aria-label="ナビゲーションを開く">Menu</button>
+  </div>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Project docs</small></span></a>
+      <p class="nav-label">Documentation</p>
+      <nav class="nav" aria-label="ドキュメント">
+        <a href="index.html"><span class="nav-icon">⌂</span>概要</a>
+        <a href="architecture.html"><span class="nav-icon">◇</span>設計</a>
+        <a href="features.html"><span class="nav-icon">✓</span>機能</a>
+        <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
+        <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
+      </nav>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.1.0</div>
+    </aside>
+    <main class="content" id="main">
+      <header class="page-head">
+        <p class="eyebrow">Development</p>
+        <h1>Rust WorkspaceとVueを、同じリポジトリで。</h1>
+        <p class="lead">Rust側はCargo Workspace、フロントはViteを利用します。開発時は一時Unixソケットを指定すると、root権限なしでServer–Agent通信を確認できます。</p>
+      </header>
+
+      <section class="section" aria-labelledby="repo-title">
+        <h2 id="repo-title">リポジトリ構成</h2>
+        <pre><code>apps/
+├── agent/          # Rust / Linux Agent
+├── server/         # Rust / Axum Server
+└── web/            # Vue + TypeScript
+crates/
+└── protocol/       # 共有Serialize型
+packaging/
+├── config/
+├── scripts/
+└── systemd/
+docs/               # このHTMLドキュメント
+scripts/
+└── package-release.sh</code></pre>
+      </section>
+
+      <section class="section" aria-labelledby="rust-title">
+        <h2 id="rust-title">Rustプロセスを起動</h2>
+        <p>最初のターミナルでAgentを起動します。</p>
+        <pre><code>DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
+cargo run --package deckox-agent</code></pre>
+        <p>次のターミナルでServerを起動します。Vueの本番ビルドを配信する場合は<code>DECKOX_WEB_DIR</code>を指定します。</p>
+        <pre><code>DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
+DECKOX_WEB_DIR="$PWD/apps/web/dist" \
+cargo run --package deckox-server</code></pre>
+      </section>
+
+      <section class="section" aria-labelledby="vue-title">
+        <h2 id="vue-title">Vue開発サーバー</h2>
+        <pre><code>cd apps/web
+npm install
+npm run dev</code></pre>
+        <p>Viteは<code>http://localhost:5173</code>で起動し、<code>/api</code>と<code>/healthz</code>を<code>http://127.0.0.1:8080</code>へプロキシします。</p>
+        <p>本番ビルド:</p>
+        <pre><code>cd apps/web
+npm ci
+npm run build</code></pre>
+      </section>
+
+      <section class="section" aria-labelledby="env-title">
+        <h2 id="env-title">環境変数</h2>
+        <table class="status-table">
+          <thead><tr><th>変数</th><th>既定値</th><th>使用プロセス</th></tr></thead>
+          <tbody>
+            <tr><td><code>DECKOX_LISTEN_ADDR</code></td><td><code>0.0.0.0:8080</code></td><td>Server</td></tr>
+            <tr><td><code>DECKOX_AGENT_CONFIG</code></td><td><code>/etc/deckox/agent.toml</code></td><td>Agent</td></tr>
+            <tr><td><code>DECKOX_AGENT_SOCKET</code></td><td><code>/run/deckox/agent.sock</code></td><td>Server / Agent</td></tr>
+            <tr><td><code>DECKOX_WEB_DIR</code></td><td><code>/usr/local/share/deckox/web</code></td><td>Server</td></tr>
+            <tr><td><code>RUST_LOG</code></td><td>各プロセスの<code>info</code></td><td>Server / Agent</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section" aria-labelledby="allowlist-title">
+        <h2 id="allowlist-title">systemd操作の許可リスト</h2>
+        <p>サービス状態の読み取りは常に可能ですが、変更操作はAgent設定へ完全一致で登録したサービスだけが対象です。</p>
+        <pre><code>socket = "/run/deckox/agent.sock"
+
+[services]
+allowed = [
+  "nginx.service",
+  "postgresql.service",
+]</code></pre>
+        <p><code>deckox-agent.service</code>と<code>deckox-server.service</code>は登録しても起動時に拒否されます。</p>
+      </section>
+
+      <section class="section" aria-labelledby="test-title">
+        <h2 id="test-title">検証コマンド</h2>
+        <pre><code>cargo fmt --all --check
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+cd apps/web
+npm ci
+npm run typecheck
+npm run build</code></pre>
+      </section>
+
+      <section class="section" aria-labelledby="docker-title">
+        <h2 id="docker-title">Docker Compose</h2>
+        <pre><code>docker compose up --build</code></pre>
+        <p>ComposeはServer–Agent通信とUIを確認するための開発構成です。</p>
+        <aside class="note warning"><strong>制限:</strong> コンテナ内のAgentはLinuxホストのsystemdを管理できません。本番のLinux管理用途ではsystemdサービスとして導入します。</aside>
+      </section>
+      <footer class="footer">Deckox Docs · Development</footer>
+    </main>
+  </div>
+</body>
+</html>

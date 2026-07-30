@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Deckoxに現在実装されているAPI、Agent、Web UI、Protocol">
+  <title>Deckox Docs — 機能</title>
+  <link rel="stylesheet" href="assets/docs.css">
+  <script src="assets/docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <div class="mobile-header">
+    <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Docs</small></span></a>
+    <button class="menu-button" type="button" data-menu-button aria-expanded="false" aria-label="ナビゲーションを開く">Menu</button>
+  </div>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Project docs</small></span></a>
+      <p class="nav-label">Documentation</p>
+      <nav class="nav" aria-label="ドキュメント">
+        <a href="index.html"><span class="nav-icon">⌂</span>概要</a>
+        <a href="architecture.html"><span class="nav-icon">◇</span>設計</a>
+        <a href="features.html"><span class="nav-icon">✓</span>機能</a>
+        <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
+        <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
+      </nav>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.1.0</div>
+    </aside>
+    <main class="content" id="main">
+      <header class="page-head">
+        <p class="eyebrow">Implemented features</p>
+        <h1>コードに存在する機能だけを、正確に。</h1>
+        <p class="lead">このページは現在呼び出せる機能と、共有型のみ存在する機能を分けて記載します。</p>
+      </header>
+
+      <section class="section" aria-labelledby="server-title">
+        <p class="eyebrow">deckox-server</p>
+        <h2 id="server-title">公開Web API</h2>
+        <table class="status-table">
+          <thead><tr><th>Endpoint</th><th>状態</th><th>レスポンス</th></tr></thead>
+          <tbody>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/healthz</code></span></td><td><span class="status done">実装済み</span></td><td><code>{"status":"ok"}</code></td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>Serverの名前・バージョン・状態とAgent状態。Agent障害時は<code>degraded</code></td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>Agentのシステム情報APIを中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのリソースメトリクスAPIを中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのストレージAPIを中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス詳細を中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/services/{id}/{action}</code></span></td><td><span class="status done">実装済み</span></td><td>起動・停止・再起動。Agentの許可・エラー状態を維持して返却</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/*</code></span></td><td><span class="status done">実装済み</span></td><td>Vue静的ファイル。未知のパスは<code>index.html</code>へSPAフォールバック</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section" aria-labelledby="agent-title">
+        <p class="eyebrow">deckox-agent</p>
+        <h2 id="agent-title">内部Agent API</h2>
+        <table class="status-table">
+          <thead><tr><th>Endpoint</th><th>状態</th><th>取得内容</th></tr></thead>
+          <tbody>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/health</code></span></td><td><span class="status done">実装済み</span></td><td>Agentプロセスのヘルス状態</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト名、OS、CPUアーキテクチャ、<code>/proc/uptime</code>の秒数</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>OS、バージョン、カーネル、ホスト名、稼働時間、boot ID、タイムゾーン</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>CPU使用率・コア数、メモリ・Swap、ロードアベレージ</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>ファイルシステム、形式、マウントポイント、容量・使用量</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>ロード済みsystemdサービス一覧と有効化状態</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>サービス詳細、Main PID、操作許可状態</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/start</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを起動</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/stop</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを停止</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/restart</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを再起動</td></tr>
+          </tbody>
+        </table>
+        <aside class="note">Agent APIはTCPではなく、<code>/run/deckox/agent.sock</code>上で提供されます。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="web-title">
+        <p class="eyebrow">Vue web</p>
+        <h2 id="web-title">管理画面</h2>
+        <div class="grid">
+          <article class="card"><span class="status done">実装済み</span><h3>システム概要</h3><p>OS・カーネル・稼働時間と、CPU・メモリ・ロードアベレージを表示します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動を提供します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="protocol-title">
+        <p class="eyebrow">deckox-protocol</p>
+        <h2 id="protocol-title">共有Protocol型</h2>
+        <p>ServerとAgentが共有するSerialize/Deserialize可能なRust型です。</p>
+        <table class="status-table">
+          <thead><tr><th>型</th><th>状態</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td><code>HealthResponse</code></td><td><span class="status done">使用中</span></td><td>Server・Agentのヘルス応答</td></tr>
+            <tr><td><code>AgentStatus</code></td><td><span class="status done">使用中</span></td><td>AgentからServerへ返すホスト状態</td></tr>
+            <tr><td><code>SystemInfo</code>ほか</td><td><span class="status done">使用中</span></td><td>システム、メトリクス、ストレージ、サービスの応答型</td></tr>
+            <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動</td></tr>
+            <tr><td><code>CommandResult</code></td><td><span class="status done">使用中</span></td><td>操作完了時のコマンドID、実行状態、メッセージ</td></tr>
+            <tr><td><code>AgentCommand</code></td><td><span class="status defined">型のみ定義済み</span></td><td>汎用コマンド型。現在のHTTPハンドラーでは未使用</td></tr>
+          </tbody>
+        </table>
+        <aside class="note"><strong>サービス制御:</strong> 専用HTTPエンドポイントと<code>ServiceAction</code>で実装されています。汎用<code>AgentCommand</code>は現在使っていません。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="not-title">
+        <h2 id="not-title">現時点で未実装のもの</h2>
+        <div class="grid">
+          <article class="card"><span class="status missing">未実装</span><h3>認証・認可</h3><p>ログイン、セッション、ロール、CSRF対策はありません。</p></article>
+          <article class="card"><span class="status missing">未実装</span><h3>その他のLinux操作</h3><p>Docker、ファイル、ネットワーク、パッケージの変更操作はありません。</p></article>
+          <article class="card"><span class="status missing">未実装</span><h3>永続化</h3><p>データベース、設定保存、監査ログはありません。</p></article>
+          <article class="card"><span class="status missing">未実装</span><h3>TLS終端</h3><p>Server自身によるHTTPS提供はありません。</p></article>
+        </div>
+      </section>
+      <footer class="footer">Deckox Docs · Features</footer>
+    </main>
+  </div>
+</body>
+</html>

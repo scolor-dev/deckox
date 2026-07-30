@@ -1,0 +1,42 @@
+services:
+  agent:
+    build:
+      context: .
+    image: deckox:local
+    restart: unless-stopped
+    init: true
+    user: "0:10001"
+    entrypoint: ["/usr/local/bin/deckox-agent"]
+    environment:
+      DECKOX_AGENT_SOCKET: /run/deckox/agent.sock
+      RUST_LOG: "${RUST_LOG:-deckox_agent=info}"
+    volumes:
+      - agent-runtime:/run/deckox
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  server:
+    image: deckox:local
+    restart: unless-stopped
+    init: true
+    depends_on:
+      - agent
+    ports:
+      - "127.0.0.1:${DECKOX_PORT:-8080}:8080"
+    environment:
+      DECKOX_AGENT_SOCKET: /run/deckox/agent.sock
+      RUST_LOG: "${RUST_LOG:-deckox_server=info}"
+    volumes:
+      - agent-runtime:/run/deckox
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  agent-runtime:

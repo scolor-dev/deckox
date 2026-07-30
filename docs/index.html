@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Deckoxの実装済み設計・機能・導入方法をまとめたプロジェクトドキュメント">
+  <title>Deckox Docs — 概要</title>
+  <link rel="stylesheet" href="assets/docs.css">
+  <script src="assets/docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <div class="mobile-header">
+    <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Docs</small></span></a>
+    <button class="menu-button" type="button" data-menu-button aria-expanded="false" aria-label="ナビゲーションを開く">Menu</button>
+  </div>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Project docs</small></span></a>
+      <p class="nav-label">Documentation</p>
+      <nav class="nav" aria-label="ドキュメント">
+        <a href="index.html"><span class="nav-icon">⌂</span>概要</a>
+        <a href="architecture.html"><span class="nav-icon">◇</span>設計</a>
+        <a href="features.html"><span class="nav-icon">✓</span>機能</a>
+        <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
+        <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
+      </nav>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.1.0</div>
+    </aside>
+    <main class="content" id="main">
+      <header class="page-head">
+        <p class="eyebrow">Deckox documentation</p>
+        <h1>Linux管理基盤の、現在地を読む。</h1>
+        <p class="lead">DeckoxはVue管理画面、Axum Server、Linux Agentを1つのモノレポで管理するWeb管理基盤です。このサイトは現在の実装に対応する設計・機能・導入手順をまとめています。</p>
+      </header>
+
+      <section class="section" aria-labelledby="start-title">
+        <h2 id="start-title">ドキュメントを選ぶ</h2>
+        <div class="grid">
+          <a class="card" href="architecture.html">
+            <span class="number">01 / ARCHITECTURE</span>
+            <h3>システム設計</h3>
+            <p>3コンポーネントの責務、実行時通信、プロセス境界、配置先を確認します。</p>
+            <span class="card-arrow">設計を見る →</span>
+          </a>
+          <a class="card" href="features.html">
+            <span class="number">02 / FEATURES</span>
+            <h3>実装済み機能</h3>
+            <p>API、Agent、Vue、共有Protocolについて、実装状態を区別して確認します。</p>
+            <span class="card-arrow">機能を見る →</span>
+          </a>
+          <a class="card" href="installation.html">
+            <span class="number">03 / INSTALLATION</span>
+            <h3>Linuxへの導入</h3>
+            <p>GitHub Release、CPU自動判定、systemd登録までの導入フローを説明します。</p>
+            <span class="card-arrow">導入方法を見る →</span>
+          </a>
+          <a class="card" href="development.html">
+            <span class="number">04 / DEVELOPMENT</span>
+            <h3>ローカル開発</h3>
+            <p>Cargo Workspace、Vue開発サーバー、Unixソケットを使った起動方法です。</p>
+            <span class="card-arrow">開発方法を見る →</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="status-title">
+        <p class="eyebrow">Implementation status</p>
+        <h2 id="status-title">現在の実装範囲</h2>
+        <p>状態はリポジトリのコードを基準にしています。「定義済み」は型が存在していても、実行するAPIがまだ存在しないことを示します。</p>
+        <table class="status-table">
+          <thead><tr><th>領域</th><th>状態</th><th>現在提供している内容</th></tr></thead>
+          <tbody>
+            <tr><td>Web Server</td><td><span class="status done">実装済み</span></td><td>Vue配信、Agentのシステム・メトリクス・ストレージ・サービスAPIの公開プロキシ</td></tr>
+            <tr><td>System Agent</td><td><span class="status done">実装済み</span></td><td>システム情報、CPU・メモリ、ストレージ、systemdサービスの取得と制御</td></tr>
+            <tr><td>Vue UI</td><td><span class="status done">実装済み</span></td><td>システム概要、リソース、ストレージ、systemdサービス管理画面</td></tr>
+            <tr><td>Service command</td><td><span class="status done">実装済み</span></td><td>許可リストに登録したsystemdサービスの起動・停止・再起動</td></tr>
+            <tr><td>認証・認可</td><td><span class="status missing">未実装</span></td><td>現在のServerにはログインやアクセス制御がありません</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <aside class="note warning">
+        <strong>公開環境について:</strong> 現在は認証とTLSが未実装です。インターネットへ直接公開できる段階ではありません。
+      </aside>
+      <footer class="footer">Deckox Docs · リポジトリの実装状態に基づくドキュメント</footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,28 @@
+[Unit]
+Description=Deckox web management server
+Documentation=https://github.com/scolor-dev/deckox
+After=network-online.target deckox-agent.service
+Wants=network-online.target
+Requires=deckox-agent.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/deckox-server
+Environment=DECKOX_LISTEN_ADDR=0.0.0.0:8080
+Environment=DECKOX_AGENT_SOCKET=/run/deckox/agent.sock
+Environment=DECKOX_WEB_DIR=/usr/local/share/deckox/web
+Environment=RUST_LOG=deckox_server=info
+User=deckox
+Group=deckox
+WorkingDirectory=/var/lib/deckox
+Restart=on-failure
+RestartSec=3s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/deckox
+
+[Install]
+WantedBy=multi-user.target
+

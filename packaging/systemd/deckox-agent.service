@@ -1,0 +1,24 @@
+[Unit]
+Description=Deckox system management agent
+Documentation=https://github.com/scolor-dev/deckox
+After=local-fs.target
+Before=deckox-server.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/deckox-agent
+Environment=DECKOX_AGENT_CONFIG=/etc/deckox/agent.toml
+Environment=DECKOX_AGENT_SOCKET=/run/deckox/agent.sock
+Environment=RUST_LOG=deckox_agent=info
+User=root
+Group=deckox
+UMask=0007
+RuntimeDirectory=deckox
+RuntimeDirectoryMode=0770
+Restart=on-failure
+RestartSec=3s
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

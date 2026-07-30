@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="DeckoxのServer、Agent、Vueからなるシステム設計">
+  <title>Deckox Docs — 設計</title>
+  <link rel="stylesheet" href="assets/docs.css">
+  <script src="assets/docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <div class="mobile-header">
+    <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Docs</small></span></a>
+    <button class="menu-button" type="button" data-menu-button aria-expanded="false" aria-label="ナビゲーションを開く">Menu</button>
+  </div>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Project docs</small></span></a>
+      <p class="nav-label">Documentation</p>
+      <nav class="nav" aria-label="ドキュメント">
+        <a href="index.html"><span class="nav-icon">⌂</span>概要</a>
+        <a href="architecture.html"><span class="nav-icon">◇</span>設計</a>
+        <a href="features.html"><span class="nav-icon">✓</span>機能</a>
+        <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
+        <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
+      </nav>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.1.0</div>
+    </aside>
+    <main class="content" id="main">
+      <header class="page-head">
+        <p class="eyebrow">Architecture</p>
+        <h1>権限と責務を分ける、3つの構成要素。</h1>
+        <p class="lead">ソースコードはVue、Axum Server、Rust Agentの3コンポーネントです。実行時はServerとAgentの2プロセスが常駐し、VueはServerが配信する静的ファイルとしてブラウザで動きます。</p>
+      </header>
+
+      <section class="section" aria-labelledby="runtime-title">
+        <h2 id="runtime-title">実行時アーキテクチャ</h2>
+        <p>ServerとAgentはローカルUnixソケット上のHTTPで通信します。Agentは外部TCPポートを持ちません。</p>
+        <figure class="diagram">
+          <img src="assets/architecture.svg" alt="Vue、Deckox Server、Deckox Agent、Linux Hostの通信構成図">
+        </figure>
+      </section>
+
+      <section class="section" aria-labelledby="responsibility-title">
+        <h2 id="responsibility-title">コンポーネントの責務</h2>
+        <div class="grid three">
+          <article class="card">
+            <span class="number">WEB</span>
+            <h3>Vue + TypeScript</h3>
+            <p>ブラウザ上の管理UIです。現在はServerとAgentの状態、ホスト名、OS、CPUアーキテクチャ、稼働時間を表示します。</p>
+          </article>
+          <article class="card">
+            <span class="number">SERVER</span>
+            <h3>Axum Server</h3>
+            <p>Vueの静的配信、公開HTTP API、Agent APIの安全な中継を担当します。一般ユーザーの<code>deckox</code>で動作します。</p>
+          </article>
+          <article class="card">
+            <span class="number">AGENT</span>
+            <h3>Rust Agent</h3>
+            <p>Linuxホスト情報の取得と、許可リスト内のsystemdサービス操作を行います。rootで動き、Serverとは権限境界を分けています。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="communication-title">
+        <h2 id="communication-title">Server–Agent通信</h2>
+        <dl class="definition-list">
+          <dt>Transport</dt><dd>HTTP over Unix domain socket</dd>
+          <dt>Socket</dt><dd><code>/run/deckox/agent.sock</code></dd>
+          <dt>Permission</dt><dd><code>0660</code>。systemdでは<code>deckox</code>グループを使用</dd>
+          <dt>Timeout</dt><dd>接続とレスポンス読み取りにそれぞれ2秒</dd>
+          <dt>Failure</dt><dd>Agentへ接続できない場合、Server状態APIは<code>degraded</code>とエラー内容を返す</dd>
+        </dl>
+      </section>
+
+      <section class="section" aria-labelledby="filesystem-title">
+        <h2 id="filesystem-title">Linux上の配置</h2>
+        <pre><code>/usr/local/bin/deckox-server
+/usr/local/bin/deckox-agent
+/usr/local/share/deckox/web/
+/etc/deckox/
+├── server.toml
+└── agent.toml
+/var/lib/deckox/
+/run/deckox/agent.sock
+/etc/systemd/system/
+├── deckox-server.service
+└── deckox-agent.service</code></pre>
+        <p>設定ファイルの配置場所は確保されていますが、現在のバイナリ設定は環境変数から読み込まれます。</p>
+      </section>
+
+      <section class="section" aria-labelledby="security-title">
+        <h2 id="security-title">現在のセキュリティ境界</h2>
+        <table class="status-table">
+          <thead><tr><th>境界</th><th>実装内容</th></tr></thead>
+          <tbody>
+            <tr><td>プロセス分離</td><td>Web Serverとroot Agentを別プロセス・別systemdユニットに分離</td></tr>
+            <tr><td>Agent公開範囲</td><td>Unixソケットのみ。ネットワークポートは使用しない</td></tr>
+            <tr><td>Server権限</td><td>専用<code>deckox</code>ユーザー、<code>NoNewPrivileges</code>、<code>ProtectSystem=strict</code></td></tr>
+            <tr><td>Agent操作</td><td>systemd変更操作は設定ファイルの完全一致許可リストに限定。Deckox自身のサービスは常に拒否</td></tr>
+          </tbody>
+        </table>
+        <aside class="note warning"><strong>未実装:</strong> ログイン認証、認可、TLS、監査ログはまだ存在しません。</aside>
+      </section>
+      <footer class="footer">Deckox Docs · Architecture</footer>
+    </main>
+  </div>
+</body>
+</html>

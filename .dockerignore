@@ -1,0 +1,8 @@
+.git
+.gitignore
+.env
+target
+README.md
+apps/web/node_modules
+apps/web/dist
+dist

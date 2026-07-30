@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="DeckoxをGitHub ReleaseからLinuxへインストールする仕組み">
+  <title>Deckox Docs — インストール</title>
+  <link rel="stylesheet" href="assets/docs.css">
+  <script src="assets/docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <div class="mobile-header">
+    <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Docs</small></span></a>
+    <button class="menu-button" type="button" data-menu-button aria-expanded="false" aria-label="ナビゲーションを開く">Menu</button>
+  </div>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Project docs</small></span></a>
+      <p class="nav-label">Documentation</p>
+      <nav class="nav" aria-label="ドキュメント">
+        <a href="index.html"><span class="nav-icon">⌂</span>概要</a>
+        <a href="architecture.html"><span class="nav-icon">◇</span>設計</a>
+        <a href="features.html"><span class="nav-icon">✓</span>機能</a>
+        <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
+        <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
+      </nav>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.1.0</div>
+    </aside>
+    <main class="content" id="main">
+      <header class="page-head">
+        <p class="eyebrow">Installation</p>
+        <h1>1つのコマンドから、2つのサービスを導入。</h1>
+        <p class="lead">インストーラーはGitHub ReleaseからCPUに合うアーカイブを取得し、SHA-256を検証してServer・Agent・Vue・systemdユニットを配置します。</p>
+      </header>
+
+      <section class="section" aria-labelledby="flow-title">
+        <h2 id="flow-title">リリースから導入まで</h2>
+        <figure class="diagram">
+          <img src="assets/release-flow.svg" alt="Gitタグ、GitHub Actions、GitHub Release、インストーラー、systemdのリリースフロー図">
+        </figure>
+      </section>
+
+      <section class="section" aria-labelledby="support-title">
+        <h2 id="support-title">対応CPUアーキテクチャ</h2>
+        <table class="status-table">
+          <thead><tr><th>uname -m</th><th>Rust target</th><th>Release</th></tr></thead>
+          <tbody>
+            <tr><td><code>x86_64</code> / <code>amd64</code></td><td><code>x86_64-unknown-linux-musl</code></td><td><span class="status done">ビルド定義済み</span></td></tr>
+            <tr><td><code>aarch64</code> / <code>arm64</code></td><td><code>aarch64-unknown-linux-musl</code></td><td><span class="status done">ビルド定義済み</span></td></tr>
+          </tbody>
+        </table>
+        <p>GitHub Actionsはx86-64とARM64を別Runnerでビルドします。両方が成功した場合にReleaseを作成します。</p>
+      </section>
+
+      <section class="section" aria-labelledby="release-title">
+        <h2 id="release-title">Releaseの作成</h2>
+        <p><code>v*</code>タグのpushでRelease Workflowが起動します。</p>
+        <pre><code>git tag v0.1.0
+git push origin main
+git push origin v0.1.0</code></pre>
+        <aside class="note"><strong>実行条件:</strong> インストールコマンドを利用するには、対象タグのGitHub Releaseと4つの配布ファイルが公開済みである必要があります。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="command-title">
+        <h2 id="command-title">Linuxへインストール</h2>
+        <pre><code>curl -fsSL \
+  https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
+  | sudo sh</code></pre>
+        <p>スクリプトを確認してから実行する場合:</p>
+        <pre><code>curl -fsSLO \
+  https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh
+less install.sh
+sudo sh install.sh</code></pre>
+        <p>特定バージョンを選ぶ場合:</p>
+        <pre><code>curl -fsSL \
+  https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
+  | sudo DECKOX_VERSION=v0.1.0 sh</code></pre>
+      </section>
+
+      <section class="section" aria-labelledby="actions-title">
+        <h2 id="actions-title">インストーラーが行う処理</h2>
+        <dl class="definition-list">
+          <dt>1. 前提確認</dt><dd>root権限と必要なLinuxコマンドの存在を確認</dd>
+          <dt>2. CPU判定</dt><dd><code>uname -m</code>からx86-64またはARM64を選択</dd>
+          <dt>3. 検証</dt><dd>アーカイブとSHA-256ファイルを取得してハッシュを比較</dd>
+          <dt>4. ユーザー</dt><dd><code>deckox</code>グループとシステムユーザーを未作成の場合のみ作成</dd>
+          <dt>5. 配置</dt><dd>バイナリ、Vue成果物、設定、systemdユニットを配置</dd>
+          <dt>6. 起動</dt><dd><code>deckox-agent</code>と<code>deckox-server</code>をenableして即時起動</dd>
+        </dl>
+      </section>
+
+      <section class="section" aria-labelledby="operate-title">
+        <h2 id="operate-title">導入後の確認</h2>
+        <pre><code>systemctl status deckox-server deckox-agent
+journalctl -u deckox-server -u deckox-agent -f</code></pre>
+        <p>既定ではServerが<code>0.0.0.0:8080</code>で待ち受けます。</p>
+        <aside class="note warning"><strong>公開禁止:</strong> 現在は認証とTLSが未実装です。信頼できないネットワークへ8080番を公開しないでください。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="agent-config-title">
+        <h2 id="agent-config-title">操作を許可するサービス</h2>
+        <p><code>/etc/deckox/agent.toml</code>へ、起動・停止・再起動を許可するsystemdサービスを完全一致で指定します。初期値は空で、変更操作はすべて拒否されます。</p>
+        <pre><code>[services]
+allowed = [
+  "nginx.service",
+  "postgresql.service",
+]</code></pre>
+        <p>変更後はAgentを再起動します。</p>
+        <pre><code>sudo systemctl restart deckox-agent</code></pre>
+      </section>
+      <footer class="footer">Deckox Docs · Installation</footer>
+    </main>
+  </div>
+</body>
+</html>

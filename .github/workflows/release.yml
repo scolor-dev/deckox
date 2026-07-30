@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install Linux build target
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools
+          rustup target add "${{ matrix.target }}"
+
+      - name: Build release archive
+        run: ./scripts/package-release.sh "${{ matrix.target }}"
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            dist/deckox-${{ matrix.target }}.tar.gz
+            dist/deckox-${{ matrix.target }}.tar.gz.sha256
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/deckox-x86_64-unknown-linux-musl.tar.gz \
+            dist/deckox-x86_64-unknown-linux-musl.tar.gz.sha256 \
+            dist/deckox-aarch64-unknown-linux-musl.tar.gz \
+            dist/deckox-aarch64-unknown-linux-musl.tar.gz.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --generate-notes \
+            --verify-tag
