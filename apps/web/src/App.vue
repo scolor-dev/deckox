@@ -1,40 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { RouterLink, RouterView, useRoute } from "vue-router";
 import { api, type ServerStatus } from "./api/client";
 import LoginView from "./views/LoginView.vue";
-import OverviewView from "./views/OverviewView.vue";
-import ServicesView from "./views/ServicesView.vue";
-import StorageView from "./views/StorageView.vue";
-import SettingsView from "./views/SettingsView.vue";
 
-type Page = "overview" | "services" | "storage" | "settings";
-
-const activePage = ref<Page>("overview");
+const route = useRoute();
 const status = ref<ServerStatus | null>(null);
 const menuOpen = ref(false);
 const authChecking = ref(true);
 const authenticated = ref(false);
 const loginMessage = ref<string | null>(null);
-
-const activeComponent = computed(() => ({
-  overview: OverviewView,
-  services: ServicesView,
-  storage: StorageView,
-  settings: SettingsView,
-})[activePage.value]);
-
-const pageTitle = computed(() => ({
-  overview: "概要",
-  services: "サービス",
-  storage: "ストレージ",
-  settings: "設定",
-})[activePage.value]);
-
-function navigate(page: Page) {
-  activePage.value = page;
-  menuOpen.value = false;
-  document.title = `${pageTitle.value} · Deckox`;
-}
 
 async function refreshStatus() {
   try {
@@ -80,6 +55,12 @@ async function logout() {
     handleUnauthorized();
   }
 }
+
+watch(() => route.fullPath, () => {
+  menuOpen.value = false;
+  const title = typeof route.meta.title === "string" ? route.meta.title : "Deckox";
+  document.title = `${title} · Deckox`;
+}, { immediate: true });
 
 onMounted(() => {
   window.addEventListener("deckox:unauthorized", handleUnauthorized);
@@ -132,34 +113,18 @@ onBeforeUnmount(() => {
         <div><span>Deckox</span><small>サーバー管理</small></div>
       </div>
       <nav aria-label="メインナビゲーション">
-        <button
-          type="button"
-          :class="{ active: activePage === 'overview' }"
-          @click="navigate('overview')"
-        >
+        <RouterLink to="/">
           概要
-        </button>
-        <button
-          type="button"
-          :class="{ active: activePage === 'services' }"
-          @click="navigate('services')"
-        >
+        </RouterLink>
+        <RouterLink to="/services">
           サービス
-        </button>
-        <button
-          type="button"
-          :class="{ active: activePage === 'storage' }"
-          @click="navigate('storage')"
-        >
+        </RouterLink>
+        <RouterLink to="/storage">
           ストレージ
-        </button>
-        <button
-          type="button"
-          :class="{ active: activePage === 'settings' }"
-          @click="navigate('settings')"
-        >
+        </RouterLink>
+        <RouterLink to="/settings">
           設定
-        </button>
+        </RouterLink>
       </nav>
       <div class="agent-state">
         <span :class="['status-dot', status?.agent ? 'online' : 'offline']" />
@@ -181,11 +146,13 @@ onBeforeUnmount(() => {
     </aside>
 
     <main class="main-content">
-      <component
-        :is="activeComponent"
-        @status="status = $event"
-        @password-changed="handlePasswordChanged"
-      />
+      <RouterView v-slot="{ Component }">
+        <component
+          :is="Component"
+          @status="status = $event"
+          @password-changed="handlePasswordChanged"
+        />
+      </RouterView>
     </main>
   </div>
 </template>

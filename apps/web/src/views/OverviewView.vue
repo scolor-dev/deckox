@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import {
   api,
   formatBytes,
@@ -8,14 +8,43 @@ import {
   type SystemInfo,
   type SystemMetrics,
 } from "../api/client";
+import MetricChart from "../components/MetricChart.vue";
+import { useRealtimeMetrics } from "../composables/useRealtimeMetrics";
 
 const emit = defineEmits<{ status: [value: ServerStatus] }>();
+const HISTORY_LIMIT = 120;
 
 const status = ref<ServerStatus | null>(null);
 const system = ref<SystemInfo | null>(null);
 const metrics = ref<SystemMetrics | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
+const intervalSeconds = ref(1);
+const realtimeEnabled = ref(true);
+const cpuHistory = ref<number[]>([]);
+const memoryHistory = ref<number[]>([]);
+const loadHistory = ref<number[]>([]);
+
+const stream = useRealtimeMetrics(intervalSeconds, realtimeEnabled);
+const memoryPercent = computed(() => {
+  if (!metrics.value || metrics.value.memory.total_bytes === 0) return 0;
+  return metrics.value.memory.used_bytes / metrics.value.memory.total_bytes * 100;
+});
+const loadMaximum = computed(() => Math.max(metrics.value?.cpu.logical_cores ?? 1, 1));
+
+function appendHistory(target: typeof cpuHistory, value: number) {
+  target.value = [...target.value.slice(-(HISTORY_LIMIT - 1)), value];
+}
+
+function applyMetrics(value: SystemMetrics) {
+  metrics.value = value;
+  appendHistory(cpuHistory, value.cpu.usage_percent);
+  const percentage = value.memory.total_bytes > 0
+    ? value.memory.used_bytes / value.memory.total_bytes * 100
+    : 0;
+  appendHistory(memoryHistory, percentage);
+  appendHistory(loadHistory, value.load_average.one_minute);
+}
 
 async function refresh() {
   loading.value = true;
@@ -23,16 +52,22 @@ async function refresh() {
   try {
     status.value = await api.serverStatus();
     emit("status", status.value);
-    [system.value, metrics.value] = await Promise.all([
+    const [systemInfo, systemMetrics] = await Promise.all([
       api.systemInfo(),
       api.systemMetrics(),
     ]);
+    system.value = systemInfo;
+    applyMetrics(systemMetrics);
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "システム情報を取得できませんでした";
   } finally {
     loading.value = false;
   }
 }
+
+watch(stream.latest, (event) => {
+  if (event?.metrics) applyMetrics(event.metrics);
+});
 
 onMounted(refresh);
 </script>
@@ -46,14 +81,22 @@ onMounted(refresh);
           {{ system?.hostname ?? status?.agent?.hostname ?? "サーバー情報を取得しています" }}
         </p>
       </div>
-      <button
-        class="button"
-        type="button"
-        :disabled="loading"
-        @click="refresh"
-      >
-        {{ loading ? "確認中…" : "更新" }}
-      </button>
+      <div class="header-actions">
+        <span
+          :class="['stream-state', stream.status.value]"
+          role="status"
+        >
+          {{ stream.status.value === "connected" ? "リアルタイム" : stream.status.value === "paused" ? "一時停止" : "接続中" }}
+        </span>
+        <button
+          class="button"
+          type="button"
+          :disabled="loading"
+          @click="refresh"
+        >
+          {{ loading ? "確認中…" : "更新" }}
+        </button>
+      </div>
     </header>
 
     <div
@@ -92,25 +135,35 @@ onMounted(refresh);
           <span>CPU使用率</span><small>{{ metrics?.cpu.logical_cores ?? "—" }}コア</small>
         </div>
         <strong>{{ metrics ? `${metrics.cpu.usage_percent.toFixed(1)}%` : "—" }}</strong>
-        <div class="progress">
-          <span :style="{ width: `${metrics?.cpu.usage_percent ?? 0}%` }" />
-        </div>
+        <MetricChart
+          :values="cpuHistory"
+          :maximum="100"
+          label="CPU使用率の推移"
+        />
       </article>
       <article class="metric-card">
         <div class="metric-head">
           <span>メモリ</span><small>全体 {{ formatBytes(metrics?.memory.total_bytes ?? 0) }}</small>
         </div>
         <strong>{{ metrics ? `${formatBytes(metrics.memory.used_bytes)} 使用中` : "—" }}</strong>
-        <div class="progress">
-          <span :style="{ width: `${metrics ? metrics.memory.used_bytes / metrics.memory.total_bytes * 100 : 0}%` }" />
-        </div>
+        <MetricChart
+          :values="memoryHistory"
+          :maximum="100"
+          label="メモリ使用率の推移"
+        />
+        <small class="metric-foot">{{ memoryPercent.toFixed(1) }}%</small>
       </article>
       <article class="metric-card">
         <div class="metric-head">
           <span>負荷平均</span><small>5分 {{ metrics?.load_average.five_minutes.toFixed(2) ?? "—" }}</small>
         </div>
         <strong>{{ metrics?.load_average.one_minute.toFixed(2) ?? "—" }}</strong>
-        <small class="metric-foot">1分値・15分値 {{ metrics?.load_average.fifteen_minutes.toFixed(2) ?? "—" }}</small>
+        <MetricChart
+          :values="loadHistory"
+          :maximum="loadMaximum"
+          label="1分間負荷平均の推移"
+        />
+        <small class="metric-foot">15分 {{ metrics?.load_average.fifteen_minutes.toFixed(2) ?? "—" }}</small>
       </article>
     </section>
 
