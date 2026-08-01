@@ -23,43 +23,15 @@ services:
     init: true
     depends_on:
       - agent
-      - terminal
     ports:
       - "127.0.0.1:${DECKOX_PORT:-8080}:8080"
     environment:
       DECKOX_AGENT_SOCKET: /run/deckox/agent.sock
-      DECKOX_TERMINAL_SOCKET: /run/deckox-terminal/terminal.sock
       # 開発・UI確認専用の既定パスワードは deckox
       DECKOX_ADMIN_PASSWORD_HASH: "$$argon2id$$v=19$$m=19456,t=2,p=1$$gQ+hx1wm0mXLgOJ02QjNIQ$$FnI/+5BDDZuigmFeZ/5vrXs7ap5MZGwH7WLmb8AoAKI"
       RUST_LOG: "${RUST_LOG:-deckox_server=info}"
     volumes:
       - agent-runtime:/run/deckox
-      - terminal-runtime:/run/deckox-terminal
-    group_add:
-      - "10002"
-    read_only: true
-    tmpfs:
-      - /tmp:size=16m,mode=1777
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-
-  terminal:
-    image: deckox:local
-    restart: unless-stopped
-    init: true
-    user: "10002:10002"
-    entrypoint: ["/usr/local/bin/deckox-terminal"]
-    network_mode: none
-    environment:
-      DECKOX_TERMINAL_SOCKET: /run/deckox-terminal/terminal.sock
-      DECKOX_TERMINAL_ENABLED: "true"
-      DECKOX_TERMINAL_HOME: /var/lib/deckox-terminal
-      RUST_LOG: "${RUST_LOG:-deckox_terminal=info}"
-    volumes:
-      - terminal-runtime:/run/deckox-terminal
-      - terminal-home:/var/lib/deckox-terminal
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -70,5 +42,3 @@ services:
 
 volumes:
   agent-runtime:
-  terminal-runtime:
-  terminal-home:

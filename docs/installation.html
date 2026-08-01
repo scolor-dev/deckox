@@ -25,13 +25,13 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.2</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.3</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
         <p class="eyebrow">Installation</p>
         <h1>1つのコマンドから、2つのサービスを導入。</h1>
-        <p class="lead">インストーラーはGitHub ReleaseからCPUに合うアーカイブを取得し、SHA-256を検証してServer・Agent・Terminal・Vue・systemdユニットを配置します。</p>
+        <p class="lead">インストーラーはGitHub ReleaseからCPUに合うアーカイブを取得し、SHA-256を検証してServer・Agent・Vue・systemdユニットを配置します。</p>
       </header>
 
       <section class="section" aria-labelledby="flow-title">
@@ -56,9 +56,9 @@
       <section class="section" aria-labelledby="release-title">
         <h2 id="release-title">Releaseの作成</h2>
         <p><code>v*</code>タグのpushでRelease Workflowが起動します。</p>
-        <pre><code>git tag v0.3.2
+        <pre><code>git tag v0.3.3
 git push origin main
-git push origin v0.3.2</code></pre>
+git push origin v0.3.3</code></pre>
         <aside class="note"><strong>実行条件:</strong> インストールコマンドを利用するには、対象タグのGitHub Releaseと4つの配布ファイルが公開済みである必要があります。</aside>
       </section>
 
@@ -75,7 +75,7 @@ sudo sh install.sh</code></pre>
         <p>特定バージョンを選ぶ場合:</p>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.2 sh</code></pre>
+  | sudo DECKOX_VERSION=v0.3.3 sh</code></pre>
         <p>ローカル配布物を検証する場合は、アーカイブと同じ場所に<code>.sha256</code>ファイルを置いて指定します。</p>
         <pre><code>sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
   sh install.sh</code></pre>
@@ -87,17 +87,17 @@ sudo sh install.sh</code></pre>
           <dt>1. 前提確認</dt><dd>root権限と必要なLinuxコマンドの存在を確認</dd>
           <dt>2. CPU判定</dt><dd><code>uname -m</code>からx86-64またはARM64を選択</dd>
           <dt>3. 検証</dt><dd>アーカイブとSHA-256ファイルを取得してハッシュを比較</dd>
-          <dt>4. ユーザー</dt><dd><code>deckox</code>と隔離コンソール用<code>deckox-terminal</code>のグループ・システムユーザーを未作成の場合のみ作成</dd>
-          <dt>5. 配置</dt><dd>3バイナリ、Vue成果物、設定、systemdユニットを配置</dd>
+          <dt>4. ユーザー</dt><dd><code>deckox</code>グループとシステムユーザーを未作成の場合のみ作成</dd>
+          <dt>5. 配置</dt><dd>2バイナリ、Vue成果物、設定、systemdユニットを配置</dd>
           <dt>6. 認証</dt><dd>初回だけ管理者パスワードを生成し、Argon2idハッシュを<code>/var/lib/deckox</code>へ配置。旧配置からの更新時は既存値を移行して維持</dd>
-          <dt>7. 起動</dt><dd><code>deckox-agent</code>、<code>deckox-terminal</code>、<code>deckox-server</code>をenableして即時起動</dd>
+          <dt>7. 起動</dt><dd><code>deckox-agent</code>と<code>deckox-server</code>をenableして即時起動</dd>
         </dl>
       </section>
 
       <section class="section" aria-labelledby="operate-title">
         <h2 id="operate-title">導入後の確認</h2>
-        <pre><code>systemctl status deckox-server deckox-agent deckox-terminal
-journalctl -u deckox-server -u deckox-agent -u deckox-terminal -f</code></pre>
+        <pre><code>systemctl status deckox-server deckox-agent
+journalctl -u deckox-server -u deckox-agent -f</code></pre>
         <p>初回インストール時は管理者パスワードがターミナルへ一度だけ表示されます。更新時は既存のパスワードが維持されます。</p>
         <h3>管理者パスワードを変更する</h3>
         <p>通常は管理画面の「設定」から、現在のパスワードと12文字以上の新しいパスワードを入力します。現在のパスワード確認に5分間で5回失敗すると一時的に制限されます。変更後は全セッションが失効し、完了案内が表示されたログイン画面から新しいパスワードで再ログインします。</p>
@@ -145,11 +145,10 @@ managed_user = "sorac"</code></pre>
         <aside class="note warning"><strong>鍵の扱い:</strong> 入力するのは<code>ssh-ed25519</code>などで始まる公開鍵だけです。秘密鍵は入力しないでください。接続不能を防ぐため、外部行を含めて最後の鍵は削除できません。</aside>
       </section>
 
-      <section class="section" aria-labelledby="terminal-title">
-        <h2 id="terminal-title">Webコンソール</h2>
-        <p>配布する<code>deckox-terminal.service</code>でWebコンソールが有効です。管理画面の「コンソール」を開いている間だけ、Serverが専用UnixソケットへWebSocket接続しPTYを作成します。</p>
-        <p>シェルはroot AgentやServerではなく、systemdの<code>deckox-terminal</code>ユーザーで動きます。同時2セッションまでで、15分入力がなければ終了します。入力と出力はjournalへ保存しません。</p>
-        <aside class="note warning"><strong>権限:</strong> コンソールからroot権限は取得できません。<code>NoNewPrivileges</code>とファイルシステム保護に加え、Agentソケット、管理者パスワード、<code>/etc/deckox</code>を明示的にアクセス不能にしています。</aside>
+      <section class="section" aria-labelledby="migration-title">
+        <h2 id="migration-title">v0.3.2からの更新</h2>
+        <p>v0.3.3ではWebコンソールを削除しました。更新時は旧<code>deckox-terminal.service</code>をDeckox管理のユニットだと確認してから停止・無効化し、ユニットとバイナリを削除します。</p>
+        <p>旧アカウントのホーム・nologinシェル・主グループがDeckoxの作成条件と一致する場合だけ、<code>deckox-terminal</code>ユーザーとグループを削除します。<code>/var/lib/deckox-terminal</code>が空でなければデータ保護のため残し、インストーラーへ警告を表示します。</p>
       </section>
       <footer class="footer">Deckox Docs · Installation</footer>
     </main>

@@ -1,8 +1,8 @@
 [Unit]
 Description=Deckox web management server
 Documentation=https://github.com/scolor-dev/deckox
-After=network-online.target deckox-agent.service deckox-terminal.service
-Wants=network-online.target deckox-terminal.service
+After=network-online.target deckox-agent.service
+Wants=network-online.target
 Requires=deckox-agent.service
 
 [Service]
@@ -12,11 +12,9 @@ Environment=DECKOX_LISTEN_ADDR=127.0.0.1:8080
 Environment=DECKOX_AGENT_SOCKET=/run/deckox/agent.sock
 Environment=DECKOX_WEB_DIR=/usr/local/share/deckox/web
 Environment=DECKOX_ADMIN_PASSWORD_HASH_FILE=/var/lib/deckox/admin-password.hash
-Environment=DECKOX_TERMINAL_SOCKET=/run/deckox-terminal/terminal.sock
 Environment=RUST_LOG=deckox_server=info
 User=deckox
 Group=deckox
-SupplementaryGroups=deckox-terminal
 WorkingDirectory=/var/lib/deckox
 Restart=on-failure
 RestartSec=3s
