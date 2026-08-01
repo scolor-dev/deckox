@@ -99,10 +99,10 @@
             <tr><td>プロセス分離</td><td>Web Serverとroot Agentを別プロセス・別systemdユニットに分離</td></tr>
             <tr><td>Agent公開範囲</td><td>Unixソケットのみ。ネットワークポートは使用しない</td></tr>
             <tr><td>Server権限</td><td>専用<code>deckox</code>ユーザー、<code>NoNewPrivileges</code>、<code>ProtectSystem=strict</code></td></tr>
-            <tr><td>管理者認証</td><td>Argon2idハッシュ、HttpOnly・SameSite=Strict Cookie、12時間のメモリ内セッション</td></tr>
+            <tr><td>管理者認証</td><td>Argon2idハッシュ、HttpOnly・SameSite=Strict Cookie、12時間のメモリ内セッション、ログイン・パスワード再確認の試行制限</td></tr>
             <tr><td>変更API</td><td>認証に加え、ブラウザの<code>Origin</code>と<code>Host</code>が同一であることを確認</td></tr>
             <tr><td>Agent操作</td><td>systemd変更は完全一致許可リストに限定。SSH鍵管理は設定した非rootユーザーとDeckox管理ブロックだけに限定</td></tr>
-            <tr><td>SSH鍵</td><td>公開鍵だけを受け付け、鍵種別・Base64データ・内部鍵種別を検証。秘密鍵とrootは対象外</td></tr>
+            <tr><td>SSH鍵</td><td>公開鍵だけを受け付け、鍵種別・Base64データ・内部鍵種別を検証。ディレクトリFDと<code>O_NOFOLLOW</code>を用いてリンク差し替えを回避</td></tr>
             <tr><td>操作ログ</td><td>認証、パスワード変更、サービス・SSH鍵操作を送信元IP・リクエストID付きでjournalへ記録</td></tr>
           </tbody>
         </table>

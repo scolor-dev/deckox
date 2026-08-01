@@ -51,7 +51,7 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス詳細を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/services/{id}/{action}</code></span></td><td><span class="status done">実装済み</span></td><td>起動・停止・再起動。Agentの許可・エラー状態を維持して返却</td></tr>
-            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/password</code></span></td><td><span class="status done">実装済み</span></td><td>現在のパスワードを確認し、Argon2idハッシュを更新して全セッションを失効</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/password</code></span></td><td><span class="status done">実装済み</span></td><td>現在のパスワードを確認し、Argon2idハッシュを更新して全セッションを失効。5分間に5回の確認失敗で制限</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/settings/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>管理対象ユーザーとDeckox管理下のSSH公開鍵を取得</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>OpenSSH形式のSSH公開鍵を追加</td></tr>
             <tr><td><span class="endpoint"><span class="method">DELETE</span><code>/api/v1/settings/ssh/keys/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>ID指定でSSH公開鍵を削除</td></tr>
@@ -92,7 +92,7 @@
           <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>設定</h3><p>管理者パスワードの変更と、設定済みLinuxユーザーのSSH公開鍵管理を提供します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>設定</h3><p>管理者パスワードの変更、SSH公開鍵管理、変更・追加・削除後の完了通知を提供します。</p></article>
         </div>
       </section>
 

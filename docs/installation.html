@@ -100,7 +100,7 @@ sudo sh install.sh</code></pre>
 journalctl -u deckox-server -u deckox-agent -f</code></pre>
         <p>初回インストール時は管理者パスワードがターミナルへ一度だけ表示されます。更新時は既存のパスワードが維持されます。</p>
         <h3>管理者パスワードを変更する</h3>
-        <p>通常は管理画面の「設定」から、現在のパスワードと12文字以上の新しいパスワードを入力します。変更後は全セッションが失効するため、新しいパスワードで再ログインします。</p>
+        <p>通常は管理画面の「設定」から、現在のパスワードと12文字以上の新しいパスワードを入力します。現在のパスワード確認に5分間で5回失敗すると一時的に制限されます。変更後は全セッションが失効し、完了案内が表示されたログイン画面から新しいパスワードで再ログインします。</p>
         <p>ログインできない場合は、次のコマンドで再設定します。</p>
         <pre><code>printf '%s' '新しいパスワード' \
   | sudo /usr/local/bin/deckox-server hash-password \
@@ -134,7 +134,7 @@ allowed = [
         <pre><code>[ssh]
 managed_user = "sorac"</code></pre>
         <pre><code>sudo systemctl restart deckox-agent</code></pre>
-        <p>再起動後は管理画面の「設定」で、OpenSSH形式の公開鍵を追加・削除できます。Deckoxは<code>~/.ssh/authorized_keys</code>内の専用マーカーで囲んだ行だけを更新し、それ以外の既存行は保持します。</p>
+        <p>再起動後は管理画面の「設定」で、OpenSSH形式の公開鍵を追加・削除できます。Deckoxは<code>~/.ssh/authorized_keys</code>内の専用マーカーで囲んだ行だけを更新し、それ以外の既存行は保持します。追加・削除が完了すると同じ画面に通知されます。</p>
         <aside class="note warning"><strong>鍵の扱い:</strong> 入力するのは<code>ssh-ed25519</code>などで始まる公開鍵だけです。秘密鍵は入力しないでください。接続不能を防ぐため、外部行を含めて最後の鍵は削除できません。</aside>
       </section>
       <footer class="footer">Deckox Docs · Installation</footer>
