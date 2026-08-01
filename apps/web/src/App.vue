@@ -125,6 +125,9 @@ onBeforeUnmount(() => {
         <RouterLink to="/storage">
           {{ t("nav.storage") }}
         </RouterLink>
+        <RouterLink to="/console">
+          {{ t("nav.console") }}
+        </RouterLink>
         <RouterLink to="/settings">
           {{ t("nav.settings") }}
         </RouterLink>

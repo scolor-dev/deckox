@@ -10,7 +10,7 @@ export const messages = {
       openMenu: "メニューを開く", mainNavigation: "メインナビゲーション", connected: "接続中",
       stateUnavailable: "状態を確認できません", logout: "ログアウト", passwordChanged: "パスワードを変更しました。新しいパスワードでログインしてください。",
     },
-    nav: { overview: "概要", services: "サービス", storage: "ストレージ", settings: "設定" },
+    nav: { overview: "概要", services: "サービス", storage: "ストレージ", console: "コンソール", settings: "設定" },
     login: { title: "管理画面にログイン", description: "管理者パスワードを入力してください。", password: "パスワード", submit: "ログイン", submitting: "確認中…" },
     overview: {
       title: "概要", loadingHost: "サーバー情報を取得しています", realtime: "リアルタイム", paused: "一時停止", connecting: "接続中", reconnect: "再接続",
@@ -30,6 +30,13 @@ export const messages = {
     storage: {
       title: "ストレージ", summary: "{count}件のマウント", mount: "マウント先", filesystem: "ファイルシステム", capacity: "容量", usage: "使用状況",
       loading: "ストレージ情報を読み込んでいます…", empty: "マウントされたファイルシステムはありません。", available: "空き {value}", used: "{value} 使用",
+    },
+    console: {
+      title: "コンソール", subtitle: "Deckoxの非rootユーザーでLinuxシェルを操作します", connect: "接続", disconnect: "切断", connecting: "コンソールへ接続しています…",
+      disconnected: "コンソールとの接続が終了しました。", shellExited: "シェルが終了しました。", disabled: "Webコンソールはサーバー設定で無効です。",
+      nonRoot: "このコンソールはroot権限では動作しません。", limit: "同時{count}接続まで・{minutes}分間操作がない場合は自動終了します。", terminalLabel: "Linux Webコンソール",
+      states: { disconnected: "未接続", connecting: "接続中", connected: "接続済み" },
+      errors: { terminal_start_failed: "シェルを開始できませんでした。", terminal_io_failed: "コンソールの入出力でエラーが発生しました。", terminal_idle_timeout: "無操作時間が上限に達したため終了しました。" },
     },
     settings: {
       title: "設定", subtitle: "Deckoxとサーバーの管理設定", display: "表示とリアルタイム更新", displayDescription: "このブラウザで使う表示言語と更新方法を設定します。",
@@ -55,6 +62,7 @@ export const messages = {
       login: "ログインできませんでした。しばらくしてから再度お試しください。", overview: "システム情報を取得できませんでした。", services: "サービス一覧を取得できませんでした。",
       serviceAction: "サービス操作に失敗しました。", storage: "ストレージ情報を取得できませんでした。", password: "パスワードを変更できませんでした。",
       systemCapabilities: "システム操作の設定を取得できませんでした。", reboot: "コンピューターを再起動できませんでした。",
+      terminalStatus: "コンソールの設定を取得できませんでした。", terminalConnection: "コンソールへ接続できませんでした。",
       sshLoad: "SSH公開鍵を取得できませんでした。", sshAdd: "SSH公開鍵を追加できませんでした。", sshRemove: "SSH公開鍵を削除できませんでした。",
       agentUnavailable: "Agentに接続できません。", badRequest: "入力内容を確認してください。", conflict: "現在の状態では操作できません。", forbidden: "この操作は許可されていません。",
       internal: "内部エラーが発生しました。", invalidCredentials: "パスワードが正しくありません。", invalidCurrentPassword: "現在のパスワードが正しくありません。",
@@ -70,7 +78,7 @@ export const messages = {
       openMenu: "Open menu", mainNavigation: "Main navigation", connected: "Connected",
       stateUnavailable: "Status unavailable", logout: "Log out", passwordChanged: "Password changed. Sign in with your new password.",
     },
-    nav: { overview: "Overview", services: "Services", storage: "Storage", settings: "Settings" },
+    nav: { overview: "Overview", services: "Services", storage: "Storage", console: "Console", settings: "Settings" },
     login: { title: "Sign in to Deckox", description: "Enter the administrator password.", password: "Password", submit: "Sign in", submitting: "Checking…" },
     overview: {
       title: "Overview", loadingHost: "Loading server information", realtime: "Live", paused: "Paused", connecting: "Connecting", reconnect: "Reconnect",
@@ -90,6 +98,13 @@ export const messages = {
     storage: {
       title: "Storage", summary: "{count} mounts", mount: "Mount point", filesystem: "File system", capacity: "Capacity", usage: "Usage",
       loading: "Loading storage information…", empty: "No mounted file systems.", available: "{value} available", used: "{value} used",
+    },
+    console: {
+      title: "Console", subtitle: "Use a Linux shell as the non-root Deckox user", connect: "Connect", disconnect: "Disconnect", connecting: "Connecting to the console…",
+      disconnected: "The console connection has ended.", shellExited: "The shell has exited.", disabled: "The web console is disabled in the server configuration.",
+      nonRoot: "This console does not run with root privileges.", limit: "Up to {count} sessions; closes after {minutes} minutes without input.", terminalLabel: "Linux web console",
+      states: { disconnected: "Disconnected", connecting: "Connecting", connected: "Connected" },
+      errors: { terminal_start_failed: "Could not start the shell.", terminal_io_failed: "A console input/output error occurred.", terminal_idle_timeout: "The console closed after reaching the idle time limit." },
     },
     settings: {
       title: "Settings", subtitle: "Deckox and server settings", display: "Display and live updates", displayDescription: "Configure the language and update behavior for this browser.",
@@ -115,6 +130,7 @@ export const messages = {
       login: "Could not sign in. Try again shortly.", overview: "Could not load system information.", services: "Could not load services.",
       serviceAction: "The service operation failed.", storage: "Could not load storage information.", password: "Could not change the password.",
       systemCapabilities: "Could not load system operation settings.", reboot: "Could not restart the computer.",
+      terminalStatus: "Could not load console settings.", terminalConnection: "Could not connect to the console.",
       sshLoad: "Could not load SSH public keys.", sshAdd: "Could not add the SSH public key.", sshRemove: "Could not remove the SSH public key.",
       agentUnavailable: "Cannot connect to Agent.", badRequest: "Check the information you entered.", conflict: "This operation is not available in the current state.", forbidden: "This operation is not permitted.",
       internal: "An internal error occurred.", invalidCredentials: "The password is incorrect.", invalidCurrentPassword: "The current password is incorrect.",

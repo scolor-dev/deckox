@@ -13,7 +13,7 @@ use axum::{
     extract::{ConnectInfo, Request, State},
     http::{
         HeaderMap, HeaderValue, Method, StatusCode,
-        header::{COOKIE, HOST, ORIGIN, SET_COOKIE},
+        header::{COOKIE, HOST, ORIGIN, SET_COOKIE, UPGRADE},
     },
     middleware::Next,
     response::{IntoResponse, Response},
@@ -598,7 +598,8 @@ pub async fn require_auth(
             "authentication is required",
         );
     }
-    if is_state_changing(request.method()) && !same_origin(request.headers()) {
+    if requires_same_origin(request.method(), request.headers()) && !same_origin(request.headers())
+    {
         warn!(
             event = "auth_origin",
             request_id,
@@ -646,6 +647,13 @@ const fn is_state_changing(method: &Method) -> bool {
     !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS)
 }
 
+fn requires_same_origin(method: &Method, headers: &HeaderMap) -> bool {
+    is_state_changing(method)
+        || headers
+            .get(UPGRADE)
+            .is_some_and(|value| value.as_bytes().eq_ignore_ascii_case(b"websocket"))
+}
+
 fn error_response(status: StatusCode, code: &'static str, message: &'static str) -> Response {
     (
         status,
@@ -661,12 +669,12 @@ fn error_response(status: StatusCode, code: &'static str, message: &'static str)
 mod tests {
     use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
-    use axum::http::{HeaderMap, HeaderValue, header};
+    use axum::http::{HeaderMap, HeaderValue, Method, header};
     use tokio::sync::{Mutex, RwLock};
 
     use super::{
         AuthInner, AuthManager, MAX_FAILURES, PasswordConfirmationResult, hash_password,
-        is_rate_limited, record_failure, same_origin, session_token,
+        is_rate_limited, record_failure, requires_same_origin, same_origin, session_token,
     };
 
     #[test]
@@ -694,6 +702,15 @@ mod tests {
             HeaderValue::from_static("http://192.168.1.21:8080"),
         );
         assert!(same_origin(&headers));
+    }
+
+    #[test]
+    fn websocket_upgrade_requires_same_origin() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::UPGRADE, HeaderValue::from_static("websocket"));
+
+        assert!(requires_same_origin(&Method::GET, &headers));
+        assert!(!requires_same_origin(&Method::GET, &HeaderMap::new()));
     }
 
     #[tokio::test]

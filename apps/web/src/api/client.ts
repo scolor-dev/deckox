@@ -48,6 +48,14 @@ export interface SystemCapabilities {
   reboot_allowed: boolean;
 }
 
+export interface TerminalStatus {
+  enabled: boolean;
+  privileged: boolean;
+  active_sessions: number;
+  max_sessions: number;
+  idle_timeout_seconds: number;
+}
+
 export interface StorageMount {
   filesystem: string;
   filesystem_type: string;
@@ -178,6 +186,7 @@ export const api = {
       body: JSON.stringify({ current_password: currentPassword }),
       headers: { "Content-Type": "application/json" },
     }),
+  terminalStatus: () => request<TerminalStatus>("/api/v1/terminal/status"),
   storage: () => request<StorageMount[]>("/api/v1/storage"),
   services: () => request<ServiceSummary[]>("/api/v1/services"),
   serviceAction: (serviceId: string, action: "start" | "stop" | "restart") =>

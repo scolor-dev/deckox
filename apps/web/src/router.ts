@@ -3,11 +3,13 @@ import OverviewView from "./views/OverviewView.vue";
 import ServicesView from "./views/ServicesView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import StorageView from "./views/StorageView.vue";
+import ConsoleView from "./views/ConsoleView.vue";
 
 export const routes = [
   { path: "/", name: "overview", component: OverviewView, meta: { titleKey: "nav.overview" } },
   { path: "/services", name: "services", component: ServicesView, meta: { titleKey: "nav.services" } },
   { path: "/storage", name: "storage", component: StorageView, meta: { titleKey: "nav.storage" } },
+  { path: "/console", name: "console", component: ConsoleView, meta: { titleKey: "nav.console" } },
   { path: "/settings", name: "settings", component: SettingsView, meta: { titleKey: "nav.settings" } },
 ] as const;
 

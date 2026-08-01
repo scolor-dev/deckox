@@ -28,6 +28,7 @@ USER deckox:deckox
 EXPOSE 8080
 ENV DECKOX_LISTEN_ADDR=0.0.0.0:8080 \
     DECKOX_WEB_DIR=/usr/local/share/deckox/web \
-    DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock
+    DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
+    DECKOX_TERMINAL_ENABLED=true \
+    DECKOX_TERMINAL_HOME=/tmp
 ENTRYPOINT ["/usr/local/bin/deckox-server"]
-
