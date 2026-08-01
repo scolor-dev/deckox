@@ -1,6 +1,7 @@
 use std::{path::PathBuf, time::Duration};
 
 use axum::http::StatusCode;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::{
@@ -31,6 +32,29 @@ impl AgentClient {
         path: &str,
         request_id: &RequestId,
     ) -> Result<AgentResponse, String> {
+        self.request_with_body(method, path, request_id, None).await
+    }
+
+    pub async fn request_json<T: Serialize + Sync>(
+        &self,
+        method: &str,
+        path: &str,
+        request_id: &RequestId,
+        payload: &T,
+    ) -> Result<AgentResponse, String> {
+        let body = serde_json::to_vec(payload)
+            .map_err(|error| format!("failed to encode Agent API request: {error}"))?;
+        self.request_with_body(method, path, request_id, Some(&body))
+            .await
+    }
+
+    async fn request_with_body(
+        &self,
+        method: &str,
+        path: &str,
+        request_id: &RequestId,
+        body: Option<&[u8]>,
+    ) -> Result<AgentResponse, String> {
         let mut stream = tokio::time::timeout(
             Duration::from_secs(2),
             UnixStream::connect(&self.socket_path),
@@ -39,14 +63,27 @@ impl AgentClient {
         .map_err(|_| "agent connection timed out".to_owned())?
         .map_err(|error| format!("agent unavailable: {error}"))?;
 
+        let body = body.unwrap_or_default();
+        let content_type = if body.is_empty() {
+            String::new()
+        } else {
+            "Content-Type: application/json\r\n".to_owned()
+        };
         let request = format!(
-            "{method} {path} HTTP/1.1\r\nHost: agent\r\n{AGENT_REQUEST_ID_HEADER}: {}\r\nConnection: close\r\n\r\n",
-            request_id.0
+            "{method} {path} HTTP/1.1\r\nHost: agent\r\n{AGENT_REQUEST_ID_HEADER}: {}\r\n{content_type}Content-Length: {}\r\nConnection: close\r\n\r\n",
+            request_id.0,
+            body.len()
         );
         stream
             .write_all(request.as_bytes())
             .await
             .map_err(|error| format!("failed to request Agent API: {error}"))?;
+        if !body.is_empty() {
+            stream
+                .write_all(body)
+                .await
+                .map_err(|error| format!("failed to send Agent API request: {error}"))?;
+        }
 
         let mut response = Vec::with_capacity(4096);
         tokio::time::timeout(Duration::from_secs(35), stream.read_to_end(&mut response))

@@ -12,12 +12,19 @@ pub struct AgentConfig {
     pub socket: Option<PathBuf>,
     #[serde(default)]
     pub services: ServicesConfig,
+    #[serde(default)]
+    pub ssh: SshConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
 pub struct ServicesConfig {
     #[serde(default)]
     pub allowed: Vec<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct SshConfig {
+    pub managed_user: Option<String>,
 }
 
 impl AgentConfig {
@@ -65,11 +72,15 @@ socket = "/tmp/deckox.sock"
 
 [services]
 allowed = ["nginx.service", "postgresql.service"]
+
+[ssh]
+managed_user = "operator"
 "#,
         )
         .expect("config should parse");
 
         assert_eq!(config.services.allowed.len(), 2);
+        assert_eq!(config.ssh.managed_user.as_deref(), Some("operator"));
         assert_eq!(
             config
                 .socket

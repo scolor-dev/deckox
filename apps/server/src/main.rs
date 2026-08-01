@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use deckox_protocol::{AgentStatus, HealthResponse};
+use deckox_protocol::{AddSshKeyRequest, AgentStatus, HealthResponse};
 use serde::Serialize;
 use tokio::net::TcpListener;
 use tower_http::{
@@ -103,6 +103,14 @@ async fn main() {
         )
         .route("/auth/logout", post(auth::logout))
         .route("/settings/password", post(auth::change_password))
+        .route(
+            "/settings/ssh/keys",
+            get(proxy_ssh_keys).post(proxy_add_ssh_key),
+        )
+        .route(
+            "/settings/ssh/keys/{key_id}",
+            axum::routing::delete(proxy_remove_ssh_key),
+        )
         .route_layer(middleware::from_fn_with_state(
             auth.clone(),
             auth::require_auth,
@@ -226,6 +234,88 @@ async fn proxy_services(
     Extension(request_id): Extension<RequestId>,
 ) -> Response {
     proxy_agent(&state.agent, "GET", "/v1/services", &request_id).await
+}
+
+async fn proxy_ssh_keys(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/ssh/keys", &request_id).await
+}
+
+async fn proxy_add_ssh_key(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(payload): Json<AddSshKeyRequest>,
+) -> Response {
+    let response = match state
+        .agent
+        .request_json("POST", "/v1/ssh/keys", &request_id, &payload)
+        .await
+    {
+        Ok(response) => (response.status, Json(response.body)).into_response(),
+        Err(message) => agent_unavailable(message),
+    };
+    log_ssh_action("add", &response, &request_id, &user);
+    response
+}
+
+async fn proxy_remove_ssh_key(
+    State(state): State<AppState>,
+    Path(key_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    if key_id.len() != 64 || !key_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                code: "bad_request",
+                message: "invalid SSH key ID".to_owned(),
+            }),
+        )
+            .into_response();
+    }
+    let response = proxy_agent(
+        &state.agent,
+        "DELETE",
+        &format!("/v1/ssh/keys/{key_id}"),
+        &request_id,
+    )
+    .await;
+    log_ssh_action("remove", &response, &request_id, &user);
+    response
+}
+
+fn log_ssh_action(
+    action: &str,
+    response: &Response,
+    request_id: &RequestId,
+    user: &AuthenticatedUser,
+) {
+    if response.status().is_success() {
+        info!(
+            event = "ssh_key_action",
+            request_id = %request_id.0,
+            actor = "admin",
+            source_ip = %user.source_ip,
+            action,
+            result = "success",
+            "SSH public key action completed"
+        );
+    } else {
+        warn!(
+            event = "ssh_key_action",
+            request_id = %request_id.0,
+            actor = "admin",
+            source_ip = %user.source_ip,
+            action,
+            result = "failure",
+            status = response.status().as_u16(),
+            "SSH public key action failed"
+        );
+    }
 }
 
 async fn proxy_service_details(
@@ -357,6 +447,17 @@ async fn proxy_agent(
         )
             .into_response(),
     }
+}
+
+fn agent_unavailable(message: String) -> Response {
+    (
+        StatusCode::BAD_GATEWAY,
+        Json(ErrorResponse {
+            code: "agent_unavailable",
+            message,
+        }),
+    )
+        .into_response()
 }
 
 fn valid_service_id(service_id: &str) -> bool {

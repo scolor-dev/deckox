@@ -6,3 +6,8 @@ socket = "/run/deckox/agent.sock"
 # for service IDs listed here. Deckox's own services are always rejected.
 [services]
 allowed = []
+
+# SSH public-key management is disabled until a non-root Linux account is set.
+# Deckox never stores private keys and does not change sshd configuration.
+[ssh]
+# managed_user = "operator"

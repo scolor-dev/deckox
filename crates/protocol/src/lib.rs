@@ -115,6 +115,26 @@ pub struct CommandResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SshKeyList {
+    pub enabled: bool,
+    pub managed_user: Option<String>,
+    pub keys: Vec<SshKeySummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SshKeySummary {
+    pub id: String,
+    pub key_type: String,
+    pub fingerprint: String,
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddSshKeyRequest {
+    pub public_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CommandStatus {
     Accepted,

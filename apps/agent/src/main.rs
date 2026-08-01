@@ -8,31 +8,33 @@ use axum::{
     Extension, Json, Router,
     extract::{Path as AxumPath, State},
     middleware,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use deckox_protocol::{
-    AgentStatus, CommandResult, HealthResponse, ServiceAction, ServiceDetails, ServiceSummary,
-    StorageMount, SystemInfo, SystemMetrics,
+    AddSshKeyRequest, AgentStatus, CommandResult, HealthResponse, ServiceAction, ServiceDetails,
+    ServiceSummary, SshKeyList, SshKeySummary, StorageMount, SystemInfo, SystemMetrics,
 };
 use tokio::net::UnixListener;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    config::AgentConfig, error::AgentError, services::ServiceManager, storage::read_storage,
-    system::read_system_info,
+    config::AgentConfig, error::AgentError, services::ServiceManager, ssh_keys::SshKeyManager,
+    storage::read_storage, system::read_system_info,
 };
 
 mod config;
 mod error;
 mod request_context;
 mod services;
+mod ssh_keys;
 mod storage;
 mod system;
 
 #[derive(Clone)]
 struct AppState {
     services: ServiceManager,
+    ssh_keys: SshKeyManager,
 }
 
 #[tokio::main]
@@ -46,6 +48,10 @@ async fn main() {
     let socket_path = config.socket_path();
     let services = ServiceManager::new(config.services.allowed).unwrap_or_else(|error| {
         eprintln!("invalid service control configuration: {error:?}");
+        std::process::exit(2);
+    });
+    let ssh_keys = SshKeyManager::new(config.ssh.managed_user).unwrap_or_else(|error| {
+        eprintln!("invalid SSH key management configuration: {error:?}");
         std::process::exit(2);
     });
 
@@ -78,7 +84,9 @@ async fn main() {
         .route("/v1/services/{service_id}/start", post(start_service))
         .route("/v1/services/{service_id}/stop", post(stop_service))
         .route("/v1/services/{service_id}/restart", post(restart_service))
-        .with_state(AppState { services })
+        .route("/v1/ssh/keys", get(list_ssh_keys).post(add_ssh_key))
+        .route("/v1/ssh/keys/{key_id}", delete(remove_ssh_key))
+        .with_state(AppState { services, ssh_keys })
         .layer(middleware::from_fn(request_context::assign_request_id));
 
     info!(path = %socket_path.display(), "deckox agent started");
@@ -229,6 +237,61 @@ async fn control_service(
         ),
     }
 
+    result.map(Json)
+}
+
+async fn list_ssh_keys(State(state): State<AppState>) -> Result<Json<SshKeyList>, AgentError> {
+    state.ssh_keys.list().await.map(Json)
+}
+
+async fn add_ssh_key(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<request_context::RequestId>,
+    Json(payload): Json<AddSshKeyRequest>,
+) -> Result<Json<SshKeySummary>, AgentError> {
+    let result = state.ssh_keys.add(&payload.public_key).await;
+    match &result {
+        Ok(key) => info!(
+            event = "ssh_key_add",
+            request_id = %request_id.0,
+            fingerprint = %key.fingerprint,
+            result = "success",
+            "SSH public key added"
+        ),
+        Err(error) => warn!(
+            event = "ssh_key_add",
+            request_id = %request_id.0,
+            error = ?error,
+            result = "failure",
+            "SSH public key addition rejected"
+        ),
+    }
+    result.map(Json)
+}
+
+async fn remove_ssh_key(
+    State(state): State<AppState>,
+    AxumPath(key_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<SshKeySummary>, AgentError> {
+    let result = state.ssh_keys.remove(&key_id).await;
+    match &result {
+        Ok(key) => info!(
+            event = "ssh_key_remove",
+            request_id = %request_id.0,
+            fingerprint = %key.fingerprint,
+            result = "success",
+            "SSH public key removed"
+        ),
+        Err(error) => warn!(
+            event = "ssh_key_remove",
+            request_id = %request_id.0,
+            key_id,
+            error = ?error,
+            result = "failure",
+            "SSH public key removal rejected"
+        ),
+    }
     result.map(Json)
 }
 

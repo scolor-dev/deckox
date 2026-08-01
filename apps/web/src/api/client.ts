@@ -74,6 +74,19 @@ export interface AuthStatus {
   authenticated: boolean;
 }
 
+export interface SshKeySummary {
+  id: string;
+  key_type: string;
+  fingerprint: string;
+  comment: string | null;
+}
+
+export interface SshKeyList {
+  enabled: boolean;
+  managed_user: string | null;
+  keys: SshKeySummary[];
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -140,6 +153,17 @@ export const api = {
       },
       false,
     ),
+  sshKeys: () => request<SshKeyList>("/api/v1/settings/ssh/keys"),
+  addSshKey: (publicKey: string) =>
+    request<SshKeySummary>("/api/v1/settings/ssh/keys", {
+      method: "POST",
+      body: JSON.stringify({ public_key: publicKey }),
+      headers: { "Content-Type": "application/json" },
+    }),
+  removeSshKey: (keyId: string) =>
+    request<SshKeySummary>(`/api/v1/settings/ssh/keys/${encodeURIComponent(keyId)}`, {
+      method: "DELETE",
+    }),
   serverStatus: () => request<ServerStatus>("/api/v1/status"),
   systemInfo: () => request<SystemInfo>("/api/v1/system"),
   systemMetrics: () => request<SystemMetrics>("/api/v1/system/metrics"),
