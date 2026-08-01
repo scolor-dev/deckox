@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 import { ApiError, api, type SshKeyList, type SystemCapabilities } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import { notify } from "../notifications";
@@ -8,6 +9,7 @@ import { preferences } from "../preferences";
 
 const emit = defineEmits<{ passwordChanged: [] }>();
 const { t } = useI18n();
+const router = useRouter();
 
 const currentPassword = ref("");
 const newPassword = ref("");
@@ -73,9 +75,11 @@ async function rebootSystem() {
 
   rebooting.value = true;
   try {
+    const health = await api.health().catch(() => null);
     await api.rebootSystem(rebootPassword.value);
     rebootPassword.value = "";
-    notify("warning", t("settings.rebootAccepted"));
+    if (health) sessionStorage.setItem("deckox:restart-instance", health.instance_id);
+    await router.push({ name: "restarting" });
   } catch (caught) {
     systemErrorKey.value = apiErrorKey(caught, "errors.reboot");
   } finally {

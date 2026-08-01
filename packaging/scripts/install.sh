@@ -83,12 +83,21 @@ if ! id deckox >/dev/null 2>&1; then
   useradd --system --gid deckox --home-dir /var/lib/deckox \
     --shell /usr/sbin/nologin deckox
 fi
+if ! getent group deckox-terminal >/dev/null 2>&1; then
+  groupadd --system deckox-terminal
+fi
+if ! id deckox-terminal >/dev/null 2>&1; then
+  useradd --system --gid deckox-terminal --home-dir /var/lib/deckox-terminal \
+    --shell /usr/sbin/nologin deckox-terminal
+fi
 
 install -d -m 0750 -o root -g deckox /etc/deckox
 install -d -m 0750 -o deckox -g deckox /var/lib/deckox
+install -d -m 0750 -o deckox-terminal -g deckox-terminal /var/lib/deckox-terminal
 install -d -m 0755 /usr/local/share/deckox/web
 install -m 0755 "${work_dir}/release/bin/deckox-server" /usr/local/bin/deckox-server
 install -m 0755 "${work_dir}/release/bin/deckox-agent" /usr/local/bin/deckox-agent
+install -m 0755 "${work_dir}/release/bin/deckox-terminal" /usr/local/bin/deckox-terminal
 cp -R "${work_dir}/release/web/." /usr/local/share/deckox/web/
 
 if [ ! -f /etc/deckox/server.toml ]; then
@@ -116,10 +125,13 @@ install -m 0644 "${work_dir}/release/systemd/deckox-agent.service" \
   /etc/systemd/system/deckox-agent.service
 install -m 0644 "${work_dir}/release/systemd/deckox-server.service" \
   /etc/systemd/system/deckox-server.service
+install -m 0644 "${work_dir}/release/systemd/deckox-terminal.service" \
+  /etc/systemd/system/deckox-terminal.service
 
 systemctl daemon-reload
-systemctl enable deckox-agent.service deckox-server.service
+systemctl enable deckox-agent.service deckox-terminal.service deckox-server.service
 systemctl restart deckox-agent.service
+systemctl restart deckox-terminal.service
 systemctl restart deckox-server.service
 
 echo
@@ -132,4 +144,4 @@ else
   echo "The existing administrator password was preserved."
 fi
 echo "For remote access, use an SSH tunnel or a trusted LAN."
-echo "Check status with: systemctl status deckox-server deckox-agent"
+echo "Check status with: systemctl status deckox-server deckox-agent deckox-terminal"

@@ -25,13 +25,13 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.1</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.2</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
         <p class="eyebrow">Development</p>
         <h1>Rust WorkspaceとVueを、同じリポジトリで。</h1>
-        <p class="lead">Rust側はCargo Workspace、フロントはViteを利用します。開発時は一時Unixソケットを指定すると、root権限なしでServer–Agent通信を確認できます。</p>
+        <p class="lead">Rust側はCargo Workspace、フロントはViteを利用します。開発時は2つの一時Unixソケットを指定すると、root権限なしでServer–Agent・Terminal通信を確認できます。</p>
       </header>
 
       <section class="section" aria-labelledby="repo-title">
@@ -39,6 +39,7 @@
         <pre><code>apps/
 ├── agent/          # Rust / Linux Agent
 ├── server/         # Rust / Axum Server
+├── terminal/       # Rust / 隔離Web Terminal
 └── web/            # Vue + TypeScript
 crates/
 └── protocol/       # 共有Serialize型
@@ -56,17 +57,21 @@ scripts/
         <p>最初のターミナルでAgentを起動します。</p>
         <pre><code>DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
 cargo run --package deckox-agent</code></pre>
-        <p>開発用パスワードのハッシュを作り、次のターミナルでServerを起動します。Vueの本番ビルドを配信する場合は<code>DECKOX_WEB_DIR</code>を指定します。</p>
+        <p>2つ目のターミナルでTerminalを起動します。開発環境では現在の非rootユーザーで動作します。</p>
+        <pre><code>DECKOX_TERMINAL_SOCKET=/tmp/deckox-terminal.sock \
+DECKOX_TERMINAL_ENABLED=true \
+DECKOX_TERMINAL_HOME=/tmp \
+cargo run --package deckox-terminal</code></pre>
+        <p>開発用パスワードのハッシュを作り、3つ目のターミナルでServerを起動します。Vueの本番ビルドを配信する場合は<code>DECKOX_WEB_DIR</code>を指定します。</p>
         <pre><code>printf '%s' '開発用パスワード' \
   | cargo run --quiet --package deckox-server -- hash-password \
   &gt; /tmp/deckox-admin-password.hash</code></pre>
         <pre><code>DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
+DECKOX_TERMINAL_SOCKET=/tmp/deckox-terminal.sock \
 DECKOX_WEB_DIR="$PWD/apps/web/dist" \
 DECKOX_ADMIN_PASSWORD_HASH_FILE=/tmp/deckox-admin-password.hash \
-DECKOX_TERMINAL_ENABLED=true \
-DECKOX_TERMINAL_HOME=/tmp \
 cargo run --package deckox-server</code></pre>
-        <aside class="note warning">開発時のWebコンソールはServerを起動したローカルユーザーの権限で動きます。本番のsystemd版は専用の<code>deckox</code>ユーザーで動きます。Serverをrootで起動した場合、コンソールは強制的に無効になります。</aside>
+        <aside class="note warning">開発時のWebコンソールはTerminalを起動したローカルユーザーの権限で動きます。本番のsystemd版は専用の<code>deckox-terminal</code>ユーザーで動きます。Terminalをrootで起動した場合、コンソールは強制的に無効になります。</aside>
       </section>
 
       <section class="section" aria-labelledby="vue-title">
@@ -89,14 +94,15 @@ npm run build</code></pre>
             <tr><td><code>DECKOX_LISTEN_ADDR</code></td><td><code>127.0.0.1:8080</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_AGENT_CONFIG</code></td><td><code>/etc/deckox/agent.toml</code></td><td>Agent</td></tr>
             <tr><td><code>DECKOX_AGENT_SOCKET</code></td><td><code>/run/deckox/agent.sock</code></td><td>Server / Agent</td></tr>
+            <tr><td><code>DECKOX_TERMINAL_SOCKET</code></td><td><code>/run/deckox-terminal/terminal.sock</code></td><td>Server / Terminal</td></tr>
             <tr><td><code>DECKOX_WEB_DIR</code></td><td><code>/usr/local/share/deckox/web</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code></td><td><code>/var/lib/deckox/admin-password.hash</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH</code></td><td>なし</td><td>Server（開発・コンテナ向け）</td></tr>
             <tr><td><code>DECKOX_SECURE_COOKIE</code></td><td><code>false</code></td><td>Server。HTTPS終端時に<code>true</code></td></tr>
-            <tr><td><code>DECKOX_TERMINAL_ENABLED</code></td><td><code>false</code></td><td>Server。<code>true</code>かつ非rootプロセスの場合のみ有効</td></tr>
-            <tr><td><code>DECKOX_TERMINAL_SHELL</code></td><td><code>/bin/sh</code></td><td>Server。許可済みの絶対パスだけ指定可能</td></tr>
-            <tr><td><code>DECKOX_TERMINAL_HOME</code></td><td><code>/var/lib/deckox</code></td><td>Server。PTYの作業ディレクトリ</td></tr>
-            <tr><td><code>RUST_LOG</code></td><td>各プロセスの<code>info</code></td><td>Server / Agent</td></tr>
+            <tr><td><code>DECKOX_TERMINAL_ENABLED</code></td><td><code>false</code></td><td>Terminal。<code>true</code>かつ非rootプロセスの場合のみ有効</td></tr>
+            <tr><td><code>DECKOX_TERMINAL_SHELL</code></td><td><code>/bin/sh</code></td><td>Terminal。許可済みの絶対パスだけ指定可能</td></tr>
+            <tr><td><code>DECKOX_TERMINAL_HOME</code></td><td><code>/var/lib/deckox-terminal</code></td><td>Terminal。PTYの作業ディレクトリ</td></tr>
+            <tr><td><code>RUST_LOG</code></td><td>各プロセスの<code>info</code></td><td>Server / Agent / Terminal</td></tr>
           </tbody>
         </table>
         <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH</code>でハッシュを直接指定した場合は永続的な保存先がないため、設定画面からのパスワード変更は無効になります。</aside>
@@ -118,7 +124,7 @@ allowed = [
 
 [ssh]
 managed_user = "operator"</code></pre>
-        <p><code>deckox-agent.service</code>と<code>deckox-server.service</code>は登録しても起動時に拒否されます。</p>
+        <p><code>deckox-agent.service</code>、<code>deckox-server.service</code>、<code>deckox-terminal.service</code>は登録しても起動時に拒否されます。</p>
         <p><code>system.allow_reboot</code>は初期値<code>false</code>です。<code>true</code>にした場合だけ、パスワード再確認後のホスト再起動を受け付けます。</p>
         <p><code>ssh.managed_user</code>は既存の非rootローカルユーザーだけを指定できます。省略時はSSH公開鍵管理が無効になります。</p>
       </section>
@@ -150,7 +156,7 @@ npm run build</code></pre>
       <section class="section" aria-labelledby="docker-title">
         <h2 id="docker-title">Docker Compose</h2>
         <pre><code>docker compose up --build</code></pre>
-        <p>ComposeはServer–Agent通信とUIを確認するための開発構成です。<code>http://127.0.0.1:8080/</code>を開き、固定の開発用パスワード<code>deckox</code>でログインします。パスワードハッシュを環境変数で渡すため、設定画面からのパスワード変更は利用できません。</p>
+        <p>ComposeはServer–Agent・Terminal通信とUIを確認するための開発構成です。<code>http://127.0.0.1:8080/</code>を開き、固定の開発用パスワード<code>deckox</code>でログインします。パスワードハッシュを環境変数で渡すため、設定画面からのパスワード変更は利用できません。</p>
         <aside class="note warning"><strong>制限:</strong> コンテナ内のAgentはLinuxホストのsystemdを管理できません。Webコンソールもコンテナ内の非rootシェルです。本番のLinux管理用途ではsystemdサービスとして導入します。</aside>
       </section>
       <footer class="footer">Deckox Docs · Development</footer>

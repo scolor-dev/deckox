@@ -50,10 +50,16 @@ export interface SystemCapabilities {
 
 export interface TerminalStatus {
   enabled: boolean;
+  isolated: boolean;
   privileged: boolean;
   active_sessions: number;
   max_sessions: number;
   idle_timeout_seconds: number;
+}
+
+export interface ServerHealth {
+  status: "ok";
+  instance_id: string;
 }
 
 export interface StorageMount {
@@ -140,6 +146,7 @@ async function request<T>(
 }
 
 export const api = {
+  health: () => request<ServerHealth>("/healthz", undefined, false),
   authSession: () => request<AuthStatus>("/api/v1/auth/session", undefined, false),
   login: (password: string) =>
     request<AuthStatus>(

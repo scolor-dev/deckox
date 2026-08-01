@@ -11,6 +11,7 @@ export const messages = {
       stateUnavailable: "状態を確認できません", logout: "ログアウト", passwordChanged: "パスワードを変更しました。新しいパスワードでログインしてください。",
     },
     nav: { overview: "概要", services: "サービス", storage: "ストレージ", console: "コンソール", settings: "設定" },
+    restart: { title: "再起動しています", waiting: "再起動の開始を待っています…", offline: "コンピューターの起動を待っています…", ready: "再接続できました。ログイン画面へ戻ります。", timeout: "5分以内に再接続できませんでした。コンピューターの状態を確認してください。", retry: "もう一度確認", keepOpen: "この画面は閉じずにお待ちください。" },
     login: { title: "管理画面にログイン", description: "管理者パスワードを入力してください。", password: "パスワード", submit: "ログイン", submitting: "確認中…" },
     overview: {
       title: "概要", loadingHost: "サーバー情報を取得しています", realtime: "リアルタイム", paused: "一時停止", connecting: "接続中", reconnect: "再接続",
@@ -34,7 +35,7 @@ export const messages = {
     console: {
       title: "コンソール", subtitle: "Deckoxの非rootユーザーでLinuxシェルを操作します", connect: "接続", disconnect: "切断", connecting: "コンソールへ接続しています…",
       disconnected: "コンソールとの接続が終了しました。", shellExited: "シェルが終了しました。", disabled: "Webコンソールはサーバー設定で無効です。",
-      nonRoot: "このコンソールはroot権限では動作しません。", limit: "同時{count}接続まで・{minutes}分間操作がない場合は自動終了します。", terminalLabel: "Linux Webコンソール",
+      nonRoot: "このコンソールは専用の非rootユーザーに隔離されています。", limit: "同時{count}接続まで・{minutes}分間操作がない場合は自動終了します。", terminalLabel: "Linux Webコンソール",
       states: { disconnected: "未接続", connecting: "接続中", connected: "接続済み" },
       errors: { terminal_start_failed: "シェルを開始できませんでした。", terminal_io_failed: "コンソールの入出力でエラーが発生しました。", terminal_idle_timeout: "無操作時間が上限に達したため終了しました。" },
     },
@@ -79,6 +80,7 @@ export const messages = {
       stateUnavailable: "Status unavailable", logout: "Log out", passwordChanged: "Password changed. Sign in with your new password.",
     },
     nav: { overview: "Overview", services: "Services", storage: "Storage", console: "Console", settings: "Settings" },
+    restart: { title: "Restarting", waiting: "Waiting for the restart to begin…", offline: "Waiting for the computer to start…", ready: "Reconnected. Returning to sign in.", timeout: "Could not reconnect within five minutes. Check the computer status.", retry: "Check again", keepOpen: "Keep this page open while Deckox reconnects." },
     login: { title: "Sign in to Deckox", description: "Enter the administrator password.", password: "Password", submit: "Sign in", submitting: "Checking…" },
     overview: {
       title: "Overview", loadingHost: "Loading server information", realtime: "Live", paused: "Paused", connecting: "Connecting", reconnect: "Reconnect",
@@ -102,7 +104,7 @@ export const messages = {
     console: {
       title: "Console", subtitle: "Use a Linux shell as the non-root Deckox user", connect: "Connect", disconnect: "Disconnect", connecting: "Connecting to the console…",
       disconnected: "The console connection has ended.", shellExited: "The shell has exited.", disabled: "The web console is disabled in the server configuration.",
-      nonRoot: "This console does not run with root privileges.", limit: "Up to {count} sessions; closes after {minutes} minutes without input.", terminalLabel: "Linux web console",
+      nonRoot: "This console is isolated under a dedicated non-root user.", limit: "Up to {count} sessions; closes after {minutes} minutes without input.", terminalLabel: "Linux web console",
       states: { disconnected: "Disconnected", connecting: "Connecting", connected: "Connected" },
       errors: { terminal_start_failed: "Could not start the shell.", terminal_io_failed: "A console input/output error occurred.", terminal_idle_timeout: "The console closed after reaching the idle time limit." },
     },

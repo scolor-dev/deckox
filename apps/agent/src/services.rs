@@ -12,7 +12,11 @@ use tokio::process::Command;
 use crate::error::AgentError;
 
 static COMMAND_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-const PROTECTED_SERVICES: [&str; 2] = ["deckox-agent.service", "deckox-server.service"];
+const PROTECTED_SERVICES: [&str; 3] = [
+    "deckox-agent.service",
+    "deckox-server.service",
+    "deckox-terminal.service",
+];
 
 #[derive(Clone)]
 pub struct ServiceManager {
@@ -251,7 +255,9 @@ mod tests {
         assert!(ServiceManager::new(vec!["nginx.service".to_owned()]).is_ok());
         assert!(ServiceManager::new(vec!["nginx.service;reboot".to_owned()]).is_err());
         assert!(ServiceManager::new(vec!["-nginx.service".to_owned()]).is_err());
-        assert!(ServiceManager::new(vec![PROTECTED_SERVICES[0].to_owned()]).is_err());
+        for service in PROTECTED_SERVICES {
+            assert!(ServiceManager::new(vec![service.to_owned()]).is_err());
+        }
     }
 
     #[test]

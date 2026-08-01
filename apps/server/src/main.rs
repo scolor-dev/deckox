@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use deckox_protocol::{AddSshKeyRequest, AgentStatus, HealthResponse};
+use deckox_protocol::{AddSshKeyRequest, AgentStatus};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower_http::{
@@ -23,7 +23,7 @@ use crate::{
     auth::{AuthManager, AuthenticatedUser, PasswordConfirmationResult},
     metrics_stream::MetricsHub,
     request_context::RequestId,
-    terminal::TerminalManager,
+    terminal::TerminalClient,
 };
 
 mod agent_client;
@@ -41,7 +41,8 @@ struct AppState {
     agent: AgentClient,
     auth: AuthManager,
     metrics: MetricsHub,
-    terminal: TerminalManager,
+    terminal: TerminalClient,
+    instance_id: String,
 }
 
 impl FromRef<AppState> for AuthManager {
@@ -56,7 +57,7 @@ impl FromRef<AppState> for MetricsHub {
     }
 }
 
-impl FromRef<AppState> for TerminalManager {
+impl FromRef<AppState> for TerminalClient {
     fn from_ref(state: &AppState) -> Self {
         state.terminal.clone()
     }
@@ -75,6 +76,12 @@ struct ServerStatus {
 struct ErrorResponse {
     code: &'static str,
     message: String,
+}
+
+#[derive(Serialize)]
+struct ServerHealth {
+    status: &'static str,
+    instance_id: String,
 }
 
 #[derive(Deserialize)]
@@ -104,7 +111,7 @@ async fn main() {
         eprintln!("failed to load authentication configuration: {error}");
         std::process::exit(2);
     });
-    let terminal = TerminalManager::from_env().unwrap_or_else(|error| {
+    let terminal = TerminalClient::from_env().unwrap_or_else(|error| {
         eprintln!("failed to load terminal configuration: {error}");
         std::process::exit(2);
     });
@@ -116,6 +123,7 @@ async fn main() {
         auth: auth.clone(),
         metrics: MetricsHub::new(agent),
         terminal,
+        instance_id: format!("{:016x}", rand::random::<u64>()),
     };
 
     let protected_api = Router::new()
@@ -211,9 +219,10 @@ fn init_tracing() {
         .init();
 }
 
-async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse {
-        status: "ok".to_owned(),
+async fn health(State(state): State<AppState>) -> Json<ServerHealth> {
+    Json(ServerHealth {
+        status: "ok",
+        instance_id: state.instance_id,
     })
 }
 

@@ -199,7 +199,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "deckox-agent"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "axum",
  "base64",
@@ -217,14 +217,14 @@ dependencies = [
 
 [[package]]
 name = "deckox-protocol"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "deckox-server"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "argon2",
  "async-stream",
@@ -233,13 +233,27 @@ dependencies = [
  "futures-core",
  "futures-util",
  "hex",
- "portable-pty",
  "rand",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "deckox-terminal"
+version = "0.3.2"
+dependencies = [
+ "axum",
+ "deckox-protocol",
+ "portable-pty",
  "rustix",
  "serde",
  "serde_json",
  "tokio",
- "tower-http",
  "tracing",
  "tracing-subscriber",
 ]
