@@ -13,7 +13,7 @@ export const messages = {
     nav: { overview: "概要", services: "サービス", storage: "ストレージ", settings: "設定" },
     login: { title: "管理画面にログイン", description: "管理者パスワードを入力してください。", password: "パスワード", submit: "ログイン", submitting: "確認中…" },
     overview: {
-      title: "概要", loadingHost: "サーバー情報を取得しています", realtime: "リアルタイム", paused: "一時停止", connecting: "接続中",
+      title: "概要", loadingHost: "サーバー情報を取得しています", realtime: "リアルタイム", paused: "一時停止", connecting: "接続中", reconnect: "再接続",
       agentUnavailable: "Agentに接続できません", healthy: "サーバーは正常に動作しています", uptime: "稼働時間", architecture: "アーキテクチャ",
       resources: "リソース使用状況", cpu: "CPU使用率", cores: "{count}コア", cpuChart: "CPU使用率の推移", memory: "メモリ",
       total: "全体 {value}", inUse: "{value} 使用中", memoryChart: "メモリ使用率の推移", load: "負荷平均", fiveMinutes: "5分 {value}",
@@ -73,7 +73,7 @@ export const messages = {
     nav: { overview: "Overview", services: "Services", storage: "Storage", settings: "Settings" },
     login: { title: "Sign in to Deckox", description: "Enter the administrator password.", password: "Password", submit: "Sign in", submitting: "Checking…" },
     overview: {
-      title: "Overview", loadingHost: "Loading server information", realtime: "Live", paused: "Paused", connecting: "Connecting",
+      title: "Overview", loadingHost: "Loading server information", realtime: "Live", paused: "Paused", connecting: "Connecting", reconnect: "Reconnect",
       agentUnavailable: "Cannot connect to Agent", healthy: "Server is operating normally", uptime: "Uptime", architecture: "Architecture",
       resources: "Resource usage", cpu: "CPU usage", cores: "{count} cores", cpuChart: "CPU usage history", memory: "Memory",
       total: "Total {value}", inUse: "{value} in use", memoryChart: "Memory usage history", load: "Load average", fiveMinutes: "5 min {value}",

@@ -70,6 +70,11 @@ async function refresh() {
   }
 }
 
+async function recover() {
+  if (stream.status.value === "reconnecting") stream.reconnect();
+  await refresh();
+}
+
 watch(stream.latest, (event) => {
   if (event?.metrics) applyMetrics(event.metrics);
 });
@@ -105,12 +110,13 @@ onMounted(refresh);
           {{ stream.status.value === "connected" ? t("overview.realtime") : stream.status.value === "paused" ? t("overview.paused") : t("overview.connecting") }}
         </span>
         <button
+          v-if="stream.status.value === 'paused' || stream.status.value === 'reconnecting'"
           class="button"
           type="button"
           :disabled="loading"
-          @click="refresh"
+          @click="recover"
         >
-          {{ loading ? t("common.checking") : t("common.refresh") }}
+          {{ loading ? t("common.checking") : stream.status.value === "reconnecting" ? t("overview.reconnect") : t("common.refresh") }}
         </button>
       </div>
     </header>
