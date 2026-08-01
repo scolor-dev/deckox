@@ -1,14 +1,22 @@
 use std::{
-    os::unix::fs::{MetadataExt, PermissionsExt},
+    fs::File,
+    io::{Read, Write},
+    os::fd::OwnedFd,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
 };
 
 use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
 use deckox_protocol::{SshKeyList, SshKeySummary};
+use rustix::{
+    fs::{
+        AtFlags, FileType, Gid, Mode, OFlags, Uid, fchmod, fchown, fstat, fsync, mkdirat, open,
+        openat, renameat, unlinkat,
+    },
+    io::Errno,
+};
 use sha2::{Digest, Sha256};
-use tokio::{io::AsyncWriteExt, process::Command, sync::Mutex};
+use tokio::sync::Mutex;
 
 use crate::error::AgentError;
 
@@ -23,6 +31,7 @@ pub struct SshKeyManager {
     write_lock: Arc<Mutex<()>>,
 }
 
+#[derive(Clone)]
 struct TargetUser {
     username: String,
     home: PathBuf,
@@ -61,10 +70,16 @@ impl SshKeyManager {
                 keys: Vec::new(),
             });
         };
-        let document = read_document(target).await?;
+        let managed_user = target.username.clone();
+        let target = Arc::clone(target);
+        let document = tokio::task::spawn_blocking(move || read_document(&target))
+            .await
+            .map_err(|error| {
+                AgentError::internal(format!("SSH key read task failed: {error}"))
+            })??;
         Ok(SshKeyList {
             enabled: true,
-            managed_user: Some(target.username.clone()),
+            managed_user: Some(managed_user),
             keys: document
                 .managed
                 .into_iter()
@@ -77,18 +92,26 @@ impl SshKeyManager {
         let target = self.target()?;
         let key = parse_public_key(public_key)?;
         let _write_guard = self.write_lock.lock().await;
-        let mut document = read_document(target).await?;
-        if document
-            .managed
-            .iter()
-            .any(|existing| existing.summary.fingerprint == key.summary.fingerprint)
-        {
-            return Err(AgentError::conflict("SSH public key is already managed"));
-        }
+        let target = target.clone();
+        tokio::task::spawn_blocking(move || {
+            let directory = open_ssh_directory(&target, true)?.ok_or_else(|| {
+                AgentError::internal("failed to create managed user's .ssh directory")
+            })?;
+            let mut document = read_document_from(&directory, target.uid)?;
+            if document
+                .managed
+                .iter()
+                .any(|existing| existing.summary.fingerprint == key.summary.fingerprint)
+            {
+                return Err(AgentError::conflict("SSH public key is already managed"));
+            }
 
-        document.managed.push(key.clone());
-        write_document(target, &document).await?;
-        Ok(key.summary)
+            document.managed.push(key.clone());
+            write_document_to(&directory, &target, &document)?;
+            Ok(key.summary)
+        })
+        .await
+        .map_err(|error| AgentError::internal(format!("SSH key update task failed: {error}")))?
     }
 
     pub async fn remove(&self, key_id: &str) -> Result<SshKeySummary, AgentError> {
@@ -97,30 +120,39 @@ impl SshKeyManager {
         }
         let target = self.target()?;
         let _write_guard = self.write_lock.lock().await;
-        let mut document = read_document(target).await?;
-        let Some(index) = document
-            .managed
-            .iter()
-            .position(|key| key.summary.id.eq_ignore_ascii_case(key_id))
-        else {
-            return Err(AgentError::not_found("managed SSH public key not found"));
-        };
+        let target = target.clone();
+        let key_id = key_id.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let Some(directory) = open_ssh_directory(&target, false)? else {
+                return Err(AgentError::not_found("managed SSH public key not found"));
+            };
+            let mut document = read_document_from(&directory, target.uid)?;
+            let Some(index) = document
+                .managed
+                .iter()
+                .position(|key| key.summary.id.eq_ignore_ascii_case(&key_id))
+            else {
+                return Err(AgentError::not_found("managed SSH public key not found"));
+            };
 
-        let external_keys = document
-            .before
-            .iter()
-            .chain(&document.after)
-            .filter(|line| is_key_line(line))
-            .count();
-        if document.managed.len() + external_keys <= 1 {
-            return Err(AgentError::conflict(
-                "refusing to remove the last SSH public key",
-            ));
-        }
+            let external_keys = document
+                .before
+                .iter()
+                .chain(&document.after)
+                .filter(|line| is_key_line(line))
+                .count();
+            if document.managed.len() + external_keys <= 1 {
+                return Err(AgentError::conflict(
+                    "refusing to remove the last SSH public key",
+                ));
+            }
 
-        let removed = document.managed.remove(index);
-        write_document(target, &document).await?;
-        Ok(removed.summary)
+            let removed = document.managed.remove(index);
+            write_document_to(&directory, &target, &document)?;
+            Ok(removed.summary)
+        })
+        .await
+        .map_err(|error| AgentError::internal(format!("SSH key update task failed: {error}")))?
     }
 
     fn target(&self) -> Result<&TargetUser, AgentError> {
@@ -182,58 +214,11 @@ fn valid_username(username: &str) -> bool {
         })
 }
 
-async fn read_document(target: &TargetUser) -> Result<AuthorizedKeysDocument, AgentError> {
-    let ssh_directory = target.home.join(".ssh");
-    match tokio::fs::symlink_metadata(&ssh_directory).await {
-        Ok(metadata) => {
-            if !metadata.is_dir() || metadata.file_type().is_symlink() {
-                return Err(AgentError::forbidden("refusing unsafe .ssh directory"));
-            }
-            if metadata.uid() != target.uid {
-                return Err(AgentError::forbidden(
-                    ".ssh directory is not owned by the managed user",
-                ));
-            }
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(AuthorizedKeysDocument::empty());
-        }
-        Err(error) => {
-            return Err(AgentError::internal(format!(
-                "failed to inspect .ssh directory: {error}"
-            )));
-        }
-    }
-
-    let path = ssh_directory.join("authorized_keys");
-    let metadata = match tokio::fs::symlink_metadata(&path).await {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(AuthorizedKeysDocument::empty());
-        }
-        Err(error) => {
-            return Err(AgentError::internal(format!(
-                "failed to inspect authorized_keys: {error}"
-            )));
-        }
+fn read_document(target: &TargetUser) -> Result<AuthorizedKeysDocument, AgentError> {
+    let Some(directory) = open_ssh_directory(target, false)? else {
+        return Ok(AuthorizedKeysDocument::empty());
     };
-    if !metadata.is_file() || metadata.file_type().is_symlink() {
-        return Err(AgentError::forbidden(
-            "refusing unsafe authorized_keys path",
-        ));
-    }
-    if metadata.uid() != target.uid {
-        return Err(AgentError::forbidden(
-            "authorized_keys is not owned by the managed user",
-        ));
-    }
-    if metadata.len() > MAX_AUTHORIZED_KEYS_BYTES {
-        return Err(AgentError::bad_request("authorized_keys is too large"));
-    }
-    let content = tokio::fs::read_to_string(&path).await.map_err(|error| {
-        AgentError::internal(format!("failed to read authorized_keys: {error}"))
-    })?;
-    AuthorizedKeysDocument::parse(&content)
+    read_document_from(&directory, target.uid)
 }
 
 impl AuthorizedKeysDocument {
@@ -362,101 +347,176 @@ fn is_key_line(line: &str) -> bool {
     !line.is_empty() && !line.starts_with('#')
 }
 
-async fn write_document(
+fn open_ssh_directory(target: &TargetUser, create: bool) -> Result<Option<OwnedFd>, AgentError> {
+    let home = open(
+        &target.home,
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|error| AgentError::forbidden(format!("failed to open home directory: {error}")))?;
+
+    let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+    let mut created = false;
+    let directory = match openat(&home, ".ssh", flags, Mode::empty()) {
+        Ok(directory) => directory,
+        Err(Errno::NOENT) if !create => return Ok(None),
+        Err(Errno::NOENT) => {
+            match mkdirat(&home, ".ssh", Mode::from(0o700)) {
+                Ok(()) => created = true,
+                Err(Errno::EXIST) => {}
+                Err(error) => {
+                    return Err(AgentError::internal(format!(
+                        "failed to create .ssh directory: {error}"
+                    )));
+                }
+            }
+            openat(&home, ".ssh", flags, Mode::empty()).map_err(|error| {
+                AgentError::forbidden(format!("failed to safely open .ssh directory: {error}"))
+            })?
+        }
+        Err(error) => {
+            return Err(AgentError::forbidden(format!(
+                "failed to safely open .ssh directory: {error}"
+            )));
+        }
+    };
+    let metadata = fstat(&directory)
+        .map_err(|error| AgentError::internal(format!("failed to inspect .ssh: {error}")))?;
+    if !FileType::from_raw_mode(metadata.st_mode).is_dir()
+        || (!created && metadata.st_uid != target.uid)
+    {
+        return Err(AgentError::forbidden(
+            ".ssh must be a directory owned by the managed user",
+        ));
+    }
+    if created {
+        fchown(
+            &directory,
+            Some(Uid::from_raw(target.uid)),
+            Some(Gid::from_raw(target.gid)),
+        )
+        .map_err(|error| AgentError::internal(format!("failed to own .ssh directory: {error}")))?;
+    }
+    if create {
+        fchmod(&directory, Mode::from(0o700)).map_err(|error| {
+            AgentError::internal(format!("failed to secure .ssh directory: {error}"))
+        })?;
+    }
+    Ok(Some(directory))
+}
+
+fn read_document_from(
+    directory: &OwnedFd,
+    expected_uid: u32,
+) -> Result<AuthorizedKeysDocument, AgentError> {
+    let descriptor = match openat(
+        directory,
+        "authorized_keys",
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+    ) {
+        Ok(descriptor) => descriptor,
+        Err(Errno::NOENT) => return Ok(AuthorizedKeysDocument::empty()),
+        Err(error) => {
+            return Err(AgentError::forbidden(format!(
+                "failed to safely open authorized_keys: {error}"
+            )));
+        }
+    };
+    let metadata = fstat(&descriptor).map_err(|error| {
+        AgentError::internal(format!("failed to inspect authorized_keys: {error}"))
+    })?;
+    if !FileType::from_raw_mode(metadata.st_mode).is_file() || metadata.st_uid != expected_uid {
+        return Err(AgentError::forbidden(
+            "authorized_keys must be a regular file owned by the managed user",
+        ));
+    }
+    if u64::try_from(metadata.st_size).map_or(true, |size| size > MAX_AUTHORIZED_KEYS_BYTES) {
+        return Err(AgentError::bad_request("authorized_keys is too large"));
+    }
+
+    let mut content = String::new();
+    File::from(descriptor)
+        .take(MAX_AUTHORIZED_KEYS_BYTES + 1)
+        .read_to_string(&mut content)
+        .map_err(|error| {
+            AgentError::bad_request(format!("authorized_keys is not valid UTF-8: {error}"))
+        })?;
+    if content.len() as u64 > MAX_AUTHORIZED_KEYS_BYTES {
+        return Err(AgentError::bad_request("authorized_keys is too large"));
+    }
+    AuthorizedKeysDocument::parse(&content)
+}
+
+fn write_document_to(
+    directory: &OwnedFd,
     target: &TargetUser,
     document: &AuthorizedKeysDocument,
 ) -> Result<(), AgentError> {
-    let ssh_directory = target.home.join(".ssh");
-    match tokio::fs::symlink_metadata(&ssh_directory).await {
-        Ok(metadata)
-            if metadata.is_dir()
-                && !metadata.file_type().is_symlink()
-                && metadata.uid() == target.uid =>
-        {
-            tokio::fs::set_permissions(&ssh_directory, std::fs::Permissions::from_mode(0o700))
-                .await
-                .map_err(|error| {
-                    AgentError::internal(format!("failed to secure .ssh directory: {error}"))
-                })?;
-        }
-        Ok(_) => return Err(AgentError::forbidden("refusing unsafe .ssh directory")),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            tokio::fs::create_dir(&ssh_directory)
-                .await
-                .map_err(|error| {
-                    AgentError::internal(format!("failed to create .ssh directory: {error}"))
-                })?;
-            tokio::fs::set_permissions(&ssh_directory, std::fs::Permissions::from_mode(0o700))
-                .await
-                .map_err(|error| {
-                    AgentError::internal(format!("failed to secure .ssh directory: {error}"))
-                })?;
-            chown(&ssh_directory, target.uid, target.gid).await?;
-        }
-        Err(error) => {
-            return Err(AgentError::internal(format!(
-                "failed to inspect .ssh directory: {error}"
-            )));
-        }
-    }
-
-    let path = ssh_directory.join("authorized_keys");
-    let temporary_path = ssh_directory.join(format!(
+    let temporary_name = format!(
         ".authorized_keys.deckox.{}",
         hex::encode(rand::random::<[u8; 8]>())
-    ));
-    let result = async {
-        let mut options = tokio::fs::OpenOptions::new();
-        options.create_new(true).write(true).mode(0o600);
-        let mut file = options.open(&temporary_path).await.map_err(|error| {
+    );
+    let result = (|| {
+        let descriptor = openat(
+            directory,
+            temporary_name.as_str(),
+            OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::from(0o600),
+        )
+        .map_err(|error| {
             AgentError::internal(format!("failed to create authorized_keys update: {error}"))
         })?;
+        fchmod(&descriptor, Mode::from(0o600)).map_err(|error| {
+            AgentError::internal(format!("failed to secure authorized_keys update: {error}"))
+        })?;
+        fchown(
+            &descriptor,
+            Some(Uid::from_raw(target.uid)),
+            Some(Gid::from_raw(target.gid)),
+        )
+        .map_err(|error| {
+            AgentError::internal(format!("failed to own authorized_keys update: {error}"))
+        })?;
+        let mut file = File::from(descriptor);
         file.write_all(document.render().as_bytes())
-            .await
             .map_err(|error| {
                 AgentError::internal(format!("failed to write authorized_keys: {error}"))
             })?;
-        file.sync_all().await.map_err(|error| {
+        file.sync_all().map_err(|error| {
             AgentError::internal(format!("failed to sync authorized_keys: {error}"))
         })?;
         drop(file);
-        chown(&temporary_path, target.uid, target.gid).await?;
-        tokio::fs::rename(&temporary_path, &path)
-            .await
-            .map_err(|error| {
-                AgentError::internal(format!("failed to replace authorized_keys: {error}"))
-            })
-    }
-    .await;
+        renameat(
+            directory,
+            temporary_name.as_str(),
+            directory,
+            "authorized_keys",
+        )
+        .map_err(|error| {
+            AgentError::internal(format!("failed to replace authorized_keys: {error}"))
+        })?;
+        fsync(directory).map_err(|error| {
+            AgentError::internal(format!("failed to sync .ssh directory: {error}"))
+        })
+    })();
     if result.is_err() {
-        let _ = tokio::fs::remove_file(&temporary_path).await;
+        let _ = unlinkat(directory, temporary_name.as_str(), AtFlags::empty());
     }
     result
 }
 
-async fn chown(path: &Path, uid: u32, gid: u32) -> Result<(), AgentError> {
-    let owner = format!("{uid}:{gid}");
-    let status = tokio::time::timeout(
-        Duration::from_secs(5),
-        Command::new("chown")
-            .arg("--")
-            .arg(owner)
-            .arg(path)
-            .status(),
-    )
-    .await
-    .map_err(|_| AgentError::internal("chown timed out"))?
-    .map_err(|error| AgentError::internal(format!("failed to run chown: {error}")))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(AgentError::internal("chown failed"))
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{AuthorizedKeysDocument, END_MARKER, START_MARKER, parse_public_key};
+    use std::{
+        fs,
+        os::unix::fs::{MetadataExt, PermissionsExt, symlink},
+    };
+
+    use super::{
+        AuthorizedKeysDocument, END_MARKER, START_MARKER, TargetUser, open_ssh_directory,
+        parse_public_key, read_document_from, write_document_to,
+    };
 
     const ED25519_KEY: &str =
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA laptop";
@@ -481,5 +541,58 @@ mod tests {
     fn rejects_authorized_keys_options_for_new_keys() {
         let input = format!("from=\"10.0.0.0/8\" {ED25519_KEY}");
         assert!(parse_public_key(&input).is_err());
+    }
+
+    #[test]
+    fn writes_authorized_keys_through_directory_descriptor() {
+        let (root, target) = temporary_target();
+        let directory = open_ssh_directory(&target, true)
+            .expect("directory should open")
+            .expect("directory should exist");
+        let key = parse_public_key(ED25519_KEY).expect("key should parse");
+        let document = AuthorizedKeysDocument {
+            before: vec!["# existing".to_owned()],
+            managed: vec![key],
+            after: Vec::new(),
+        };
+
+        write_document_to(&directory, &target, &document).expect("document should write");
+        let loaded = read_document_from(&directory, target.uid).expect("document should read");
+        assert_eq!(loaded.managed.len(), 1);
+        let metadata = fs::metadata(target.home.join(".ssh/authorized_keys"))
+            .expect("authorized_keys should exist");
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
+        assert_eq!(metadata.uid(), target.uid);
+
+        fs::remove_dir_all(root).expect("temporary directory should be removed");
+    }
+
+    #[test]
+    fn rejects_symlinked_ssh_directory() {
+        let (root, target) = temporary_target();
+        let redirected = root.join("redirected");
+        fs::create_dir(&redirected).expect("redirect target should be created");
+        symlink(&redirected, target.home.join(".ssh")).expect("symlink should be created");
+
+        assert!(open_ssh_directory(&target, false).is_err());
+
+        fs::remove_dir_all(root).expect("temporary directory should be removed");
+    }
+
+    fn temporary_target() -> (std::path::PathBuf, TargetUser) {
+        let root = std::env::temp_dir().join(format!(
+            "deckox-ssh-test-{}",
+            hex::encode(rand::random::<[u8; 8]>())
+        ));
+        let home = root.join("home");
+        fs::create_dir_all(&home).expect("temporary home should be created");
+        let metadata = fs::metadata(&home).expect("temporary home should be readable");
+        let target = TargetUser {
+            username: "test-user".to_owned(),
+            home,
+            uid: metadata.uid(),
+            gid: metadata.gid(),
+        };
+        (root, target)
     }
 }
