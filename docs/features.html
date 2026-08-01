@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.0</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.1</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -46,8 +46,12 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/auth/logout</code></span></td><td><span class="status done">実装済み</span></td><td>セッションを無効化</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>Serverの名前・バージョン・状態とAgent状態。Agent障害時は<code>degraded</code></td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>Agentのシステム情報APIを中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト再起動がAgent設定で許可されているか取得</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みのホスト再起動をAgentへ要求</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのリソースメトリクスAPIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">SSE</span><code>/api/v1/events/metrics?interval=1|2|5</code></span></td><td><span class="status done">実装済み</span></td><td>CPU・メモリ・負荷平均を認証済みブラウザへ配信。購読者0件では採取を休止</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/terminal/status</code></span></td><td><span class="status done">実装済み</span></td><td>有効状態、同時接続数、無操作終了時間を取得</td></tr>
+            <tr><td><span class="endpoint"><span class="method">WS</span><code>/api/v1/terminal/ws</code></span></td><td><span class="status done">実装済み</span></td><td>非root PTYの入出力と端末サイズ変更。同一Origin、2接続、15分無操作終了</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのストレージAPIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス詳細を中継</td></tr>
@@ -70,6 +74,8 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/health</code></span></td><td><span class="status done">実装済み</span></td><td>Agentプロセスのヘルス状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト名、OS、CPUアーキテクチャ、<code>/proc/uptime</code>の秒数</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>OS、バージョン、カーネル、ホスト名、稼働時間、boot ID、タイムゾーン</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>設定に基づくホスト再起動の許可状態</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>許可時のみ<code>systemctl --no-block reboot</code>を実行</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>CPU使用率・コア数、メモリ・Swap、ロードアベレージ</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>ファイルシステム、形式、マウントポイント、容量・使用量</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>ロード済みsystemdサービス一覧と有効化状態</td></tr>
@@ -92,10 +98,12 @@
           <article class="card"><span class="status done">実装済み</span><h3>管理者ログイン</h3><p>セッション確認、ログイン、ログアウト、APIの401応答時のログイン画面復帰を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>Webコンソール</h3><p>非root PTYへWebSocketで接続し、接続状態、再接続、端末サイズ追従、無操作終了を提供します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>ホスト再起動</h3><p>Agent側で明示的に許可した場合だけ、設定画面で管理者パスワードを再確認して再起動します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/console</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>日本語・英語</h3><p>端末言語の自動判定と手動選択に対応し、APIエラーコードも選択言語の文言へ変換します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、SSH公開鍵、リアルタイム更新の有効化・1/2/5秒間隔、共通の成功・警告・失敗通知を提供します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、SSH公開鍵、ホスト再起動、リアルタイム更新の有効化・1/2/5秒間隔、共通通知を提供します。</p></article>
         </div>
       </section>
 
@@ -109,6 +117,7 @@
             <tr><td><code>HealthResponse</code></td><td><span class="status done">使用中</span></td><td>Server・Agentのヘルス応答</td></tr>
             <tr><td><code>AgentStatus</code></td><td><span class="status done">使用中</span></td><td>AgentからServerへ返すホスト状態</td></tr>
             <tr><td><code>SystemInfo</code>ほか</td><td><span class="status done">使用中</span></td><td>システム、メトリクス、ストレージ、サービスの応答型</td></tr>
+            <tr><td><code>SystemCapabilities</code></td><td><span class="status done">使用中</span></td><td>Agent設定に基づくホスト再起動の許可状態</td></tr>
             <tr><td><code>RealtimeMetricsEvent</code></td><td><span class="status done">使用中</span></td><td>SSEの連番、取得時刻、Agent接続状態、メトリクス、エラーコード</td></tr>
             <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動</td></tr>
             <tr><td><code>CommandResult</code></td><td><span class="status done">使用中</span></td><td>操作完了時のコマンドID、実行状態、メッセージ</td></tr>
@@ -123,7 +132,7 @@
         <h2 id="not-title">現時点で未実装のもの</h2>
         <div class="grid">
           <article class="card"><span class="status missing">未実装</span><h3>高度な認可</h3><p>複数ユーザー、ロール、MFAはありません。現在は単一管理者だけです。</p></article>
-          <article class="card"><span class="status missing">未実装</span><h3>その他のLinux操作</h3><p>Docker、ファイル、ネットワーク、パッケージの変更操作はありません。</p></article>
+          <article class="card"><span class="status missing">未実装</span><h3>専用のLinux管理画面</h3><p>Docker、ファイル、ネットワーク、パッケージを型付き操作で管理する専用API・画面はありません。</p></article>
           <article class="card"><span class="status missing">未実装</span><h3>永続化</h3><p>データベースと監査ログの専用保存・閲覧画面はありません。必要な操作イベントはjournalへ記録します。</p></article>
           <article class="card"><span class="status missing">未実装</span><h3>TLS終端</h3><p>Server自身によるHTTPS提供はありません。</p></article>
         </div>

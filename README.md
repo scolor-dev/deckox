@@ -3,13 +3,14 @@
 Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基盤です。
 
 現在は次の最小構成と、Agentによるシステム情報・リソース・ストレージ取得、
-許可リスト付きsystemdサービス管理、管理者パスワード変更、SSH公開鍵管理を
-提供します。SSEによるリアルタイムメトリクス、軽量SVG
-グラフ、日本語・英語の表示切替、画面ごとのURLとブラウザ別表示設定も実装済みです。
+許可リスト付きsystemdサービス管理、管理者パスワード変更、SSH公開鍵管理、
+パスワード再確認付きのホスト再起動を提供します。SSEによるリアルタイムメトリクス、
+軽量SVGグラフ、日本語・英語の表示切替、非root Webコンソール、画面ごとのURLと
+ブラウザ別表示設定も実装済みです。
 
 ```text
 Vue管理画面
-    ↕ REST / SSE
+    ↕ REST / SSE / WebSocket
 deckox-server（Axum API + Vue配信）
     ↓ HTTP over Unix socket
 deckox-agent（Linux操作）
@@ -52,6 +53,8 @@ DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock cargo run --package deckox-agent
 DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
 DECKOX_WEB_DIR="$PWD/apps/web/dist" \
 DECKOX_ADMIN_PASSWORD_HASH_FILE=/tmp/deckox-admin-password.hash \
+DECKOX_TERMINAL_ENABLED=true \
+DECKOX_TERMINAL_HOME=/tmp \
 cargo run --package deckox-server
 ```
 
@@ -99,12 +102,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.3.0`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.3.1`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -129,7 +132,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.0 sh
+  | sudo DECKOX_VERSION=v0.3.1 sh
 ```
 
 ローカルで作成した配布物を検証する場合は、アーカイブと同じ場所に
@@ -181,6 +184,27 @@ sudo systemctl restart deckox-agent
 失わないよう、外部の鍵を含めて最後の1本になる鍵は削除できません。Agentは
 `.ssh`をシンボリックリンクを辿らずに開き、同じディレクトリFDを基準として
 一時ファイルの作成、権限設定、同期、置換を行います。
+
+ホスト再起動は初期状態では無効です。利用する場合は
+`/etc/deckox/agent.toml`で明示的に許可し、Agentを再起動します。
+
+```toml
+[system]
+allow_reboot = true
+```
+
+```bash
+sudo systemctl restart deckox-agent
+```
+
+設定画面から再起動するときは管理者パスワードを再入力します。パスワード確認の
+試行制限はパスワード変更と共通です。
+
+Webコンソールはsystemd版で有効になり、`deckox-server`と同じ非rootの
+`deckox`ユーザー、`NoNewPrivileges`、`ProtectSystem=strict`の制限内で
+`/bin/sh`を起動します。同時2セッションまで、15分間入力がなければ終了し、
+画面を離れたりタブを非表示にしたりした場合も接続を閉じます。入力・出力内容は
+ログへ記録せず、セッションの開始・終了だけをjournalへ記録します。
 
 Serverは既定で`127.0.0.1:8080`だけに待ち受けます。別端末から一時的に
 確認する場合は、SSHトンネルを利用します。
@@ -248,6 +272,7 @@ Composeはハッシュを環境変数で直接渡すため、設定画面から�
 
 コンテナ内のAgentはLinuxホストのsystemdなどを管理できません。Linux全体を
 管理する本番用途では、systemdサービスとしてインストールしてください。
+Webコンソールもコンテナ内の非rootシェルであり、ホストのシェルではありません。
 
 ## セキュリティ
 
@@ -258,6 +283,7 @@ Serverと通信します。
 Serverは単一管理者のArgon2idパスワード認証と、12時間のメモリ内セッション
 を提供します。CookieはHttpOnly・SameSite=Strictです。ログインとパスワード
 再確認には送信元IP単位の試行制限があります。認証、パスワード変更、
-サービス操作、SSH公開鍵操作はリクエストID付きでjournalへ記録します。
+サービス操作、SSH公開鍵操作、ホスト再起動、コンソールの開始・終了は
+リクエストID付きでjournalへ記録します。
 Agentは任意のシェルコマンドを受け付けず、許可済みの型付き操作だけを
-実行します。
+実行します。WebコンソールはAgent内ではなく非root Server側で動作します。

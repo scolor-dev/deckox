@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.0</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.1</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -56,9 +56,9 @@
       <section class="section" aria-labelledby="release-title">
         <h2 id="release-title">Releaseの作成</h2>
         <p><code>v*</code>タグのpushでRelease Workflowが起動します。</p>
-        <pre><code>git tag v0.3.0
+        <pre><code>git tag v0.3.1
 git push origin main
-git push origin v0.3.0</code></pre>
+git push origin v0.3.1</code></pre>
         <aside class="note"><strong>実行条件:</strong> インストールコマンドを利用するには、対象タグのGitHub Releaseと4つの配布ファイルが公開済みである必要があります。</aside>
       </section>
 
@@ -75,7 +75,7 @@ sudo sh install.sh</code></pre>
         <p>特定バージョンを選ぶ場合:</p>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.0 sh</code></pre>
+  | sudo DECKOX_VERSION=v0.3.1 sh</code></pre>
         <p>ローカル配布物を検証する場合は、アーカイブと同じ場所に<code>.sha256</code>ファイルを置いて指定します。</p>
         <pre><code>sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
   sh install.sh</code></pre>
@@ -121,6 +121,13 @@ Environment=DECKOX_LISTEN_ADDR=192.168.1.21:8080</code></pre>
 
       <section class="section" aria-labelledby="agent-config-title">
         <h2 id="agent-config-title">操作を許可するサービス</h2>
+        <h3>ホスト再起動を許可する</h3>
+        <p>ホスト再起動は初期状態で無効です。利用する場合だけ、<code>/etc/deckox/agent.toml</code>へ次を設定します。</p>
+        <pre><code>[system]
+allow_reboot = true</code></pre>
+        <p>設定画面から実行するときは管理者パスワードの再確認が必要です。設定変更後はAgentを再起動します。</p>
+        <pre><code>sudo systemctl restart deckox-agent</code></pre>
+        <h3>systemdサービス操作を許可する</h3>
         <p><code>/etc/deckox/agent.toml</code>へ、起動・停止・再起動を許可するsystemdサービスを完全一致で指定します。初期値は空で、変更操作はすべて拒否されます。</p>
         <pre><code>[services]
 allowed = [
@@ -136,6 +143,13 @@ managed_user = "sorac"</code></pre>
         <pre><code>sudo systemctl restart deckox-agent</code></pre>
         <p>再起動後は管理画面の「設定」で、OpenSSH形式の公開鍵を追加・削除できます。Deckoxは<code>~/.ssh/authorized_keys</code>内の専用マーカーで囲んだ行だけを更新し、それ以外の既存行は保持します。追加・削除が完了すると同じ画面に通知されます。</p>
         <aside class="note warning"><strong>鍵の扱い:</strong> 入力するのは<code>ssh-ed25519</code>などで始まる公開鍵だけです。秘密鍵は入力しないでください。接続不能を防ぐため、外部行を含めて最後の鍵は削除できません。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="terminal-title">
+        <h2 id="terminal-title">Webコンソール</h2>
+        <p>配布する<code>deckox-server.service</code>ではWebコンソールが有効です。管理画面の「コンソール」を開いている間だけWebSocketとPTYを作成します。</p>
+        <p>シェルはroot Agentではなく、systemdの<code>deckox</code>ユーザーで動きます。同時2セッションまでで、15分入力がなければ終了します。入力と出力はjournalへ保存しません。</p>
+        <aside class="note warning"><strong>権限:</strong> コンソールからroot権限は取得できません。systemdの<code>NoNewPrivileges</code>とファイルシステム保護が適用されますが、非rootユーザーが読める情報と<code>/var/lib/deckox</code>への書き込みは可能です。</aside>
       </section>
       <footer class="footer">Deckox Docs · Installation</footer>
     </main>
