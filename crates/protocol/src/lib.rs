@@ -34,6 +34,15 @@ pub struct SystemMetrics {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RealtimeMetricsEvent {
+    pub sequence: u64,
+    pub timestamp_ms: u64,
+    pub agent_online: bool,
+    pub metrics: Option<SystemMetrics>,
+    pub error_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CpuMetrics {
     pub logical_cores: usize,
     pub usage_percent: f64,

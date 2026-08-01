@@ -14,6 +14,8 @@ license = "MIT"
 
 [workspace.dependencies]
 argon2 = "0.5"
+async-stream = "0.3"
+futures-core = "0.3"
 axum = "0.8"
 base64 = "0.22"
 deckox-protocol = { path = "crates/protocol" }
