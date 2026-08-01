@@ -41,68 +41,91 @@ onMounted(refresh);
   <div class="view">
     <header class="view-header">
       <div>
-        <p class="eyebrow">SYSTEM OVERVIEW</p>
-        <h1>{{ system?.hostname ?? status?.agent?.hostname ?? "Linux Server" }}</h1>
+        <h1>概要</h1>
+        <p class="subtitle">
+          {{ system?.hostname ?? status?.agent?.hostname ?? "サーバー情報を取得しています" }}
+        </p>
       </div>
-      <button class="button secondary" type="button" :disabled="loading" @click="refresh">
+      <button
+        class="button"
+        type="button"
+        :disabled="loading"
+        @click="refresh"
+      >
         {{ loading ? "確認中…" : "更新" }}
       </button>
     </header>
 
-    <div v-if="error" class="notice error">{{ error }}</div>
-    <div v-else-if="status?.agent_error" class="notice warning">
+    <div
+      v-if="error"
+      class="notice error"
+    >
+      {{ error }}
+    </div>
+    <div
+      v-else-if="status?.agent_error"
+      class="notice warning"
+    >
       Agentに接続できません: {{ status.agent_error }}
     </div>
 
-    <section class="hero-card">
-      <div>
-        <span :class="['status-dot', status?.agent ? 'online' : 'offline']"></span>
-        <span class="status-label">{{ status?.agent ? "SYSTEM ONLINE" : "AGENT OFFLINE" }}</span>
-        <h2>{{ system?.operating_system ?? "Linux" }}</h2>
-        <p>
-          {{ system?.os_version ? `Version ${system.os_version}` : "システム情報を取得しています" }}
-          <span v-if="system"> · Kernel {{ system.kernel_version }}</span>
-        </p>
+    <section class="server-summary">
+      <div class="server-state">
+        <span :class="['status-dot', status?.agent ? 'online' : 'offline']" />
+        <div>
+          <strong>{{ status?.agent ? "サーバーは正常に動作しています" : "Agentに接続できません" }}</strong>
+          <span>{{ system?.operating_system ?? "Linux" }} {{ system?.os_version ?? "" }}</span>
+        </div>
       </div>
-      <div class="orb" aria-hidden="true"></div>
+      <dl>
+        <div><dt>稼働時間</dt><dd>{{ formatUptime(system?.uptime_seconds) }}</dd></div>
+        <div><dt>アーキテクチャ</dt><dd>{{ system?.architecture ?? "—" }}</dd></div>
+      </dl>
     </section>
 
-    <section class="metric-grid" aria-label="リソース使用状況">
+    <section
+      class="metric-grid"
+      aria-label="リソース使用状況"
+    >
       <article class="metric-card">
-        <div class="metric-head"><span>CPU</span><small>{{ metrics?.cpu.logical_cores ?? "—" }} cores</small></div>
+        <div class="metric-head">
+          <span>CPU使用率</span><small>{{ metrics?.cpu.logical_cores ?? "—" }}コア</small>
+        </div>
         <strong>{{ metrics ? `${metrics.cpu.usage_percent.toFixed(1)}%` : "—" }}</strong>
-        <div class="progress"><span :style="{ width: `${metrics?.cpu.usage_percent ?? 0}%` }"></span></div>
+        <div class="progress">
+          <span :style="{ width: `${metrics?.cpu.usage_percent ?? 0}%` }" />
+        </div>
       </article>
       <article class="metric-card">
-        <div class="metric-head"><span>MEMORY</span><small>{{ formatBytes(metrics?.memory.total_bytes ?? 0) }}</small></div>
-        <strong>{{ metrics ? formatBytes(metrics.memory.used_bytes) : "—" }}</strong>
-        <div class="progress"><span :style="{ width: `${metrics ? metrics.memory.used_bytes / metrics.memory.total_bytes * 100 : 0}%` }"></span></div>
+        <div class="metric-head">
+          <span>メモリ</span><small>全体 {{ formatBytes(metrics?.memory.total_bytes ?? 0) }}</small>
+        </div>
+        <strong>{{ metrics ? `${formatBytes(metrics.memory.used_bytes)} 使用中` : "—" }}</strong>
+        <div class="progress">
+          <span :style="{ width: `${metrics ? metrics.memory.used_bytes / metrics.memory.total_bytes * 100 : 0}%` }" />
+        </div>
       </article>
       <article class="metric-card">
-        <div class="metric-head"><span>LOAD 1M</span><small>5m {{ metrics?.load_average.five_minutes.toFixed(2) ?? "—" }}</small></div>
+        <div class="metric-head">
+          <span>負荷平均</span><small>5分 {{ metrics?.load_average.five_minutes.toFixed(2) ?? "—" }}</small>
+        </div>
         <strong>{{ metrics?.load_average.one_minute.toFixed(2) ?? "—" }}</strong>
-        <small class="metric-foot">15m {{ metrics?.load_average.fifteen_minutes.toFixed(2) ?? "—" }}</small>
-      </article>
-      <article class="metric-card">
-        <div class="metric-head"><span>UPTIME</span><small>{{ system?.architecture ?? "—" }}</small></div>
-        <strong>{{ formatUptime(system?.uptime_seconds) }}</strong>
-        <small class="metric-foot">{{ system?.timezone ?? "Timezone unknown" }}</small>
+        <small class="metric-foot">1分値・15分値 {{ metrics?.load_average.fifteen_minutes.toFixed(2) ?? "—" }}</small>
       </article>
     </section>
 
     <section class="detail-panel">
       <div class="section-title">
-        <div><p class="eyebrow">HOST DETAILS</p><h2>システム詳細</h2></div>
+        <h2>システム情報</h2>
       </div>
       <dl class="details">
         <div><dt>ホスト名</dt><dd>{{ system?.hostname ?? "—" }}</dd></div>
         <div><dt>OS</dt><dd>{{ system ? `${system.operating_system} ${system.os_version ?? ""}` : "—" }}</dd></div>
         <div><dt>カーネル</dt><dd>{{ system?.kernel_version ?? "—" }}</dd></div>
         <div><dt>アーキテクチャ</dt><dd>{{ system?.architecture ?? "—" }}</dd></div>
-        <div><dt>Boot ID</dt><dd class="mono">{{ system?.boot_id ?? "—" }}</dd></div>
-        <div><dt>Server</dt><dd>{{ status?.status ?? "—" }} · v{{ status?.version ?? "—" }}</dd></div>
+        <div><dt>タイムゾーン</dt><dd>{{ system?.timezone ?? "—" }}</dd></div>
+        <div><dt>Deckox</dt><dd>バージョン {{ status?.version ?? "—" }}</dd></div>
       </dl>
     </section>
   </div>
 </template>
-

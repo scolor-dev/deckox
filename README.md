@@ -37,20 +37,19 @@ scripts/
 
 ## ローカル開発
 
-Rust側:
+Rust側はAgent用のUnixソケットと、Server用の管理者パスワードハッシュが
+必要です。通常のLinuxではAgentが`/run/deckox/agent.sock`を使用します。
+一般ユーザーで試す場合は、両方に同じ一時ソケットを指定します。
 
 ```bash
-cargo run --package deckox-agent
-cargo run --package deckox-server
-```
+printf '%s' '開発用パスワード' \
+  | cargo run --quiet --package deckox-server -- hash-password \
+  > /tmp/deckox-admin-password.hash
 
-通常のLinuxではAgentが`/run/deckox/agent.sock`を使用します。一般ユーザーで
-試す場合は、両方に同じ一時ソケットを指定します。
-
-```bash
 DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock cargo run --package deckox-agent
 DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
 DECKOX_WEB_DIR="$PWD/apps/web/dist" \
+DECKOX_ADMIN_PASSWORD_HASH_FILE=/tmp/deckox-admin-password.hash \
 cargo run --package deckox-server
 ```
 
@@ -77,22 +76,32 @@ npm run build
 ```bash
 cargo fmt --all --check
 cargo test --workspace
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets --all-features --locked -- \
+  -D warnings -W clippy::pedantic -W clippy::nursery
 
 cd apps/web
 npm ci
+npm run lint
 npm run typecheck
 npm run build
 ```
 
+## CI
+
+`main`・`develop`へのpushとPull RequestでGitHub Actionsの通常CIが動きます。
+
+- Rust: `fmt`、厳格なClippy、ワークスペーステスト
+- Vue: 依存関係の固定インストール、ESLint、型チェック、本番ビルド
+- Packaging: インストール・リリース用シェルの構文確認
+
 ## GitHubからインストール
 
-`v0.1.0`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.2.0`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -117,7 +126,15 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.1.0 sh
+  | sudo DECKOX_VERSION=v0.2.0 sh
+```
+
+ローカルで作成した配布物を検証する場合は、アーカイブと同じ場所に
+`.sha256`ファイルを置いて指定できます。
+
+```bash
+sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
+  sh install.sh
 ```
 
 インストール後:
@@ -126,6 +143,49 @@ curl -fsSL \
 systemctl status deckox-server deckox-agent
 journalctl -u deckox-server -u deckox-agent -f
 ```
+
+初回インストール時には、ランダムな管理者パスワードがターミナルへ一度だけ
+表示されます。更新時は既存のパスワードが維持されます。パスワードを再設定
+する場合:
+
+```bash
+printf '%s' '新しいパスワード' \
+  | sudo /usr/local/bin/deckox-server hash-password \
+  | sudo tee /etc/deckox/admin-password.hash >/dev/null
+sudo chown root:deckox /etc/deckox/admin-password.hash
+sudo chmod 0640 /etc/deckox/admin-password.hash
+sudo systemctl restart deckox-server
+```
+
+Serverは既定で`127.0.0.1:8080`だけに待ち受けます。別端末から一時的に
+確認する場合は、SSHトンネルを利用します。
+
+```bash
+ssh -L 8080:127.0.0.1:8080 user@server
+```
+
+LAN内の端末から常時アクセスする場合は、サーバーのLANアドレスだけへ
+待受先を上書きします。次の例ではサーバーのアドレスを`192.168.1.21`と
+しています。
+
+```bash
+sudo systemctl edit deckox-server
+```
+
+```ini
+[Service]
+Environment=DECKOX_LISTEN_ADDR=192.168.1.21:8080
+```
+
+保存後に反映します。
+
+```bash
+sudo systemctl restart deckox-server
+```
+
+同じLANの端末から`http://192.168.1.21:8080/`を開き、管理者パスワードで
+ログインできます。TLS終端は未実装なので、信頼できるLANまたはSSHトンネル
+内だけで利用し、ルーターのポート転送や外部公開には使用しないでください。
 
 配置先:
 
@@ -156,6 +216,9 @@ Docker Composeは開発・UI確認用にも利用できます。
 docker compose up --build
 ```
 
+`http://127.0.0.1:8080/`を開き、開発用パスワード`deckox`でログインします。
+これはローカル開発専用の固定値です。
+
 コンテナ内のAgentはLinuxホストのsystemdなどを管理できません。Linux全体を
 管理する本番用途では、systemdサービスとしてインストールしてください。
 
@@ -165,5 +228,7 @@ docker compose up --build
 `deckox-agent`は別プロセスとし、外部TCPポートを公開せずUnixソケットだけで
 Serverと通信します。
 
-現在のAgentは状態取得だけを提供します。今後のシステム操作APIでは、任意の
-シェルコマンドを受け付けず、許可済みの型付き操作だけを実装します。
+Serverは単一管理者のArgon2idパスワード認証と、12時間のメモリ内セッション
+を提供します。CookieはHttpOnly・SameSite=Strictです。サービス操作と認証
+イベントはリクエストID付きでjournalへ記録します。Agentは任意のシェル
+コマンドを受け付けず、許可済みの型付き操作だけを実行します。

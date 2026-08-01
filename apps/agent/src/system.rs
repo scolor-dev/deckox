@@ -51,9 +51,7 @@ pub async fn read_system_metrics() -> Result<SystemMetrics, AgentError> {
 
     Ok(SystemMetrics {
         cpu: CpuMetrics {
-            logical_cores: std::thread::available_parallelism()
-                .map(usize::from)
-                .unwrap_or(1),
+            logical_cores: std::thread::available_parallelism().map_or(1, usize::from),
             usage_percent,
         },
         memory,
@@ -133,13 +131,15 @@ fn parse_key_values(input: &str) -> HashMap<String, String> {
         .collect()
 }
 
-fn parse_uptime(input: &str) -> Result<u64, AgentError> {
-    input
+pub fn parse_uptime(input: &str) -> Result<u64, AgentError> {
+    let value = input
         .split_whitespace()
         .next()
-        .and_then(|value| value.parse::<f64>().ok())
-        .map(|value| value as u64)
-        .ok_or_else(|| AgentError::internal("invalid /proc/uptime format"))
+        .ok_or_else(|| AgentError::internal("invalid /proc/uptime format"))?;
+    let whole_seconds = value.split_once('.').map_or(value, |(whole, _)| whole);
+    whole_seconds
+        .parse()
+        .map_err(|_| AgentError::internal("invalid /proc/uptime format"))
 }
 
 #[derive(Clone, Copy)]
@@ -179,7 +179,11 @@ fn calculate_cpu_usage(first: CpuSample, second: CpuSample) -> Result<f64, Agent
     if total == 0 {
         return Err(AgentError::internal("CPU sample interval was empty"));
     }
-    Ok((((total.saturating_sub(idle)) as f64 / total as f64) * 100.0).clamp(0.0, 100.0))
+    let active = u32::try_from(total.saturating_sub(idle))
+        .map_err(|_| AgentError::internal("CPU active sample was too large"))?;
+    let total =
+        u32::try_from(total).map_err(|_| AgentError::internal("CPU sample was too large"))?;
+    Ok(((f64::from(active) / f64::from(total)) * 100.0).clamp(0.0, 100.0))
 }
 
 fn parse_memory(input: &str) -> Result<MemoryMetrics, AgentError> {
@@ -281,6 +285,6 @@ mod tests {
     #[test]
     fn parses_load_average_values() {
         let load = parse_load_average("0.10 0.20 0.30 1/100 123").expect("valid load");
-        assert_eq!(load.five_minutes, 0.20);
+        assert!((load.five_minutes - 0.20).abs() < f64::EPSILON);
     }
 }

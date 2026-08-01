@@ -1,9 +1,10 @@
-use std::{env, net::SocketAddr, path::PathBuf};
+use std::{env, io::Read, net::SocketAddr, path::PathBuf};
 
 use axum::{
-    Json, Router,
-    extract::{Path, State},
+    Extension, Json, Router,
+    extract::{FromRef, Path, State},
     http::StatusCode,
+    middleware,
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -14,20 +15,33 @@ use tower_http::{
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::agent_client::AgentClient;
+use crate::{
+    auth::{AuthManager, AuthenticatedUser},
+    request_context::RequestId,
+};
 
 mod agent_client;
+mod auth;
+mod request_context;
 
-const DEFAULT_LISTEN_ADDR: &str = "0.0.0.0:8080";
+const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:8080";
 const DEFAULT_AGENT_SOCKET: &str = "/run/deckox/agent.sock";
 const DEFAULT_WEB_DIR: &str = "/usr/local/share/deckox/web";
 
 #[derive(Clone)]
 struct AppState {
     agent: AgentClient,
+    auth: AuthManager,
+}
+
+impl FromRef<AppState> for AuthManager {
+    fn from_ref(state: &AppState) -> Self {
+        state.auth.clone()
+    }
 }
 
 #[derive(Serialize)]
@@ -47,6 +61,11 @@ struct ErrorResponse {
 
 #[tokio::main]
 async fn main() {
+    if env::args().nth(1).as_deref() == Some("hash-password") {
+        hash_password_from_stdin();
+        return;
+    }
+
     init_tracing();
 
     let listen_addr = env::var("DECKOX_LISTEN_ADDR")
@@ -58,13 +77,18 @@ async fn main() {
         });
     let web_dir =
         PathBuf::from(env::var("DECKOX_WEB_DIR").unwrap_or_else(|_| DEFAULT_WEB_DIR.to_owned()));
+    let auth = AuthManager::load().unwrap_or_else(|error| {
+        eprintln!("failed to load authentication configuration: {error}");
+        std::process::exit(2);
+    });
     let state = AppState {
         agent: AgentClient::new(PathBuf::from(
             env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| DEFAULT_AGENT_SOCKET.to_owned()),
         )),
+        auth: auth.clone(),
     };
 
-    let api = Router::new()
+    let protected_api = Router::new()
         .route("/status", get(status))
         .route("/system", get(proxy_system))
         .route("/system/metrics", get(proxy_metrics))
@@ -77,14 +101,24 @@ async fn main() {
             "/services/{service_id}/restart",
             post(proxy_restart_service),
         )
+        .route("/auth/logout", post(auth::logout))
+        .route_layer(middleware::from_fn_with_state(
+            auth.clone(),
+            auth::require_auth,
+        ))
         .fallback(api_not_found);
+    let public_api = Router::new()
+        .route("/auth/login", post(auth::login))
+        .route("/auth/session", get(auth::status))
+        .merge(protected_api);
     let static_files =
         ServeDir::new(&web_dir).not_found_service(ServeFile::new(web_dir.join("index.html")));
     let app = Router::new()
         .route("/healthz", get(health))
-        .nest("/api/v1", api)
+        .nest("/api/v1", public_api)
         .fallback_service(static_files)
         .layer(TraceLayer::new_for_http())
+        .layer(middleware::from_fn(request_context::assign_request_id))
         .with_state(state);
 
     let listener = TcpListener::bind(listen_addr)
@@ -96,12 +130,31 @@ async fn main() {
 
     info!(address = %listen_addr, web_dir = %web_dir.display(), "deckox server started");
 
-    if let Err(error) = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
+    if let Err(error) = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
     {
         error!(%error, "server stopped unexpectedly");
         std::process::exit(1);
+    }
+}
+
+fn hash_password_from_stdin() {
+    let mut password = String::new();
+    if let Err(error) = std::io::stdin().take(1025).read_to_string(&mut password) {
+        eprintln!("failed to read password: {error}");
+        std::process::exit(2);
+    }
+    let password = password.trim_end_matches(['\r', '\n']);
+    match auth::hash_password(password) {
+        Ok(hash) => println!("{hash}"),
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
     }
 }
 
@@ -120,8 +173,15 @@ async fn health() -> Json<HealthResponse> {
     })
 }
 
-async fn status(State(state): State<AppState>) -> Json<ServerStatus> {
-    match state.agent.get_json::<AgentStatus>("/v1/status").await {
+async fn status(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Json<ServerStatus> {
+    match state
+        .agent
+        .get_json::<AgentStatus>("/v1/status", &request_id)
+        .await
+    {
         Ok(agent) => Json(ServerStatus {
             name: "deckox",
             version: env!("CARGO_PKG_VERSION"),
@@ -139,48 +199,91 @@ async fn status(State(state): State<AppState>) -> Json<ServerStatus> {
     }
 }
 
-async fn proxy_system(State(state): State<AppState>) -> Response {
-    proxy_agent(&state.agent, "GET", "/v1/system").await
+async fn proxy_system(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/system", &request_id).await
 }
 
-async fn proxy_metrics(State(state): State<AppState>) -> Response {
-    proxy_agent(&state.agent, "GET", "/v1/system/metrics").await
+async fn proxy_metrics(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/system/metrics", &request_id).await
 }
 
-async fn proxy_storage(State(state): State<AppState>) -> Response {
-    proxy_agent(&state.agent, "GET", "/v1/storage").await
+async fn proxy_storage(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/storage", &request_id).await
 }
 
-async fn proxy_services(State(state): State<AppState>) -> Response {
-    proxy_agent(&state.agent, "GET", "/v1/services").await
+async fn proxy_services(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/services", &request_id).await
 }
 
 async fn proxy_service_details(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
 ) -> Response {
-    proxy_service_request(&state.agent, "GET", &service_id, None).await
+    proxy_service_request(&state.agent, "GET", &service_id, None, &request_id, None).await
 }
 
 async fn proxy_start_service(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
 ) -> Response {
-    proxy_service_request(&state.agent, "POST", &service_id, Some("start")).await
+    proxy_service_request(
+        &state.agent,
+        "POST",
+        &service_id,
+        Some("start"),
+        &request_id,
+        Some(&user),
+    )
+    .await
 }
 
 async fn proxy_stop_service(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
 ) -> Response {
-    proxy_service_request(&state.agent, "POST", &service_id, Some("stop")).await
+    proxy_service_request(
+        &state.agent,
+        "POST",
+        &service_id,
+        Some("stop"),
+        &request_id,
+        Some(&user),
+    )
+    .await
 }
 
 async fn proxy_restart_service(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
 ) -> Response {
-    proxy_service_request(&state.agent, "POST", &service_id, Some("restart")).await
+    proxy_service_request(
+        &state.agent,
+        "POST",
+        &service_id,
+        Some("restart"),
+        &request_id,
+        Some(&user),
+    )
+    .await
 }
 
 async fn proxy_service_request(
@@ -188,6 +291,8 @@ async fn proxy_service_request(
     method: &str,
     service_id: &str,
     action: Option<&str>,
+    request_id: &RequestId,
+    user: Option<&AuthenticatedUser>,
 ) -> Response {
     if !valid_service_id(service_id) {
         return (
@@ -200,15 +305,47 @@ async fn proxy_service_request(
             .into_response();
     }
 
-    let path = match action {
-        Some(action) => format!("/v1/services/{service_id}/{action}"),
-        None => format!("/v1/services/{service_id}"),
-    };
-    proxy_agent(client, method, &path).await
+    let path = action.map_or_else(
+        || format!("/v1/services/{service_id}"),
+        |action| format!("/v1/services/{service_id}/{action}"),
+    );
+    let response = proxy_agent(client, method, &path, request_id).await;
+    if let (Some(action), Some(user)) = (action, user) {
+        if response.status().is_success() {
+            info!(
+                event = "service_action",
+                request_id = %request_id.0,
+                actor = "admin",
+                source_ip = %user.source_ip,
+                service = service_id,
+                action,
+                result = "success",
+                "service action completed"
+            );
+        } else {
+            warn!(
+                event = "service_action",
+                request_id = %request_id.0,
+                actor = "admin",
+                source_ip = %user.source_ip,
+                service = service_id,
+                action,
+                result = "failure",
+                status = response.status().as_u16(),
+                "service action failed"
+            );
+        }
+    }
+    response
 }
 
-async fn proxy_agent(client: &AgentClient, method: &str, path: &str) -> Response {
-    match client.request(method, path).await {
+async fn proxy_agent(
+    client: &AgentClient,
+    method: &str,
+    path: &str,
+    request_id: &RequestId,
+) -> Response {
+    match client.request(method, path, request_id).await {
         Ok(response) => (response.status, Json(response.body)).into_response(),
         Err(message) => (
             StatusCode::BAD_GATEWAY,

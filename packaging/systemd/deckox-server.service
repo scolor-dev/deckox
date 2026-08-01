@@ -8,9 +8,10 @@ Requires=deckox-agent.service
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/deckox-server
-Environment=DECKOX_LISTEN_ADDR=0.0.0.0:8080
+Environment=DECKOX_LISTEN_ADDR=127.0.0.1:8080
 Environment=DECKOX_AGENT_SOCKET=/run/deckox/agent.sock
 Environment=DECKOX_WEB_DIR=/usr/local/share/deckox/web
+Environment=DECKOX_ADMIN_PASSWORD_HASH_FILE=/etc/deckox/admin-password.hash
 Environment=RUST_LOG=deckox_server=info
 User=deckox
 Group=deckox
@@ -25,4 +26,3 @@ ReadWritePaths=/var/lib/deckox
 
 [Install]
 WantedBy=multi-user.target
-

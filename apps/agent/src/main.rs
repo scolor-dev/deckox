@@ -5,8 +5,9 @@ use std::{
 };
 
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     extract::{Path as AxumPath, State},
+    middleware,
     routing::{get, post},
 };
 use deckox_protocol::{
@@ -14,7 +15,7 @@ use deckox_protocol::{
     StorageMount, SystemInfo, SystemMetrics,
 };
 use tokio::net::UnixListener;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
@@ -24,6 +25,7 @@ use crate::{
 
 mod config;
 mod error;
+mod request_context;
 mod services;
 mod storage;
 mod system;
@@ -76,7 +78,8 @@ async fn main() {
         .route("/v1/services/{service_id}/start", post(start_service))
         .route("/v1/services/{service_id}/stop", post(stop_service))
         .route("/v1/services/{service_id}/restart", post(restart_service))
-        .with_state(AppState { services });
+        .with_state(AppState { services })
+        .layer(middleware::from_fn(request_context::assign_request_id));
 
     info!(path = %socket_path.display(), "deckox agent started");
 
@@ -129,14 +132,12 @@ async fn health() -> Json<HealthResponse> {
 async fn agent_status() -> Json<AgentStatus> {
     let hostname = tokio::fs::read_to_string("/etc/hostname")
         .await
-        .map(|value| value.trim().to_owned())
-        .unwrap_or_else(|_| "unknown".to_owned());
+        .map_or_else(|_| "unknown".to_owned(), |value| value.trim().to_owned());
 
     let uptime_seconds = tokio::fs::read_to_string("/proc/uptime")
         .await
         .ok()
-        .and_then(|value| value.split_whitespace().next()?.parse::<f64>().ok())
-        .map(|seconds| seconds as u64);
+        .and_then(|value| system::parse_uptime(&value).ok());
 
     Json(AgentStatus {
         status: "running".to_owned(),
@@ -175,34 +176,60 @@ async fn service_details(
 async fn start_service(
     State(state): State<AppState>,
     AxumPath(service_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
 ) -> Result<Json<CommandResult>, AgentError> {
-    state
-        .services
-        .control(&service_id, ServiceAction::Start)
-        .await
-        .map(Json)
+    control_service(state, service_id, ServiceAction::Start, request_id).await
 }
 
 async fn stop_service(
     State(state): State<AppState>,
     AxumPath(service_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
 ) -> Result<Json<CommandResult>, AgentError> {
-    state
-        .services
-        .control(&service_id, ServiceAction::Stop)
-        .await
-        .map(Json)
+    control_service(state, service_id, ServiceAction::Stop, request_id).await
 }
 
 async fn restart_service(
     State(state): State<AppState>,
     AxumPath(service_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
 ) -> Result<Json<CommandResult>, AgentError> {
-    state
-        .services
-        .control(&service_id, ServiceAction::Restart)
-        .await
-        .map(Json)
+    control_service(state, service_id, ServiceAction::Restart, request_id).await
+}
+
+async fn control_service(
+    state: AppState,
+    service_id: String,
+    action: ServiceAction,
+    request_id: request_context::RequestId,
+) -> Result<Json<CommandResult>, AgentError> {
+    let action_name = match &action {
+        ServiceAction::Start => "start",
+        ServiceAction::Stop => "stop",
+        ServiceAction::Restart => "restart",
+    };
+    let result = state.services.control(&service_id, action).await;
+
+    match &result {
+        Ok(command_result) => info!(
+            event = "service_action",
+            request_id = %request_id.0,
+            service = %service_id,
+            action = action_name,
+            status = ?command_result.status,
+            "service action completed"
+        ),
+        Err(error) => warn!(
+            event = "service_action",
+            request_id = %request_id.0,
+            service = %service_id,
+            action = action_name,
+            error = ?error,
+            "service action rejected"
+        ),
+    }
+
+    result.map(Json)
 }
 
 async fn shutdown_signal() {

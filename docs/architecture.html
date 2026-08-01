@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.1.0</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.2.0</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -53,7 +53,7 @@
           <article class="card">
             <span class="number">SERVER</span>
             <h3>Axum Server</h3>
-            <p>Vueの静的配信、公開HTTP API、Agent APIの安全な中継を担当します。一般ユーザーの<code>deckox</code>で動作します。</p>
+            <p>Vueの静的配信、管理者認証、公開HTTP API、Agent APIの安全な中継を担当します。一般ユーザーの<code>deckox</code>で動作します。</p>
           </article>
           <article class="card">
             <span class="number">AGENT</span>
@@ -69,7 +69,7 @@
           <dt>Transport</dt><dd>HTTP over Unix domain socket</dd>
           <dt>Socket</dt><dd><code>/run/deckox/agent.sock</code></dd>
           <dt>Permission</dt><dd><code>0660</code>。systemdでは<code>deckox</code>グループを使用</dd>
-          <dt>Timeout</dt><dd>接続とレスポンス読み取りにそれぞれ2秒</dd>
+          <dt>Timeout</dt><dd>接続は2秒、レスポンス読み取りは35秒。Agent内のsystemd操作は30秒で打ち切る</dd>
           <dt>Failure</dt><dd>Agentへ接続できない場合、Server状態APIは<code>degraded</code>とエラー内容を返す</dd>
         </dl>
       </section>
@@ -80,6 +80,7 @@
 /usr/local/bin/deckox-agent
 /usr/local/share/deckox/web/
 /etc/deckox/
+├── admin-password.hash
 ├── server.toml
 └── agent.toml
 /var/lib/deckox/
@@ -87,7 +88,7 @@
 /etc/systemd/system/
 ├── deckox-server.service
 └── deckox-agent.service</code></pre>
-        <p>設定ファイルの配置場所は確保されていますが、現在のバイナリ設定は環境変数から読み込まれます。</p>
+        <p>Agentは<code>agent.toml</code>を読み込み、ソケットの場所を環境変数で上書きできます。Serverは現在、環境変数から設定を読み込み、<code>server.toml</code>は将来の設定場所として予約されています。</p>
       </section>
 
       <section class="section" aria-labelledby="security-title">
@@ -98,10 +99,13 @@
             <tr><td>プロセス分離</td><td>Web Serverとroot Agentを別プロセス・別systemdユニットに分離</td></tr>
             <tr><td>Agent公開範囲</td><td>Unixソケットのみ。ネットワークポートは使用しない</td></tr>
             <tr><td>Server権限</td><td>専用<code>deckox</code>ユーザー、<code>NoNewPrivileges</code>、<code>ProtectSystem=strict</code></td></tr>
+            <tr><td>管理者認証</td><td>Argon2idハッシュ、HttpOnly・SameSite=Strict Cookie、12時間のメモリ内セッション</td></tr>
+            <tr><td>変更API</td><td>認証に加え、ブラウザの<code>Origin</code>と<code>Host</code>が同一であることを確認</td></tr>
             <tr><td>Agent操作</td><td>systemd変更操作は設定ファイルの完全一致許可リストに限定。Deckox自身のサービスは常に拒否</td></tr>
+            <tr><td>操作ログ</td><td>認証とサービス操作を送信元IP・リクエストID付きでjournalへ記録</td></tr>
           </tbody>
         </table>
-        <aside class="note warning"><strong>未実装:</strong> ログイン認証、認可、TLS、監査ログはまだ存在しません。</aside>
+        <aside class="note warning"><strong>未実装:</strong> 複数ユーザー・ロール・MFA・TLS終端・監査ログの専用閲覧画面はまだ存在しません。</aside>
       </section>
       <footer class="footer">Deckox Docs · Architecture</footer>
     </main>

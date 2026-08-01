@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { api, formatBytes, type StorageMount } from "../api/client";
 
 const mounts = ref<StorageMount[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
-
-const totalBytes = computed(() => mounts.value.reduce((sum, mount) => sum + mount.total_bytes, 0));
-const usedBytes = computed(() => mounts.value.reduce((sum, mount) => sum + mount.used_bytes, 0));
 
 async function refresh() {
   loading.value = true;
@@ -28,35 +25,85 @@ onMounted(refresh);
   <div class="view">
     <header class="view-header">
       <div>
-        <p class="eyebrow">FILESYSTEM STORAGE</p>
         <h1>ストレージ</h1>
-        <p class="subtitle">{{ formatBytes(usedBytes) }} / {{ formatBytes(totalBytes) }} used</p>
+        <p class="subtitle">
+          {{ mounts.length }}件のマウント
+        </p>
       </div>
-      <button class="button secondary" type="button" :disabled="loading" @click="refresh">
+      <button
+        class="button"
+        type="button"
+        :disabled="loading"
+        @click="refresh"
+      >
         {{ loading ? "読込中…" : "更新" }}
       </button>
     </header>
 
-    <div v-if="error" class="notice error">{{ error }}</div>
+    <div
+      v-if="error"
+      class="notice error"
+    >
+      {{ error }}
+    </div>
 
-    <section class="storage-grid">
-      <article v-for="mount in mounts" :key="`${mount.filesystem}:${mount.mount_point}`" class="storage-card">
-        <div class="storage-head">
-          <div><span class="mount-icon">◆</span><strong>{{ mount.mount_point }}</strong></div>
-          <span class="usage">{{ mount.usage_percent.toFixed(0) }}%</span>
-        </div>
-        <p>{{ mount.filesystem }} · {{ mount.filesystem_type }}</p>
-        <div class="progress storage-progress">
-          <span :class="{ critical: mount.usage_percent >= 90 }" :style="{ width: `${mount.usage_percent}%` }"></span>
-        </div>
-        <div class="storage-meta">
-          <span>{{ formatBytes(mount.used_bytes) }} 使用中</span>
-          <span>{{ formatBytes(mount.available_bytes) }} 空き</span>
-          <span>{{ formatBytes(mount.total_bytes) }} 合計</span>
-        </div>
-      </article>
-      <div v-if="loading && mounts.length === 0" class="empty-card">ストレージ情報を読み込んでいます…</div>
-      <div v-else-if="!loading && mounts.length === 0 && !error" class="empty-card">マウントされたファイルシステムはありません。</div>
+    <section class="table-panel storage-panel">
+      <div class="table-scroll">
+        <table class="storage-table">
+          <thead>
+            <tr><th>マウント先</th><th>ファイルシステム</th><th>容量</th><th>使用状況</th></tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading && mounts.length === 0">
+              <td
+                colspan="4"
+                class="empty"
+              >
+                ストレージ情報を読み込んでいます…
+              </td>
+            </tr>
+            <tr v-else-if="!loading && mounts.length === 0 && !error">
+              <td
+                colspan="4"
+                class="empty"
+              >
+                マウントされたファイルシステムはありません。
+              </td>
+            </tr>
+            <tr
+              v-for="mount in mounts"
+              :key="`${mount.filesystem}:${mount.mount_point}`"
+            >
+              <td class="path-cell">
+                <strong
+                  class="storage-path"
+                  :title="mount.mount_point"
+                >{{ mount.mount_point }}</strong>
+              </td>
+              <td class="filesystem-cell">
+                <span :title="mount.filesystem">{{ mount.filesystem }}</span>
+                <small>{{ mount.filesystem_type }}</small>
+              </td>
+              <td class="capacity-cell">
+                <strong>{{ formatBytes(mount.total_bytes) }}</strong>
+                <small>空き {{ formatBytes(mount.available_bytes) }}</small>
+              </td>
+              <td class="storage-usage-cell">
+                <div class="usage-row">
+                  <span>{{ mount.usage_percent.toFixed(0) }}%</span>
+                  <small>{{ formatBytes(mount.used_bytes) }} 使用</small>
+                </div>
+                <div class="progress">
+                  <span
+                    :class="{ critical: mount.usage_percent >= 90 }"
+                    :style="{ width: `${mount.usage_percent}%` }"
+                  />
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   </div>
 </template>
