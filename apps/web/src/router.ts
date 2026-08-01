@@ -5,10 +5,10 @@ import SettingsView from "./views/SettingsView.vue";
 import StorageView from "./views/StorageView.vue";
 
 export const routes = [
-  { path: "/", name: "overview", component: OverviewView, meta: { title: "概要" } },
-  { path: "/services", name: "services", component: ServicesView, meta: { title: "サービス" } },
-  { path: "/storage", name: "storage", component: StorageView, meta: { title: "ストレージ" } },
-  { path: "/settings", name: "settings", component: SettingsView, meta: { title: "設定" } },
+  { path: "/", name: "overview", component: OverviewView, meta: { titleKey: "nav.overview" } },
+  { path: "/services", name: "services", component: ServicesView, meta: { titleKey: "nav.services" } },
+  { path: "/storage", name: "storage", component: StorageView, meta: { titleKey: "nav.storage" } },
+  { path: "/settings", name: "settings", component: SettingsView, meta: { titleKey: "nav.settings" } },
 ] as const;
 
 export const router = createRouter({

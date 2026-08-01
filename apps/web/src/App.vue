@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import { api, type ServerStatus } from "./api/client";
+import NotificationRegion from "./components/NotificationRegion.vue";
 import LoginView from "./views/LoginView.vue";
 
 const route = useRoute();
+const { t, locale } = useI18n();
 const status = ref<ServerStatus | null>(null);
 const menuOpen = ref(false);
 const authChecking = ref(true);
@@ -44,7 +47,7 @@ function handleUnauthorized() {
 }
 
 function handlePasswordChanged() {
-  loginMessage.value = "パスワードを変更しました。新しいパスワードでログインしてください。";
+  loginMessage.value = t("app.passwordChanged");
   handleUnauthorized();
 }
 
@@ -56,10 +59,10 @@ async function logout() {
   }
 }
 
-watch(() => route.fullPath, () => {
+watch([() => route.fullPath, locale], () => {
   menuOpen.value = false;
-  const title = typeof route.meta.title === "string" ? route.meta.title : "Deckox";
-  document.title = `${title} · Deckox`;
+  const titleKey = typeof route.meta.titleKey === "string" ? route.meta.titleKey : "nav.overview";
+  document.title = `${t(titleKey)} · Deckox`;
 }, { immediate: true });
 
 onMounted(() => {
@@ -78,7 +81,7 @@ onBeforeUnmount(() => {
     class="auth-page"
   >
     <p class="auth-loading">
-      認証状態を確認しています…
+      {{ t("app.checkingAuth") }}
     </p>
   </main>
 
@@ -100,36 +103,36 @@ onBeforeUnmount(() => {
         class="menu-button"
         type="button"
         :aria-expanded="menuOpen"
-        aria-label="メニューを開く"
+        :aria-label="t('app.openMenu')"
         @click="menuOpen = !menuOpen"
       >
-        {{ menuOpen ? "閉じる" : "メニュー" }}
+        {{ menuOpen ? t("common.close") : t("app.menu") }}
       </button>
     </header>
 
     <aside :class="['sidebar', { open: menuOpen }]">
       <div class="brand">
         <span class="brand-mark">D</span>
-        <div><span>Deckox</span><small>サーバー管理</small></div>
+        <div><span>Deckox</span><small>{{ t("app.serverManagement") }}</small></div>
       </div>
-      <nav aria-label="メインナビゲーション">
+      <nav :aria-label="t('app.mainNavigation')">
         <RouterLink to="/">
-          概要
+          {{ t("nav.overview") }}
         </RouterLink>
         <RouterLink to="/services">
-          サービス
+          {{ t("nav.services") }}
         </RouterLink>
         <RouterLink to="/storage">
-          ストレージ
+          {{ t("nav.storage") }}
         </RouterLink>
         <RouterLink to="/settings">
-          設定
+          {{ t("nav.settings") }}
         </RouterLink>
       </nav>
       <div class="agent-state">
         <span :class="['status-dot', status?.agent ? 'online' : 'offline']" />
         <div>
-          <strong>{{ status?.agent ? "接続中" : "状態を確認できません" }}</strong>
+          <strong>{{ status?.agent ? t("app.connected") : t("app.stateUnavailable") }}</strong>
           <small>{{ status?.agent?.hostname ?? "Agent" }}</small>
         </div>
       </div>
@@ -139,13 +142,14 @@ onBeforeUnmount(() => {
           type="button"
           @click="logout"
         >
-          ログアウト
+          {{ t("app.logout") }}
         </button>
-        <span>バージョン {{ status?.version ?? "0.2.1" }}</span>
+        <span>{{ t("common.version") }} {{ status?.version ?? "0.2.1" }}</span>
       </div>
     </aside>
 
     <main class="main-content">
+      <NotificationRegion />
       <RouterView v-slot="{ Component }">
         <component
           :is="Component"

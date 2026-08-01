@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, toRef, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   api,
   formatBytes,
@@ -10,17 +11,21 @@ import {
 } from "../api/client";
 import MetricChart from "../components/MetricChart.vue";
 import { useRealtimeMetrics } from "../composables/useRealtimeMetrics";
+import { notify } from "../notifications";
+import { preferences } from "../preferences";
+import { apiErrorKey } from "../api/errors";
 
 const emit = defineEmits<{ status: [value: ServerStatus] }>();
 const HISTORY_LIMIT = 120;
+const { t, locale } = useI18n();
 
 const status = ref<ServerStatus | null>(null);
 const system = ref<SystemInfo | null>(null);
 const metrics = ref<SystemMetrics | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
-const intervalSeconds = ref(1);
-const realtimeEnabled = ref(true);
+const intervalSeconds = toRef(preferences, "metricsInterval");
+const realtimeEnabled = toRef(preferences, "realtimeEnabled");
 const cpuHistory = ref<number[]>([]);
 const memoryHistory = ref<number[]>([]);
 const loadHistory = ref<number[]>([]);
@@ -59,7 +64,7 @@ async function refresh() {
     system.value = systemInfo;
     applyMetrics(systemMetrics);
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "システム情報を取得できませんでした";
+    error.value = t(apiErrorKey(cause, "errors.overview"));
   } finally {
     loading.value = false;
   }
@@ -69,6 +74,17 @@ watch(stream.latest, (event) => {
   if (event?.metrics) applyMetrics(event.metrics);
 });
 
+let streamWasDisconnected = false;
+watch(stream.status, (current, previous) => {
+  if (current === "reconnecting" && previous === "connected") {
+    streamWasDisconnected = true;
+    notify("warning", t("notifications.streamLost"));
+  } else if (current === "connected" && streamWasDisconnected) {
+    streamWasDisconnected = false;
+    notify("success", t("notifications.streamRestored"));
+  }
+});
+
 onMounted(refresh);
 </script>
 
@@ -76,9 +92,9 @@ onMounted(refresh);
   <div class="view">
     <header class="view-header">
       <div>
-        <h1>概要</h1>
+        <h1>{{ t("overview.title") }}</h1>
         <p class="subtitle">
-          {{ system?.hostname ?? status?.agent?.hostname ?? "サーバー情報を取得しています" }}
+          {{ system?.hostname ?? status?.agent?.hostname ?? t("overview.loadingHost") }}
         </p>
       </div>
       <div class="header-actions">
@@ -86,7 +102,7 @@ onMounted(refresh);
           :class="['stream-state', stream.status.value]"
           role="status"
         >
-          {{ stream.status.value === "connected" ? "リアルタイム" : stream.status.value === "paused" ? "一時停止" : "接続中" }}
+          {{ stream.status.value === "connected" ? t("overview.realtime") : stream.status.value === "paused" ? t("overview.paused") : t("overview.connecting") }}
         </span>
         <button
           class="button"
@@ -94,7 +110,7 @@ onMounted(refresh);
           :disabled="loading"
           @click="refresh"
         >
-          {{ loading ? "確認中…" : "更新" }}
+          {{ loading ? t("common.checking") : t("common.refresh") }}
         </button>
       </div>
     </header>
@@ -106,78 +122,78 @@ onMounted(refresh);
       {{ error }}
     </div>
     <div
-      v-else-if="status?.agent_error"
+      v-else-if="status?.agent_error || stream.latest.value?.agent_online === false"
       class="notice warning"
     >
-      Agentに接続できません: {{ status.agent_error }}
+      {{ t("overview.agentUnavailable") }}
     </div>
 
     <section class="server-summary">
       <div class="server-state">
         <span :class="['status-dot', status?.agent ? 'online' : 'offline']" />
         <div>
-          <strong>{{ status?.agent ? "サーバーは正常に動作しています" : "Agentに接続できません" }}</strong>
+          <strong>{{ status?.agent ? t("overview.healthy") : t("overview.agentUnavailable") }}</strong>
           <span>{{ system?.operating_system ?? "Linux" }} {{ system?.os_version ?? "" }}</span>
         </div>
       </div>
       <dl>
-        <div><dt>稼働時間</dt><dd>{{ formatUptime(system?.uptime_seconds) }}</dd></div>
-        <div><dt>アーキテクチャ</dt><dd>{{ system?.architecture ?? "—" }}</dd></div>
+        <div><dt>{{ t("overview.uptime") }}</dt><dd>{{ formatUptime(system?.uptime_seconds, locale) }}</dd></div>
+        <div><dt>{{ t("overview.architecture") }}</dt><dd>{{ system?.architecture ?? t("common.none") }}</dd></div>
       </dl>
     </section>
 
     <section
       class="metric-grid"
-      aria-label="リソース使用状況"
+      :aria-label="t('overview.resources')"
     >
       <article class="metric-card">
         <div class="metric-head">
-          <span>CPU使用率</span><small>{{ metrics?.cpu.logical_cores ?? "—" }}コア</small>
+          <span>{{ t("overview.cpu") }}</span><small>{{ t("overview.cores", { count: metrics?.cpu.logical_cores ?? t("common.none") }) }}</small>
         </div>
         <strong>{{ metrics ? `${metrics.cpu.usage_percent.toFixed(1)}%` : "—" }}</strong>
         <MetricChart
           :values="cpuHistory"
           :maximum="100"
-          label="CPU使用率の推移"
+          :label="t('overview.cpuChart')"
         />
       </article>
       <article class="metric-card">
         <div class="metric-head">
-          <span>メモリ</span><small>全体 {{ formatBytes(metrics?.memory.total_bytes ?? 0) }}</small>
+          <span>{{ t("overview.memory") }}</span><small>{{ t("overview.total", { value: formatBytes(metrics?.memory.total_bytes ?? 0, locale) }) }}</small>
         </div>
-        <strong>{{ metrics ? `${formatBytes(metrics.memory.used_bytes)} 使用中` : "—" }}</strong>
+        <strong>{{ metrics ? t("overview.inUse", { value: formatBytes(metrics.memory.used_bytes, locale) }) : t("common.none") }}</strong>
         <MetricChart
           :values="memoryHistory"
           :maximum="100"
-          label="メモリ使用率の推移"
+          :label="t('overview.memoryChart')"
         />
         <small class="metric-foot">{{ memoryPercent.toFixed(1) }}%</small>
       </article>
       <article class="metric-card">
         <div class="metric-head">
-          <span>負荷平均</span><small>5分 {{ metrics?.load_average.five_minutes.toFixed(2) ?? "—" }}</small>
+          <span>{{ t("overview.load") }}</span><small>{{ t("overview.fiveMinutes", { value: metrics?.load_average.five_minutes.toFixed(2) ?? t("common.none") }) }}</small>
         </div>
         <strong>{{ metrics?.load_average.one_minute.toFixed(2) ?? "—" }}</strong>
         <MetricChart
           :values="loadHistory"
           :maximum="loadMaximum"
-          label="1分間負荷平均の推移"
+          :label="t('overview.loadChart')"
         />
-        <small class="metric-foot">15分 {{ metrics?.load_average.fifteen_minutes.toFixed(2) ?? "—" }}</small>
+        <small class="metric-foot">{{ t("overview.fifteenMinutes", { value: metrics?.load_average.fifteen_minutes.toFixed(2) ?? t("common.none") }) }}</small>
       </article>
     </section>
 
     <section class="detail-panel">
       <div class="section-title">
-        <h2>システム情報</h2>
+        <h2>{{ t("overview.systemInfo") }}</h2>
       </div>
       <dl class="details">
-        <div><dt>ホスト名</dt><dd>{{ system?.hostname ?? "—" }}</dd></div>
-        <div><dt>OS</dt><dd>{{ system ? `${system.operating_system} ${system.os_version ?? ""}` : "—" }}</dd></div>
-        <div><dt>カーネル</dt><dd>{{ system?.kernel_version ?? "—" }}</dd></div>
-        <div><dt>アーキテクチャ</dt><dd>{{ system?.architecture ?? "—" }}</dd></div>
-        <div><dt>タイムゾーン</dt><dd>{{ system?.timezone ?? "—" }}</dd></div>
-        <div><dt>Deckox</dt><dd>バージョン {{ status?.version ?? "—" }}</dd></div>
+        <div><dt>{{ t("overview.hostname") }}</dt><dd>{{ system?.hostname ?? t("common.none") }}</dd></div>
+        <div><dt>OS</dt><dd>{{ system ? `${system.operating_system} ${system.os_version ?? ""}` : t("common.none") }}</dd></div>
+        <div><dt>{{ t("overview.kernel") }}</dt><dd>{{ system?.kernel_version ?? t("common.none") }}</dd></div>
+        <div><dt>{{ t("overview.architecture") }}</dt><dd>{{ system?.architecture ?? t("common.none") }}</dd></div>
+        <div><dt>{{ t("overview.timezone") }}</dt><dd>{{ system?.timezone ?? t("common.none") }}</dd></div>
+        <div><dt>Deckox</dt><dd>{{ t("common.version") }} {{ status?.version ?? t("common.none") }}</dd></div>
       </dl>
     </section>
   </div>

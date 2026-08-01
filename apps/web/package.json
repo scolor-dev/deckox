@@ -8,16 +8,18 @@
     "build": "vue-tsc -b && vite build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
+    "test": "vitest run",
     "typecheck": "vue-tsc -b",
     "preview": "vite preview"
   },
   "dependencies": {
     "vue": "^3.5.0",
-    "vue-i18n": "^11.4.8",
+    "vue-i18n": "^11.1.12",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@intlify/devtools-types": "^11.1.12",
     "@types/node": "^24.0.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "eslint": "^10.8.0",

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { ApiError, api } from "../api/client";
+import { useI18n } from "vue-i18n";
+import { api } from "../api/client";
+import { apiErrorKey } from "../api/errors";
 
 defineProps<{
   message?: string | null;
@@ -9,6 +11,7 @@ defineProps<{
 const emit = defineEmits<{
   authenticated: [];
 }>();
+const { t } = useI18n();
 
 const password = ref("");
 const submitting = ref(false);
@@ -23,9 +26,7 @@ async function submit() {
     password.value = "";
     emit("authenticated");
   } catch (error) {
-    errorMessage.value = error instanceof ApiError
-      ? error.message
-      : "ログインできませんでした。しばらくしてから再度お試しください。";
+    errorMessage.value = t(apiErrorKey(error, "errors.login"));
   } finally {
     submitting.value = false;
   }
@@ -42,14 +43,14 @@ async function submit() {
         <span class="brand-mark">D</span>
         <div>
           <strong>Deckox</strong>
-          <small>サーバー管理</small>
+          <small>{{ t("app.serverManagement") }}</small>
         </div>
       </div>
 
       <h1 id="login-title">
-        管理画面にログイン
+        {{ t("login.title") }}
       </h1>
-      <p>管理者パスワードを入力してください。</p>
+      <p>{{ t("login.description") }}</p>
       <p
         v-if="message"
         class="notice success login-notice"
@@ -59,7 +60,7 @@ async function submit() {
       </p>
 
       <form @submit.prevent="submit">
-        <label for="password">パスワード</label>
+        <label for="password">{{ t("login.password") }}</label>
         <input
           id="password"
           v-model="password"
@@ -81,7 +82,7 @@ async function submit() {
           type="submit"
           :disabled="submitting || password.length === 0"
         >
-          {{ submitting ? "確認中…" : "ログイン" }}
+          {{ submitting ? t("login.submitting") : t("login.submit") }}
         </button>
       </form>
     </section>

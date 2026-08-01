@@ -34,8 +34,8 @@ export function parseMetricsEvent(data: string): RealtimeMetricsEvent | null {
 }
 
 export function useRealtimeMetrics(
-  intervalSeconds: Ref<number>,
-  enabled: Ref<boolean>,
+  intervalSeconds: Readonly<Ref<number>>,
+  enabled: Readonly<Ref<boolean>>,
 ) {
   const status = ref<StreamStatus>("paused");
   const latest = ref<RealtimeMetricsEvent | null>(null);
