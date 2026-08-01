@@ -1,74 +1,69 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 560" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 620" role="img" aria-labelledby="title desc">
   <title id="title">Deckoxの実行時アーキテクチャ</title>
-  <desc id="desc">ブラウザ上のVue管理画面が管理者認証付きのAxum ServerへRESTで操作を送り、ServerがSSEでメトリクス、WebSocketで非rootコンソールを提供する。ServerはUnixソケットを通じてAgentからLinux情報を取得する構成。</desc>
+  <desc id="desc">Vue管理画面、Axum Server、root Agent、専用非root Terminalが分離され、Serverから2つのUnixソケットで内部サービスへ接続する構成。</desc>
   <defs>
-    <linearGradient id="panel" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#132238"/>
-      <stop offset="1" stop-color="#0b1422"/>
-    </linearGradient>
-    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
-      <path d="M0 0 9 4.5 0 9Z" fill="#5eead4"/>
-    </marker>
+    <linearGradient id="panel" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#132238"/><stop offset="1" stop-color="#0b1422"/></linearGradient>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 9 4.5 0 9Z" fill="#5eead4"/></marker>
   </defs>
-  <rect width="1040" height="560" rx="24" fill="#080e18"/>
-  <text x="54" y="54" fill="#5eead4" font-family="ui-monospace,monospace" font-size="13" letter-spacing="2">RUNTIME ARCHITECTURE</text>
+  <rect width="1040" height="620" rx="24" fill="#080e18"/>
+  <text x="54" y="52" fill="#5eead4" font-family="ui-monospace,monospace" font-size="13" letter-spacing="2">RUNTIME ARCHITECTURE · v0.3.2</text>
 
-  <g transform="translate(54 92)">
-    <rect width="260" height="156" rx="16" fill="url(#panel)" stroke="#2c415c"/>
-    <rect x="20" y="20" width="44" height="44" rx="10" fill="#163d38"/>
-    <text x="42" y="49" text-anchor="middle" fill="#5eead4" font-family="system-ui,sans-serif" font-size="20">V</text>
-    <text x="20" y="92" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="22" font-weight="700">Vue Web UI</text>
-    <text x="20" y="120" fill="#8fa0b6" font-family="system-ui,sans-serif" font-size="14">ブラウザ上の管理画面</text>
-    <text x="20" y="142" fill="#617187" font-family="ui-monospace,monospace" font-size="11">STATIC HTML / JS / CSS</text>
+  <g transform="translate(54 88)">
+    <rect width="250" height="150" rx="16" fill="url(#panel)" stroke="#2c415c"/>
+    <text x="22" y="44" fill="#5eead4" font-family="ui-monospace,monospace" font-size="13">BROWSER</text>
+    <text x="22" y="82" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="22" font-weight="700">Vue Web UI</text>
+    <text x="22" y="112" fill="#8fa0b6" font-family="system-ui,sans-serif" font-size="14">REST · SSE · WebSocket</text>
+    <text x="22" y="134" fill="#617187" font-family="system-ui,sans-serif" font-size="12">日本語 / English</text>
   </g>
 
-  <path d="M314 158 H390" stroke="#7dd3fc" stroke-width="2" marker-end="url(#arrow)"/>
-  <text x="352" y="145" text-anchor="middle" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="10">REST</text>
-  <path d="M398 196 H322" stroke="#5eead4" stroke-width="2" marker-end="url(#arrow)"/>
-  <text x="360" y="218" text-anchor="middle" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="10">SSE / WEBSOCKET</text>
+  <path d="M304 163 H390" stroke="#5eead4" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="347" y="148" text-anchor="middle" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="10">HTTP / WS</text>
 
-  <g transform="translate(398 92)">
-    <rect width="260" height="156" rx="16" fill="url(#panel)" stroke="#2c415c"/>
-    <rect x="20" y="20" width="44" height="44" rx="10" fill="#173249"/>
-    <text x="42" y="49" text-anchor="middle" fill="#7dd3fc" font-family="system-ui,sans-serif" font-size="18">S</text>
-    <text x="20" y="92" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="22" font-weight="700">Deckox Server</text>
-    <text x="20" y="120" fill="#8fa0b6" font-family="system-ui,sans-serif" font-size="14">認証・API中継・Vue配信</text>
-    <text x="20" y="142" fill="#617187" font-family="ui-monospace,monospace" font-size="11">REST + SSE + WS / deckox-server</text>
+  <g transform="translate(398 88)">
+    <rect width="250" height="150" rx="16" fill="url(#panel)" stroke="#2c415c"/>
+    <text x="22" y="44" fill="#7dd3fc" font-family="ui-monospace,monospace" font-size="13">deckox user</text>
+    <text x="22" y="82" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="22" font-weight="700">Deckox Server</text>
+    <text x="22" y="112" fill="#8fa0b6" font-family="system-ui,sans-serif" font-size="14">認証 · API · Vue配信</text>
+    <text x="22" y="134" fill="#617187" font-family="system-ui,sans-serif" font-size="12">外部HTTPの唯一の入口</text>
   </g>
 
-  <path d="M658 170 H734" stroke="#5eead4" stroke-width="2" marker-end="url(#arrow)"/>
-  <text x="696" y="143" text-anchor="middle" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="10">HTTP</text>
-  <text x="696" y="158" text-anchor="middle" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="10">UNIX SOCKET</text>
-
-  <g transform="translate(742 92)">
-    <rect width="244" height="156" rx="16" fill="url(#panel)" stroke="#2c415c"/>
-    <rect x="20" y="20" width="44" height="44" rx="10" fill="#3b2d16"/>
-    <text x="42" y="49" text-anchor="middle" fill="#fbbf24" font-family="system-ui,sans-serif" font-size="18">A</text>
-    <text x="20" y="92" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="22" font-weight="700">Deckox Agent</text>
-    <text x="20" y="120" fill="#8fa0b6" font-family="system-ui,sans-serif" font-size="14">Linux・systemd・SSH鍵管理</text>
-    <text x="20" y="142" fill="#617187" font-family="ui-monospace,monospace" font-size="11">deckox-agent</text>
+  <path d="M648 133 H730" stroke="#5eead4" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="689" y="113" text-anchor="middle" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="10">HTTP / UDS</text>
+  <g transform="translate(738 70)">
+    <rect width="248" height="136" rx="16" fill="url(#panel)" stroke="#5f4921"/>
+    <text x="20" y="38" fill="#fbbf24" font-family="ui-monospace,monospace" font-size="13">root</text>
+    <text x="20" y="73" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="21" font-weight="700">Deckox Agent</text>
+    <text x="20" y="102" fill="#8fa0b6" font-family="system-ui,sans-serif" font-size="13">型付きLinux操作のみ</text>
+    <text x="20" y="122" fill="#617187" font-family="ui-monospace,monospace" font-size="11">/run/deckox/agent.sock</text>
   </g>
 
-  <path d="M864 248 V332" stroke="#5eead4" stroke-width="2" marker-end="url(#arrow)"/>
-  <text x="883" y="296" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="11">READ / CONTROL</text>
+  <path d="M648 208 C690 208 690 288 730 288" stroke="#5eead4" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="683" y="258" text-anchor="middle" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="10">WS / UDS</text>
+  <g transform="translate(738 222)">
+    <rect width="248" height="142" rx="16" fill="url(#panel)" stroke="#235b54"/>
+    <text x="20" y="38" fill="#5eead4" font-family="ui-monospace,monospace" font-size="13">deckox-terminal user</text>
+    <text x="20" y="73" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="21" font-weight="700">Deckox Terminal</text>
+    <text x="20" y="102" fill="#8fa0b6" font-family="system-ui,sans-serif" font-size="13">隔離PTY · 非rootシェル</text>
+    <text x="20" y="124" fill="#617187" font-family="ui-monospace,monospace" font-size="10">/run/deckox-terminal/terminal.sock</text>
+  </g>
 
-  <g transform="translate(742 342)">
-    <rect width="244" height="144" rx="16" fill="#0d1827" stroke="#2c415c"/>
+  <path d="M862 364 V428" stroke="#5eead4" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M862 206 V428" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrow)"/>
+  <g transform="translate(738 438)">
+    <rect width="248" height="126" rx="16" fill="#0d1827" stroke="#2c415c"/>
     <text x="20" y="40" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="21" font-weight="700">Linux Host</text>
-    <text x="20" y="72" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">/etc/hostname</text>
-    <text x="20" y="96" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">/proc/uptime</text>
-    <text x="20" y="120" fill="#617187" font-family="system-ui,sans-serif" font-size="12">systemd・OS・authorized_keys</text>
+    <text x="20" y="72" fill="#8fa0b6" font-family="system-ui,sans-serif" font-size="13">systemd · /proc · SSH鍵</text>
+    <text x="20" y="98" fill="#617187" font-family="system-ui,sans-serif" font-size="12">Agentは管理 / Terminalは一般権限</text>
   </g>
 
-  <g transform="translate(54 308)">
-    <rect width="604" height="178" rx="16" fill="#0b1421" stroke="#1d2c40"/>
-    <text x="22" y="35" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="16" font-weight="700">現在の境界</text>
-    <line x1="22" y1="53" x2="582" y2="53" stroke="#1d2c40"/>
-    <circle cx="31" cy="82" r="4" fill="#5eead4"/>
-    <text x="46" y="87" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">REST・SSE・WebSocketは管理者セッションで保護</text>
-    <circle cx="31" cy="116" r="4" fill="#5eead4"/>
-    <text x="46" y="121" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">Agentは /run/deckox/agent.sock のみで待受</text>
-    <circle cx="31" cy="150" r="4" fill="#fbbf24"/>
-    <text x="46" y="155" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">変更対象は許可サービスと指定ユーザーの公開鍵に限定</text>
+  <g transform="translate(54 300)">
+    <rect width="594" height="264" rx="16" fill="#0b1421" stroke="#1d2c40"/>
+    <text x="24" y="40" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="17" font-weight="700">プロセスと権限の境界</text>
+    <line x1="24" y1="58" x2="570" y2="58" stroke="#1d2c40"/>
+    <circle cx="32" cy="88" r="4" fill="#7dd3fc"/><text x="48" y="93" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">Serverだけがブラウザからの通信と認証情報を扱う</text>
+    <circle cx="32" cy="124" r="4" fill="#fbbf24"/><text x="48" y="129" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">Agentはrootだが、許可済みの型付き操作だけを受付</text>
+    <circle cx="32" cy="160" r="4" fill="#5eead4"/><text x="48" y="165" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">Terminalは専用ユーザー・別ホーム・別Unixソケット</text>
+    <circle cx="32" cy="196" r="4" fill="#5eead4"/><text x="48" y="201" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">TerminalからAgentソケット・認証データ・設定へアクセス不可</text>
+    <circle cx="32" cy="232" r="4" fill="#7dd3fc"/><text x="48" y="237" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">両内部サービスはTCPポートを持たない</text>
   </g>
 </svg>

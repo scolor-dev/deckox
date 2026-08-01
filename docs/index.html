@@ -25,13 +25,13 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.1</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.2</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
         <p class="eyebrow">Deckox documentation</p>
         <h1>Linux管理基盤の、現在地を読む。</h1>
-        <p class="lead">DeckoxはVue管理画面、Axum Server、Linux Agentを1つのモノレポで管理するWeb管理基盤です。このサイトは現在の実装に対応する設計・機能・導入手順をまとめています。</p>
+        <p class="lead">DeckoxはVue管理画面、Axum Server、Linux Agent、隔離Terminalを1つのモノレポで管理するWeb管理基盤です。このサイトは現在の実装に対応する設計・機能・導入手順をまとめています。</p>
       </header>
 
       <section class="section" aria-labelledby="start-title">
@@ -40,7 +40,7 @@
           <a class="card" href="architecture.html">
             <span class="number">01 / ARCHITECTURE</span>
             <h3>システム設計</h3>
-            <p>3コンポーネントの責務、実行時通信、プロセス境界、配置先を確認します。</p>
+            <p>4コンポーネントの責務、実行時通信、プロセス境界、配置先を確認します。</p>
             <span class="card-arrow">設計を見る →</span>
           </a>
           <a class="card" href="features.html">
@@ -71,9 +71,10 @@
         <table class="status-table">
           <thead><tr><th>領域</th><th>状態</th><th>現在提供している内容</th></tr></thead>
           <tbody>
-            <tr><td>Web Server</td><td><span class="status done">実装済み</span></td><td>Vue配信、単一管理者認証、Agent APIプロキシ、SSEメトリクス、WebSocket + PTYコンソール</td></tr>
+            <tr><td>Web Server</td><td><span class="status done">実装済み</span></td><td>Vue配信、単一管理者認証、Agent APIプロキシ、SSEメトリクス、Terminal WebSocket中継</td></tr>
             <tr><td>System Agent</td><td><span class="status done">実装済み</span></td><td>システム情報、CPU・メモリ、ストレージ、systemdサービス制御、SSH公開鍵管理、許可設定付きホスト再起動</td></tr>
-            <tr><td>Vue UI</td><td><span class="status done">実装済み</span></td><td>リアルタイムグラフ、概要・サービス・ストレージ・コンソール・設定の固有URL、日本語・英語、共通通知</td></tr>
+            <tr><td>Terminal</td><td><span class="status done">実装済み</span></td><td>専用非rootユーザー、PTY、同時接続・無操作時間制限、Agent・認証データからの分離</td></tr>
+            <tr><td>Vue UI</td><td><span class="status done">実装済み</span></td><td>リアルタイムグラフ、概要・サービス・ストレージ・コンソール・設定の固有URL、日本語・英語、再起動後の自動復帰</td></tr>
             <tr><td>Service command</td><td><span class="status done">実装済み</span></td><td>許可リストに登録したsystemdサービスの起動・停止・再起動</td></tr>
             <tr><td>認証</td><td><span class="status done">実装済み</span></td><td>Argon2idパスワード、変更時の全セッション失効、12時間セッション、ログイン・パスワード再確認の試行制限、同一Origin確認</td></tr>
           </tbody>

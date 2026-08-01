@@ -12,7 +12,7 @@
   <g transform="translate(52 92)">
     <rect width="178" height="110" rx="14" fill="#111d2e" stroke="#2d415b"/>
     <text x="20" y="39" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="17" font-weight="700">Git tag</text>
-    <text x="20" y="68" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">v0.3.1</text>
+    <text x="20" y="68" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">v0.3.2</text>
     <text x="20" y="91" fill="#617187" font-family="system-ui,sans-serif" font-size="12">pushで開始</text>
   </g>
 
@@ -53,6 +53,7 @@
     <text x="20" y="37" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="17" font-weight="700">Linux systemd</text>
     <text x="20" y="68" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">deckox-agent.service</text>
     <text x="20" y="91" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">deckox-server.service</text>
+    <text x="190" y="68" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">deckox-terminal.service</text>
     <text x="238" y="91" fill="#5eead4" font-family="system-ui,sans-serif" font-size="12">enable --now</text>
   </g>
 
@@ -60,6 +61,6 @@
     <rect width="486" height="124" rx="14" fill="#0b1421" stroke="#1d2c40"/>
     <text x="20" y="36" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="16" font-weight="700">配布アーカイブの内容</text>
     <text x="20" y="68" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">bin/  web/  config/  systemd/</text>
-    <text x="20" y="96" fill="#617187" font-family="system-ui,sans-serif" font-size="12">Server・Agent・Vue成果物・設定・ユニット</text>
+    <text x="20" y="96" fill="#617187" font-family="system-ui,sans-serif" font-size="12">Server・Agent・Terminal・Vue成果物・設定・ユニット</text>
   </g>
 </svg>
