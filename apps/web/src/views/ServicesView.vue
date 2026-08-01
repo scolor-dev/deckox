@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { api, type ServiceSummary } from "../api/client";
+import { apiErrorKey } from "../api/errors";
+import { notify } from "../notifications";
+
+const { t } = useI18n();
 
 const services = ref<ServiceSummary[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
-const message = ref<string | null>(null);
 const query = ref("");
 const pending = ref<string | null>(null);
 
@@ -22,14 +26,14 @@ const runningCount = computed(
 );
 
 function activeStateLabel(state: string) {
-  return state === "active" ? "稼働中" : state === "failed" ? "異常" : "停止中";
+  return t(state === "active" ? "services.running" : state === "failed" ? "services.failed" : "services.stopped");
 }
 
 function unitStateLabel(state: string | null) {
-  if (state === "enabled") return "有効";
-  if (state === "disabled") return "無効";
-  if (state === "static") return "固定";
-  return state ?? "—";
+  if (state === "enabled") return t("services.enabled");
+  if (state === "disabled") return t("services.disabled");
+  if (state === "static") return t("services.static");
+  return state ?? t("common.none");
 }
 
 async function refresh() {
@@ -38,7 +42,7 @@ async function refresh() {
   try {
     services.value = await api.services();
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "サービス一覧を取得できませんでした";
+    error.value = t(apiErrorKey(cause, "errors.services"));
   } finally {
     loading.value = false;
   }
@@ -46,19 +50,19 @@ async function refresh() {
 
 async function runAction(service: ServiceSummary, action: "start" | "stop" | "restart") {
   if ((action === "stop" || action === "restart") &&
-      !window.confirm(`${service.id} を${action === "stop" ? "停止" : "再起動"}しますか？`)) {
+      !window.confirm(t(action === "stop" ? "services.confirmStop" : "services.confirmRestart", { id: service.id }))) {
     return;
   }
 
   pending.value = `${service.id}:${action}`;
   error.value = null;
-  message.value = null;
   try {
-    const result = await api.serviceAction(service.id, action);
-    message.value = result.message ?? `${service.id} の操作が完了しました`;
+    await api.serviceAction(service.id, action);
+    notify("success", t("services.completed", { id: service.id }));
     await refresh();
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "サービス操作に失敗しました";
+    error.value = t(apiErrorKey(cause, "errors.serviceAction"));
+    notify("error", error.value);
   } finally {
     pending.value = null;
   }
@@ -71,9 +75,9 @@ onMounted(refresh);
   <div class="view">
     <header class="view-header">
       <div>
-        <h1>サービス</h1>
+        <h1>{{ t("services.title") }}</h1>
         <p class="subtitle">
-          全{{ services.length }}件のうち{{ runningCount }}件が稼働中
+          {{ t("services.summary", { total: services.length, running: runningCount }) }}
         </p>
       </div>
       <button
@@ -82,7 +86,7 @@ onMounted(refresh);
         :disabled="loading"
         @click="refresh"
       >
-        {{ loading ? "読込中…" : "更新" }}
+        {{ loading ? t("common.loading") : t("common.refresh") }}
       </button>
     </header>
 
@@ -92,36 +96,29 @@ onMounted(refresh);
     >
       {{ error }}
     </div>
-    <div
-      v-if="message"
-      class="notice success"
-    >
-      {{ message }}
-    </div>
-
     <section class="table-panel">
       <div class="table-toolbar">
         <label class="search">
-          <span class="sr-only">サービスを検索</span>
+          <span class="sr-only">{{ t("services.search") }}</span>
           <input
             v-model="query"
             type="search"
-            placeholder="サービス名または説明を検索"
+            :placeholder="t('services.searchPlaceholder')"
           >
         </label>
-        <span class="table-count">{{ filteredServices.length }}件</span>
+        <span class="table-count">{{ t("services.count", { count: filteredServices.length }) }}</span>
       </div>
 
       <div class="table-scroll">
         <table>
-          <thead><tr><th>サービス</th><th>状態</th><th>自動起動</th><th>操作</th></tr></thead>
+          <thead><tr><th>{{ t("services.service") }}</th><th>{{ t("services.state") }}</th><th>{{ t("services.startup") }}</th><th>{{ t("services.actions") }}</th></tr></thead>
           <tbody>
             <tr v-if="loading && services.length === 0">
               <td
                 colspan="4"
                 class="empty"
               >
-                サービスを読み込んでいます…
+                {{ t("services.loading") }}
               </td>
             </tr>
             <tr v-else-if="filteredServices.length === 0">
@@ -129,7 +126,7 @@ onMounted(refresh);
                 colspan="4"
                 class="empty"
               >
-                該当するサービスはありません。
+                {{ t("services.empty") }}
               </td>
             </tr>
             <tr
@@ -138,7 +135,7 @@ onMounted(refresh);
             >
               <td>
                 <strong class="service-name">{{ service.id }}</strong>
-                <small>{{ service.description || "説明なし" }}</small>
+                <small>{{ service.description || t("services.noDescription") }}</small>
               </td>
               <td>
                 <span :class="['state-badge', service.active_state === 'active' ? 'active' : 'inactive']">
@@ -158,7 +155,7 @@ onMounted(refresh);
                     :disabled="pending !== null || service.active_state === 'active'"
                     @click="runAction(service, 'start')"
                   >
-                    起動
+                    {{ t("services.start") }}
                   </button>
                   <button
                     class="action-button"
@@ -166,7 +163,7 @@ onMounted(refresh);
                     :disabled="pending !== null || service.active_state !== 'active'"
                     @click="runAction(service, 'restart')"
                   >
-                    再起動
+                    {{ t("services.restart") }}
                   </button>
                   <button
                     class="action-button danger"
@@ -174,13 +171,13 @@ onMounted(refresh);
                     :disabled="pending !== null || service.active_state !== 'active'"
                     @click="runAction(service, 'stop')"
                   >
-                    停止
+                    {{ t("services.stop") }}
                   </button>
                 </div>
                 <span
                   v-else
                   class="locked"
-                >閲覧のみ</span>
+                >{{ t("services.readOnly") }}</span>
               </td>
             </tr>
           </tbody>
@@ -189,7 +186,7 @@ onMounted(refresh);
     </section>
 
     <aside class="inline-note">
-      変更操作は <code>/etc/deckox/agent.toml</code> の許可リストに登録されたサービスだけ利用できます。
+      {{ t("services.allowlist") }}
     </aside>
   </div>
 </template>

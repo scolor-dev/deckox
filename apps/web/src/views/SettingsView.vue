@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { ApiError, api, type SshKeyList } from "../api/client";
+import { apiErrorKey } from "../api/errors";
+import { notify } from "../notifications";
+import { preferences } from "../preferences";
 
 const emit = defineEmits<{ passwordChanged: [] }>();
+const { t } = useI18n();
 
 const currentPassword = ref("");
 const newPassword = ref("");
@@ -11,20 +16,23 @@ const submitting = ref(false);
 const error = ref<string | null>(null);
 const sshKeys = ref<SshKeyList | null>(null);
 const sshLoading = ref(true);
-const sshError = ref<string | null>(null);
-const sshSuccess = ref<string | null>(null);
+const sshErrorKey = ref<string | null>(null);
 const publicKey = ref("");
 const addingKey = ref(false);
 const removingKeyId = ref<string | null>(null);
 
+function displaySettingsChanged() {
+  notify("success", t("settings.saved"));
+}
+
 async function changePassword() {
   error.value = null;
   if (newPassword.value.length < 12) {
-    error.value = "新しいパスワードは12文字以上で入力してください。";
+    error.value = t("settings.passwordTooShort");
     return;
   }
   if (newPassword.value !== passwordConfirmation.value) {
-    error.value = "新しいパスワードが確認欄と一致しません。";
+    error.value = t("settings.passwordMismatch");
     return;
   }
 
@@ -36,13 +44,7 @@ async function changePassword() {
     passwordConfirmation.value = "";
     emit("passwordChanged");
   } catch (caught) {
-    if (caught instanceof ApiError && caught.code === "invalid_current_password") {
-      error.value = "現在のパスワードが正しくありません。";
-    } else if (caught instanceof ApiError && caught.code === "rate_limited") {
-      error.value = "確認に何度も失敗したため、5分ほど待ってから再度お試しください。";
-    } else {
-      error.value = caught instanceof Error ? caught.message : "パスワードを変更できませんでした。";
-    }
+    error.value = t(apiErrorKey(caught, "errors.password"));
   } finally {
     submitting.value = false;
   }
@@ -50,21 +52,20 @@ async function changePassword() {
 
 async function loadSshKeys() {
   sshLoading.value = true;
-  sshError.value = null;
-  sshSuccess.value = null;
+  sshErrorKey.value = null;
   try {
     sshKeys.value = await api.sshKeys();
   } catch (caught) {
-    sshError.value = caught instanceof Error ? caught.message : "SSH公開鍵を取得できませんでした。";
+    sshErrorKey.value = apiErrorKey(caught, "errors.sshLoad");
   } finally {
     sshLoading.value = false;
   }
 }
 
 async function addSshKey() {
-  sshError.value = null;
+  sshErrorKey.value = null;
   if (!publicKey.value.trim()) {
-    sshError.value = "追加するSSH公開鍵を入力してください。";
+    sshErrorKey.value = "settings.keyRequired";
     return;
   }
   addingKey.value = true;
@@ -72,29 +73,26 @@ async function addSshKey() {
     const added = await api.addSshKey(publicKey.value.trim());
     publicKey.value = "";
     await loadSshKeys();
-    sshSuccess.value = `${added.comment ?? added.fingerprint} を追加しました。`;
+    notify("success", t("settings.keyAdded", { label: added.comment ?? added.fingerprint }));
   } catch (caught) {
-    sshError.value = caught instanceof Error ? caught.message : "SSH公開鍵を追加できませんでした。";
+    sshErrorKey.value = apiErrorKey(caught, "errors.sshAdd");
   } finally {
     addingKey.value = false;
   }
 }
 
 async function removeSshKey(keyId: string, label: string) {
-  if (!window.confirm(`${label} を削除しますか？`)) return;
+  if (!window.confirm(t("settings.confirmRemove", { label }))) return;
   removingKeyId.value = keyId;
-  sshError.value = null;
-  sshSuccess.value = null;
+  sshErrorKey.value = null;
   try {
     const removed = await api.removeSshKey(keyId);
     await loadSshKeys();
-    sshSuccess.value = `${removed.comment ?? removed.fingerprint} を削除しました。`;
+    notify("success", t("settings.keyRemoved", { label: removed.comment ?? removed.fingerprint }));
   } catch (caught) {
-    if (caught instanceof ApiError && caught.status === 409) {
-      sshError.value = "最後のSSH公開鍵は削除できません。先に別の鍵を追加してください。";
-    } else {
-      sshError.value = caught instanceof Error ? caught.message : "SSH公開鍵を削除できませんでした。";
-    }
+    sshErrorKey.value = caught instanceof ApiError && caught.status === 409
+      ? "settings.lastKey"
+      : apiErrorKey(caught, "errors.sshRemove");
   } finally {
     removingKeyId.value = null;
   }
@@ -109,12 +107,68 @@ onMounted(() => {
   <section class="view settings-view">
     <header class="view-header">
       <div>
-        <h1>設定</h1>
+        <h1>{{ t("settings.title") }}</h1>
         <p class="subtitle">
-          Deckoxとサーバーの管理設定
+          {{ t("settings.subtitle") }}
         </p>
       </div>
     </header>
+
+    <section
+      class="settings-section"
+      aria-labelledby="display-heading"
+    >
+      <div class="settings-description">
+        <h2 id="display-heading">
+          {{ t("settings.display") }}
+        </h2>
+        <p>{{ t("settings.displayDescription") }}</p>
+      </div>
+      <div class="settings-form">
+        <label for="language">{{ t("settings.language") }}</label>
+        <select
+          id="language"
+          v-model="preferences.locale"
+          @change="displaySettingsChanged"
+        >
+          <option value="auto">
+            {{ t("settings.languageAuto") }}
+          </option>
+          <option value="ja">
+            {{ t("settings.japanese") }}
+          </option>
+          <option value="en">
+            {{ t("settings.english") }}
+          </option>
+        </select>
+
+        <label class="checkbox-field">
+          <input
+            v-model="preferences.realtimeEnabled"
+            type="checkbox"
+            @change="displaySettingsChanged"
+          >
+          <span>{{ t("settings.realtime") }}</span>
+        </label>
+        <small>{{ t("settings.realtimeHelp") }}</small>
+
+        <label for="metrics-interval">{{ t("settings.interval") }}</label>
+        <select
+          id="metrics-interval"
+          v-model.number="preferences.metricsInterval"
+          :disabled="!preferences.realtimeEnabled"
+          @change="displaySettingsChanged"
+        >
+          <option
+            v-for="seconds in [1, 2, 5]"
+            :key="seconds"
+            :value="seconds"
+          >
+            {{ t("settings.intervalValue", { seconds }) }}
+          </option>
+        </select>
+      </div>
+    </section>
 
     <section
       class="settings-section"
@@ -122,15 +176,15 @@ onMounted(() => {
     >
       <div class="settings-description">
         <h2 id="password-heading">
-          管理者パスワード
+          {{ t("settings.password") }}
         </h2>
-        <p>管理画面へログインするときのパスワードを変更します。</p>
+        <p>{{ t("settings.passwordDescription") }}</p>
       </div>
       <form
         class="settings-form"
         @submit.prevent="changePassword"
       >
-        <label for="current-password">現在のパスワード</label>
+        <label for="current-password">{{ t("settings.currentPassword") }}</label>
         <input
           id="current-password"
           v-model="currentPassword"
@@ -139,7 +193,7 @@ onMounted(() => {
           required
         >
 
-        <label for="new-password">新しいパスワード</label>
+        <label for="new-password">{{ t("settings.newPassword") }}</label>
         <input
           id="new-password"
           v-model="newPassword"
@@ -148,9 +202,9 @@ onMounted(() => {
           minlength="12"
           required
         >
-        <small>12文字以上で入力してください。</small>
+        <small>{{ t("settings.passwordRule") }}</small>
 
-        <label for="password-confirmation">新しいパスワード（確認）</label>
+        <label for="password-confirmation">{{ t("settings.passwordConfirmation") }}</label>
         <input
           id="password-confirmation"
           v-model="passwordConfirmation"
@@ -172,10 +226,10 @@ onMounted(() => {
           type="submit"
           :disabled="submitting"
         >
-          {{ submitting ? "変更しています…" : "パスワードを変更" }}
+          {{ submitting ? t("settings.changing") : t("settings.changePassword") }}
         </button>
         <p class="settings-help">
-          変更後は、すべての端末で再ログインが必要です。
+          {{ t("settings.relogin") }}
         </p>
       </form>
     </section>
@@ -186,40 +240,33 @@ onMounted(() => {
     >
       <div class="settings-description">
         <h2 id="ssh-heading">
-          SSH公開鍵
+          {{ t("settings.ssh") }}
         </h2>
-        <p>指定したLinuxユーザーへのSSH接続を許可する公開鍵を管理します。</p>
+        <p>{{ t("settings.sshDescription") }}</p>
       </div>
       <div class="settings-form ssh-settings">
         <p
-          v-if="sshError"
+          v-if="sshErrorKey"
           class="notice error"
           role="alert"
         >
-          {{ sshError }}
-        </p>
-        <p
-          v-if="sshSuccess"
-          class="notice success"
-          role="status"
-        >
-          {{ sshSuccess }}
+          {{ t(sshErrorKey) }}
         </p>
         <p
           v-if="sshLoading"
           class="settings-help"
         >
-          SSH公開鍵を確認しています…
+          {{ t("settings.checkingKeys") }}
         </p>
         <div
           v-else-if="!sshKeys?.enabled"
           class="notice warning"
         >
-          SSH公開鍵管理は無効です。Agent設定の <code>ssh.managed_user</code> に、管理する非rootユーザーを指定してください。
+          {{ t("settings.sshDisabled") }}
         </div>
         <template v-else>
           <p class="managed-user">
-            対象ユーザー <strong class="mono">{{ sshKeys.managed_user }}</strong>
+            {{ t("settings.managedUser") }} <strong class="mono">{{ sshKeys.managed_user }}</strong>
           </p>
 
           <div
@@ -232,7 +279,7 @@ onMounted(() => {
               class="ssh-key-item"
             >
               <div>
-                <strong>{{ key.comment ?? "コメントなし" }}</strong>
+                <strong>{{ key.comment ?? t("settings.noComment") }}</strong>
                 <span class="mono">{{ key.key_type }}</span>
                 <code>{{ key.fingerprint }}</code>
               </div>
@@ -242,7 +289,7 @@ onMounted(() => {
                 :disabled="removingKeyId !== null"
                 @click="removeSshKey(key.id, key.comment ?? key.fingerprint)"
               >
-                {{ removingKeyId === key.id ? "削除中…" : "削除" }}
+                {{ removingKeyId === key.id ? t("settings.deleting") : t("settings.delete") }}
               </button>
             </article>
           </div>
@@ -250,29 +297,29 @@ onMounted(() => {
             v-else
             class="settings-help"
           >
-            Deckoxが管理しているSSH公開鍵はありません。
+            {{ t("settings.noKeys") }}
           </p>
 
           <form
             class="ssh-add-form"
             @submit.prevent="addSshKey"
           >
-            <label for="public-key">公開鍵を追加</label>
+            <label for="public-key">{{ t("settings.addKey") }}</label>
             <textarea
               id="public-key"
               v-model="publicKey"
               rows="4"
-              placeholder="ssh-ed25519 AAAA... device-name"
+              :placeholder="t('settings.keyPlaceholder')"
               spellcheck="false"
               required
             />
-            <small>秘密鍵は入力しないでください。OpenSSH形式の公開鍵1本だけを受け付けます。</small>
+            <small>{{ t("settings.publicOnly") }}</small>
             <button
               class="primary-button settings-submit"
               type="submit"
               :disabled="addingKey"
             >
-              {{ addingKey ? "追加しています…" : "公開鍵を追加" }}
+              {{ addingKey ? t("settings.adding") : t("settings.addKey") }}
             </button>
           </form>
         </template>

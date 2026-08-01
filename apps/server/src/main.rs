@@ -21,11 +21,13 @@ use tracing_subscriber::EnvFilter;
 use crate::agent_client::AgentClient;
 use crate::{
     auth::{AuthManager, AuthenticatedUser},
+    metrics_stream::MetricsHub,
     request_context::RequestId,
 };
 
 mod agent_client;
 mod auth;
+mod metrics_stream;
 mod request_context;
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:8080";
@@ -36,11 +38,18 @@ const DEFAULT_WEB_DIR: &str = "/usr/local/share/deckox/web";
 struct AppState {
     agent: AgentClient,
     auth: AuthManager,
+    metrics: MetricsHub,
 }
 
 impl FromRef<AppState> for AuthManager {
     fn from_ref(state: &AppState) -> Self {
         state.auth.clone()
+    }
+}
+
+impl FromRef<AppState> for MetricsHub {
+    fn from_ref(state: &AppState) -> Self {
+        state.metrics.clone()
     }
 }
 
@@ -81,17 +90,20 @@ async fn main() {
         eprintln!("failed to load authentication configuration: {error}");
         std::process::exit(2);
     });
+    let agent = AgentClient::new(PathBuf::from(
+        env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| DEFAULT_AGENT_SOCKET.to_owned()),
+    ));
     let state = AppState {
-        agent: AgentClient::new(PathBuf::from(
-            env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| DEFAULT_AGENT_SOCKET.to_owned()),
-        )),
+        agent: agent.clone(),
         auth: auth.clone(),
+        metrics: MetricsHub::new(agent),
     };
 
     let protected_api = Router::new()
         .route("/status", get(status))
         .route("/system", get(proxy_system))
         .route("/system/metrics", get(proxy_metrics))
+        .route("/events/metrics", get(metrics_stream::metrics_events))
         .route("/storage", get(proxy_storage))
         .route("/services", get(proxy_services))
         .route("/services/{service_id}", get(proxy_service_details))

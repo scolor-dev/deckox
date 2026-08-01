@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.2.1</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.0</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -124,6 +124,7 @@ cd apps/web
 npm ci
 npm run lint
 npm run typecheck
+npm run test
 npm run build</code></pre>
       </section>
 
@@ -132,7 +133,7 @@ npm run build</code></pre>
         <p><code>main</code>・<code>develop</code>へのpushとPull Requestで、GitHub Actionsの<code>CI</code> Workflowが動作します。</p>
         <dl class="definition-list">
           <dt>Rust</dt><dd>フォーマット、<code>pedantic</code>・<code>nursery</code>を含むClippy、ワークスペーステスト、インストール用シェルの構文を確認</dd>
-          <dt>Vue</dt><dd><code>npm ci</code>で依存関係を固定し、ESLint、型チェック、本番ビルドを実行</dd>
+          <dt>Vue</dt><dd><code>npm ci</code>で依存関係を固定し、ESLint、型チェック、Vitest単体テスト、本番ビルドを実行</dd>
         </dl>
       </section>
 

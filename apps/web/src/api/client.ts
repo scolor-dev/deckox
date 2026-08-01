@@ -176,19 +176,27 @@ export const api = {
     ),
 };
 
-export function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number, locale = "en"): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
   const units = ["B", "KiB", "MiB", "GiB", "TiB"];
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+  const value = bytes / 1024 ** index;
+  return `${new Intl.NumberFormat(locale, {
+    maximumFractionDigits: index === 0 ? 0 : 1,
+    minimumFractionDigits: index === 0 ? 0 : 1,
+  }).format(value)} ${units[index]}`;
 }
 
-export function formatUptime(seconds: number | null | undefined): string {
+export function formatUptime(
+  seconds: number | null | undefined,
+  locale = "en",
+): string {
   if (seconds == null) return "—";
   const days = Math.floor(seconds / 86_400);
   const hours = Math.floor((seconds % 86_400) / 3_600);
   const minutes = Math.floor((seconds % 3_600) / 60);
-  if (days > 0) return `${String(days)}日 ${String(hours)}時間`;
-  if (hours > 0) return `${String(hours)}時間 ${String(minutes)}分`;
-  return `${String(minutes)}分`;
+  const japanese = locale.toLowerCase().startsWith("ja");
+  if (days > 0) return japanese ? `${String(days)}日 ${String(hours)}時間` : `${String(days)}d ${String(hours)}h`;
+  if (hours > 0) return japanese ? `${String(hours)}時間 ${String(minutes)}分` : `${String(hours)}h ${String(minutes)}m`;
+  return japanese ? `${String(minutes)}分` : `${String(minutes)}m`;
 }

@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.2.1</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.0</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -56,9 +56,9 @@
       <section class="section" aria-labelledby="release-title">
         <h2 id="release-title">Releaseの作成</h2>
         <p><code>v*</code>タグのpushでRelease Workflowが起動します。</p>
-        <pre><code>git tag v0.2.1
+        <pre><code>git tag v0.3.0
 git push origin main
-git push origin v0.2.1</code></pre>
+git push origin v0.3.0</code></pre>
         <aside class="note"><strong>実行条件:</strong> インストールコマンドを利用するには、対象タグのGitHub Releaseと4つの配布ファイルが公開済みである必要があります。</aside>
       </section>
 
@@ -75,7 +75,7 @@ sudo sh install.sh</code></pre>
         <p>特定バージョンを選ぶ場合:</p>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.2.1 sh</code></pre>
+  | sudo DECKOX_VERSION=v0.3.0 sh</code></pre>
         <p>ローカル配布物を検証する場合は、アーカイブと同じ場所に<code>.sha256</code>ファイルを置いて指定します。</p>
         <pre><code>sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
   sh install.sh</code></pre>

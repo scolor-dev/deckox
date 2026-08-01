@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { api, formatBytes, type StorageMount } from "../api/client";
+import { apiErrorKey } from "../api/errors";
+
+const { t, locale } = useI18n();
 
 const mounts = ref<StorageMount[]>([]);
 const loading = ref(true);
@@ -12,7 +16,7 @@ async function refresh() {
   try {
     mounts.value = await api.storage();
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "ストレージ情報を取得できませんでした";
+    error.value = t(apiErrorKey(cause, "errors.storage"));
   } finally {
     loading.value = false;
   }
@@ -25,9 +29,9 @@ onMounted(refresh);
   <div class="view">
     <header class="view-header">
       <div>
-        <h1>ストレージ</h1>
+        <h1>{{ t("storage.title") }}</h1>
         <p class="subtitle">
-          {{ mounts.length }}件のマウント
+          {{ t("storage.summary", { count: mounts.length }) }}
         </p>
       </div>
       <button
@@ -36,7 +40,7 @@ onMounted(refresh);
         :disabled="loading"
         @click="refresh"
       >
-        {{ loading ? "読込中…" : "更新" }}
+        {{ loading ? t("common.loading") : t("common.refresh") }}
       </button>
     </header>
 
@@ -51,7 +55,7 @@ onMounted(refresh);
       <div class="table-scroll">
         <table class="storage-table">
           <thead>
-            <tr><th>マウント先</th><th>ファイルシステム</th><th>容量</th><th>使用状況</th></tr>
+            <tr><th>{{ t("storage.mount") }}</th><th>{{ t("storage.filesystem") }}</th><th>{{ t("storage.capacity") }}</th><th>{{ t("storage.usage") }}</th></tr>
           </thead>
           <tbody>
             <tr v-if="loading && mounts.length === 0">
@@ -59,7 +63,7 @@ onMounted(refresh);
                 colspan="4"
                 class="empty"
               >
-                ストレージ情報を読み込んでいます…
+                {{ t("storage.loading") }}
               </td>
             </tr>
             <tr v-else-if="!loading && mounts.length === 0 && !error">
@@ -67,7 +71,7 @@ onMounted(refresh);
                 colspan="4"
                 class="empty"
               >
-                マウントされたファイルシステムはありません。
+                {{ t("storage.empty") }}
               </td>
             </tr>
             <tr
@@ -85,13 +89,13 @@ onMounted(refresh);
                 <small>{{ mount.filesystem_type }}</small>
               </td>
               <td class="capacity-cell">
-                <strong>{{ formatBytes(mount.total_bytes) }}</strong>
-                <small>空き {{ formatBytes(mount.available_bytes) }}</small>
+                <strong>{{ formatBytes(mount.total_bytes, locale) }}</strong>
+                <small>{{ t("storage.available", { value: formatBytes(mount.available_bytes, locale) }) }}</small>
               </td>
               <td class="storage-usage-cell">
                 <div class="usage-row">
                   <span>{{ mount.usage_percent.toFixed(0) }}%</span>
-                  <small>{{ formatBytes(mount.used_bytes) }} 使用</small>
+                  <small>{{ t("storage.used", { value: formatBytes(mount.used_bytes, locale) }) }}</small>
                 </div>
                 <div class="progress">
                   <span
