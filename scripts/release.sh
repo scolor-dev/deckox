@@ -2,13 +2,10 @@
 set -eu
 
 version=${1:-}
-case "$version" in
-  v[0-9]*.[0-9]*.[0-9]*) ;;
-  *)
-    echo "Usage: scripts/release.sh vX.Y.Z" >&2
-    exit 2
-    ;;
-esac
+if ! printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+  echo "Usage: scripts/release.sh vX.Y.Z" >&2
+  exit 2
+fi
 
 release_number=${version#v}
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -115,10 +112,10 @@ wait_for_run Release "$main_sha"
 
 assets=$(gh release view "$version" --json assets --jq '.assets[].name')
 for expected in \
-  "deckox-${version}-x86_64-unknown-linux-gnu.tar.gz" \
-  "deckox-${version}-x86_64-unknown-linux-gnu.tar.gz.sha256" \
-  "deckox-${version}-aarch64-unknown-linux-gnu.tar.gz" \
-  "deckox-${version}-aarch64-unknown-linux-gnu.tar.gz.sha256"
+  "deckox-x86_64-unknown-linux-musl.tar.gz" \
+  "deckox-x86_64-unknown-linux-musl.tar.gz.sha256" \
+  "deckox-aarch64-unknown-linux-musl.tar.gz" \
+  "deckox-aarch64-unknown-linux-musl.tar.gz.sha256"
 do
   printf '%s\n' "$assets" | awk -v expected="$expected" \
     '$0 == expected { found = 1 } END { exit !found }' || \

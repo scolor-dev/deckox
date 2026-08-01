@@ -41,7 +41,9 @@ jobs:
         run: cargo test --workspace --all-features --locked
 
       - name: Check installer scripts
-        run: sh -n packaging/scripts/install.sh scripts/package-release.sh
+        run: >-
+          sh -n packaging/scripts/install.sh scripts/package-release.sh
+          scripts/release.sh
 
   web:
     name: Vue

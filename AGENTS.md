@@ -22,4 +22,3 @@ When the user explicitly asks to deploy, release to `main`, or publish the curre
 6. After completion, remain on `develop` and report the release URL and the Raspberry Pi update command.
 
 The release script performs the fixed sequence: fetch and preflight checks, squash `develop` into `main`, wait for `main` CI, create and push an annotated tag, wait for the Release workflow, verify all four architecture archives/checksums, and merge the release commit back into `develop`. It intentionally does not wait for the final `develop` synchronization CI because that tree has already passed `main` CI.
-
