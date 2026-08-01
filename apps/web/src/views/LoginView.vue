@@ -2,6 +2,10 @@
 import { ref } from "vue";
 import { ApiError, api } from "../api/client";
 
+defineProps<{
+  message?: string | null;
+}>();
+
 const emit = defineEmits<{
   authenticated: [];
 }>();
@@ -46,6 +50,13 @@ async function submit() {
         管理画面にログイン
       </h1>
       <p>管理者パスワードを入力してください。</p>
+      <p
+        v-if="message"
+        class="notice success login-notice"
+        role="status"
+      >
+        {{ message }}
+      </p>
 
       <form @submit.prevent="submit">
         <label for="password">パスワード</label>

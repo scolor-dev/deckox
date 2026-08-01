@@ -171,6 +171,7 @@ nav button.active::before {
 .login-brand small { color: #8a9099; font-size: 10px; }
 .login-card h1 { font-size: 21px; }
 .login-card > p { margin: 5px 0 22px; color: #747b85; font-size: 12px; }
+.login-card > .login-notice { margin: -10px 0 18px; color: #29643d; }
 .login-card form { display: grid; gap: 8px; }
 .login-card label { color: #3f454d; font-size: 12px; font-weight: 600; }
 .login-card input {

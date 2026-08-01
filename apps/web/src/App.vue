@@ -14,6 +14,7 @@ const status = ref<ServerStatus | null>(null);
 const menuOpen = ref(false);
 const authChecking = ref(true);
 const authenticated = ref(false);
+const loginMessage = ref<string | null>(null);
 
 const activeComponent = computed(() => ({
   overview: OverviewView,
@@ -57,6 +58,7 @@ async function checkAuthentication() {
 
 function handleAuthenticated() {
   authenticated.value = true;
+  loginMessage.value = null;
   void refreshStatus();
 }
 
@@ -64,6 +66,11 @@ function handleUnauthorized() {
   authenticated.value = false;
   status.value = null;
   menuOpen.value = false;
+}
+
+function handlePasswordChanged() {
+  loginMessage.value = "パスワードを変更しました。新しいパスワードでログインしてください。";
+  handleUnauthorized();
 }
 
 async function logout() {
@@ -96,6 +103,7 @@ onBeforeUnmount(() => {
 
   <LoginView
     v-else-if="!authenticated"
+    :message="loginMessage"
     @authenticated="handleAuthenticated"
   />
 
@@ -176,7 +184,7 @@ onBeforeUnmount(() => {
       <component
         :is="activeComponent"
         @status="status = $event"
-        @password-changed="handleUnauthorized"
+        @password-changed="handlePasswordChanged"
       />
     </main>
   </div>

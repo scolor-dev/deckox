@@ -46,6 +46,7 @@ struct AuthInner {
     secure_cookie: bool,
     sessions: Mutex<HashMap<String, Instant>>,
     failures: Mutex<HashMap<IpAddr, FailedLogins>>,
+    password_change_failures: Mutex<HashMap<IpAddr, FailedLogins>>,
     password_change: Mutex<()>,
 }
 
@@ -84,6 +85,7 @@ enum LoginResult {
 enum ChangePasswordResult {
     Changed,
     InvalidCurrentPassword,
+    RateLimited,
     InvalidNewPassword,
     NotPersistent,
     Failed(String),
@@ -115,6 +117,7 @@ impl AuthManager {
                 secure_cookie,
                 sessions: Mutex::new(HashMap::new()),
                 failures: Mutex::new(HashMap::new()),
+                password_change_failures: Mutex::new(HashMap::new()),
                 password_change: Mutex::new(()),
             }),
         })
@@ -122,10 +125,10 @@ impl AuthManager {
 
     async fn login(&self, source_ip: IpAddr, password: String) -> LoginResult {
         if password.is_empty() || password.len() > MAX_PASSWORD_BYTES {
-            self.record_failure(source_ip).await;
+            record_failure(&self.inner.failures, source_ip).await;
             return LoginResult::Invalid;
         }
-        if self.is_rate_limited(source_ip).await {
+        if is_rate_limited(&self.inner.failures, source_ip).await {
             return LoginResult::RateLimited;
         }
 
@@ -133,11 +136,16 @@ impl AuthManager {
         let valid = verify_password(password_hash, password).await;
 
         if !valid {
-            self.record_failure(source_ip).await;
+            record_failure(&self.inner.failures, source_ip).await;
             return LoginResult::Invalid;
         }
 
         self.inner.failures.lock().await.remove(&source_ip);
+        self.inner
+            .password_change_failures
+            .lock()
+            .await
+            .remove(&source_ip);
         let token = hex::encode(rand::random::<[u8; 32]>());
         self.inner
             .sessions
@@ -149,6 +157,7 @@ impl AuthManager {
 
     async fn change_password(
         &self,
+        source_ip: IpAddr,
         current_password: String,
         new_password: String,
     ) -> ChangePasswordResult {
@@ -159,11 +168,20 @@ impl AuthManager {
         if new_password.len() < MIN_PASSWORD_BYTES || new_password.len() > MAX_PASSWORD_BYTES {
             return ChangePasswordResult::InvalidNewPassword;
         }
+        if is_rate_limited(&self.inner.password_change_failures, source_ip).await {
+            return ChangePasswordResult::RateLimited;
+        }
 
         let current_hash = self.inner.password_hash.read().await.clone();
         if !verify_password(current_hash, current_password).await {
+            record_failure(&self.inner.password_change_failures, source_ip).await;
             return ChangePasswordResult::InvalidCurrentPassword;
         }
+        self.inner
+            .password_change_failures
+            .lock()
+            .await
+            .remove(&source_ip);
 
         let password_to_hash = new_password;
         let new_hash =
@@ -204,30 +222,6 @@ impl AuthManager {
         }
     }
 
-    async fn is_rate_limited(&self, source_ip: IpAddr) -> bool {
-        let now = Instant::now();
-        let mut failures = self.inner.failures.lock().await;
-        failures.retain(|_, entry| now.duration_since(entry.started_at) < FAILURE_WINDOW);
-        failures
-            .get(&source_ip)
-            .is_some_and(|entry| entry.count >= MAX_FAILURES)
-    }
-
-    async fn record_failure(&self, source_ip: IpAddr) {
-        let now = Instant::now();
-        let mut failures = self.inner.failures.lock().await;
-        let entry = failures.entry(source_ip).or_insert(FailedLogins {
-            count: 0,
-            started_at: now,
-        });
-        if now.duration_since(entry.started_at) >= FAILURE_WINDOW {
-            entry.count = 0;
-            entry.started_at = now;
-        }
-        entry.count = entry.count.saturating_add(1);
-        drop(failures);
-    }
-
     fn session_cookie(&self, token: &str) -> String {
         let secure = if self.inner.secure_cookie {
             "; Secure"
@@ -249,6 +243,33 @@ impl AuthManager {
         };
         format!("{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0{secure}")
     }
+}
+
+async fn is_rate_limited(
+    failures: &Mutex<HashMap<IpAddr, FailedLogins>>,
+    source_ip: IpAddr,
+) -> bool {
+    let now = Instant::now();
+    let mut failures = failures.lock().await;
+    failures.retain(|_, entry| now.duration_since(entry.started_at) < FAILURE_WINDOW);
+    failures
+        .get(&source_ip)
+        .is_some_and(|entry| entry.count >= MAX_FAILURES)
+}
+
+async fn record_failure(failures: &Mutex<HashMap<IpAddr, FailedLogins>>, source_ip: IpAddr) {
+    let now = Instant::now();
+    let mut failures = failures.lock().await;
+    let entry = failures.entry(source_ip).or_insert(FailedLogins {
+        count: 0,
+        started_at: now,
+    });
+    if now.duration_since(entry.started_at) >= FAILURE_WINDOW {
+        entry.count = 0;
+        entry.started_at = now;
+    }
+    entry.count = entry.count.saturating_add(1);
+    drop(failures);
 }
 
 async fn verify_password(password_hash: String, password: String) -> bool {
@@ -432,7 +453,11 @@ pub async fn change_password(
     Json(payload): Json<ChangePasswordRequest>,
 ) -> Response {
     match auth
-        .change_password(payload.current_password, payload.new_password)
+        .change_password(
+            user.source_ip,
+            payload.current_password,
+            payload.new_password,
+        )
         .await
     {
         ChangePasswordResult::Changed => {
@@ -453,11 +478,37 @@ pub async fn change_password(
             }
             response
         }
-        ChangePasswordResult::InvalidCurrentPassword => error_response(
-            StatusCode::UNAUTHORIZED,
-            "invalid_current_password",
-            "current password is incorrect",
-        ),
+        ChangePasswordResult::InvalidCurrentPassword => {
+            warn!(
+                event = "password_change",
+                request_id = %request_id.0,
+                actor = "admin",
+                source_ip = %user.source_ip,
+                result = "failure",
+                reason = "invalid_current_password",
+                "administrator password confirmation failed"
+            );
+            error_response(
+                StatusCode::UNAUTHORIZED,
+                "invalid_current_password",
+                "current password is incorrect",
+            )
+        }
+        ChangePasswordResult::RateLimited => {
+            warn!(
+                event = "password_change",
+                request_id = %request_id.0,
+                actor = "admin",
+                source_ip = %user.source_ip,
+                result = "rate_limited",
+                "administrator password confirmation rate limited"
+            );
+            error_response(
+                StatusCode::TOO_MANY_REQUESTS,
+                "rate_limited",
+                "too many password confirmation attempts; try again later",
+            )
+        }
         ChangePasswordResult::InvalidNewPassword => error_response(
             StatusCode::BAD_REQUEST,
             "invalid_new_password",
@@ -576,9 +627,14 @@ fn error_response(status: StatusCode, code: &'static str, message: &'static str)
 
 #[cfg(test)]
 mod tests {
-    use axum::http::{HeaderMap, HeaderValue, header};
+    use std::{collections::HashMap, net::IpAddr};
 
-    use super::{hash_password, same_origin, session_token};
+    use axum::http::{HeaderMap, HeaderValue, header};
+    use tokio::sync::Mutex;
+
+    use super::{
+        MAX_FAILURES, hash_password, is_rate_limited, record_failure, same_origin, session_token,
+    };
 
     #[test]
     fn hashes_password_with_argon2id() {
@@ -605,5 +661,15 @@ mod tests {
             HeaderValue::from_static("http://192.168.1.21:8080"),
         );
         assert!(same_origin(&headers));
+    }
+
+    #[tokio::test]
+    async fn rate_limits_password_confirmation_failures() {
+        let failures = Mutex::new(HashMap::new());
+        let source_ip = IpAddr::from([192, 0, 2, 1]);
+        for _ in 0..MAX_FAILURES {
+            record_failure(&failures, source_ip).await;
+        }
+        assert!(is_rate_limited(&failures, source_ip).await);
     }
 }

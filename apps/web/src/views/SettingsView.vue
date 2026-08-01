@@ -12,6 +12,7 @@ const error = ref<string | null>(null);
 const sshKeys = ref<SshKeyList | null>(null);
 const sshLoading = ref(true);
 const sshError = ref<string | null>(null);
+const sshSuccess = ref<string | null>(null);
 const publicKey = ref("");
 const addingKey = ref(false);
 const removingKeyId = ref<string | null>(null);
@@ -37,6 +38,8 @@ async function changePassword() {
   } catch (caught) {
     if (caught instanceof ApiError && caught.code === "invalid_current_password") {
       error.value = "現在のパスワードが正しくありません。";
+    } else if (caught instanceof ApiError && caught.code === "rate_limited") {
+      error.value = "確認に何度も失敗したため、5分ほど待ってから再度お試しください。";
     } else {
       error.value = caught instanceof Error ? caught.message : "パスワードを変更できませんでした。";
     }
@@ -48,6 +51,7 @@ async function changePassword() {
 async function loadSshKeys() {
   sshLoading.value = true;
   sshError.value = null;
+  sshSuccess.value = null;
   try {
     sshKeys.value = await api.sshKeys();
   } catch (caught) {
@@ -65,9 +69,10 @@ async function addSshKey() {
   }
   addingKey.value = true;
   try {
-    await api.addSshKey(publicKey.value.trim());
+    const added = await api.addSshKey(publicKey.value.trim());
     publicKey.value = "";
     await loadSshKeys();
+    sshSuccess.value = `${added.comment ?? added.fingerprint} を追加しました。`;
   } catch (caught) {
     sshError.value = caught instanceof Error ? caught.message : "SSH公開鍵を追加できませんでした。";
   } finally {
@@ -79,9 +84,11 @@ async function removeSshKey(keyId: string, label: string) {
   if (!window.confirm(`${label} を削除しますか？`)) return;
   removingKeyId.value = keyId;
   sshError.value = null;
+  sshSuccess.value = null;
   try {
-    await api.removeSshKey(keyId);
+    const removed = await api.removeSshKey(keyId);
     await loadSshKeys();
+    sshSuccess.value = `${removed.comment ?? removed.fingerprint} を削除しました。`;
   } catch (caught) {
     if (caught instanceof ApiError && caught.status === 409) {
       sshError.value = "最後のSSH公開鍵は削除できません。先に別の鍵を追加してください。";
@@ -190,6 +197,13 @@ onMounted(() => {
           role="alert"
         >
           {{ sshError }}
+        </p>
+        <p
+          v-if="sshSuccess"
+          class="notice success"
+          role="status"
+        >
+          {{ sshSuccess }}
         </p>
         <p
           v-if="sshLoading"
