@@ -2,6 +2,11 @@
 # The Agent listens only on this local Unix socket.
 socket = "/run/deckox/agent.sock"
 
+# Reboot stays disabled until explicitly enabled. The Web UI also requires the
+# administrator password again before calling the fixed reboot operation.
+[system]
+allow_reboot = false
+
 # Service state can always be read. Start, stop, and restart are permitted only
 # for service IDs listed here. Deckox's own services are always rejected.
 [services]

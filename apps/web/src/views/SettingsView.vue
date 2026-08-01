@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { ApiError, api, type SshKeyList } from "../api/client";
+import { ApiError, api, type SshKeyList, type SystemCapabilities } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import { notify } from "../notifications";
 import { preferences } from "../preferences";
@@ -20,6 +20,10 @@ const sshErrorKey = ref<string | null>(null);
 const publicKey = ref("");
 const addingKey = ref(false);
 const removingKeyId = ref<string | null>(null);
+const systemCapabilities = ref<SystemCapabilities | null>(null);
+const systemErrorKey = ref<string | null>(null);
+const rebootPassword = ref("");
+const rebooting = ref(false);
 
 function displaySettingsChanged() {
   notify("success", t("settings.saved"));
@@ -47,6 +51,35 @@ async function changePassword() {
     error.value = t(apiErrorKey(caught, "errors.password"));
   } finally {
     submitting.value = false;
+  }
+}
+
+async function loadSystemCapabilities() {
+  systemErrorKey.value = null;
+  try {
+    systemCapabilities.value = await api.systemCapabilities();
+  } catch (caught) {
+    systemErrorKey.value = apiErrorKey(caught, "errors.systemCapabilities");
+  }
+}
+
+async function rebootSystem() {
+  systemErrorKey.value = null;
+  if (!rebootPassword.value) {
+    systemErrorKey.value = "settings.rebootPasswordRequired";
+    return;
+  }
+  if (!window.confirm(t("settings.confirmReboot"))) return;
+
+  rebooting.value = true;
+  try {
+    await api.rebootSystem(rebootPassword.value);
+    rebootPassword.value = "";
+    notify("warning", t("settings.rebootAccepted"));
+  } catch (caught) {
+    systemErrorKey.value = apiErrorKey(caught, "errors.reboot");
+  } finally {
+    rebooting.value = false;
   }
 }
 
@@ -99,6 +132,7 @@ async function removeSshKey(keyId: string, label: string) {
 }
 
 onMounted(() => {
+  void loadSystemCapabilities();
   void loadSshKeys();
 });
 </script>
@@ -168,6 +202,54 @@ onMounted(() => {
           </option>
         </select>
       </div>
+    </section>
+
+    <section
+      class="settings-section"
+      aria-labelledby="system-operations-heading"
+    >
+      <div class="settings-description">
+        <h2 id="system-operations-heading">
+          {{ t("settings.systemOperations") }}
+        </h2>
+        <p>{{ t("settings.systemOperationsDescription") }}</p>
+      </div>
+      <form
+        class="settings-form"
+        @submit.prevent="rebootSystem"
+      >
+        <div
+          v-if="systemCapabilities && !systemCapabilities.reboot_allowed"
+          class="notice warning"
+        >
+          {{ t("settings.rebootDisabled") }}
+        </div>
+        <template v-else>
+          <label for="reboot-password">{{ t("settings.rebootPassword") }}</label>
+          <input
+            id="reboot-password"
+            v-model="rebootPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+          <small>{{ t("settings.rebootHelp") }}</small>
+          <p
+            v-if="systemErrorKey"
+            class="notice error"
+            role="alert"
+          >
+            {{ t(systemErrorKey) }}
+          </p>
+          <button
+            class="primary-button danger-button settings-submit"
+            type="submit"
+            :disabled="rebooting || !systemCapabilities?.reboot_allowed"
+          >
+            {{ rebooting ? t("settings.rebooting") : t("settings.reboot") }}
+          </button>
+        </template>
+      </form>
     </section>
 
     <section

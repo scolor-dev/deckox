@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.0</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.1</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -63,7 +63,10 @@ cargo run --package deckox-agent</code></pre>
         <pre><code>DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
 DECKOX_WEB_DIR="$PWD/apps/web/dist" \
 DECKOX_ADMIN_PASSWORD_HASH_FILE=/tmp/deckox-admin-password.hash \
+DECKOX_TERMINAL_ENABLED=true \
+DECKOX_TERMINAL_HOME=/tmp \
 cargo run --package deckox-server</code></pre>
+        <aside class="note warning">開発時のWebコンソールはServerを起動したローカルユーザーの権限で動きます。本番のsystemd版は専用の<code>deckox</code>ユーザーで動きます。Serverをrootで起動した場合、コンソールは強制的に無効になります。</aside>
       </section>
 
       <section class="section" aria-labelledby="vue-title">
@@ -71,7 +74,7 @@ cargo run --package deckox-server</code></pre>
         <pre><code>cd apps/web
 npm install
 npm run dev</code></pre>
-        <p>Viteは<code>http://localhost:5173</code>で起動し、<code>/api</code>と<code>/healthz</code>を<code>http://127.0.0.1:8080</code>へプロキシします。</p>
+        <p>Viteは<code>http://localhost:5173</code>で起動し、<code>/api</code>のHTTP・WebSocketと<code>/healthz</code>を<code>http://127.0.0.1:8080</code>へプロキシします。</p>
         <p>本番ビルド:</p>
         <pre><code>cd apps/web
 npm ci
@@ -90,6 +93,9 @@ npm run build</code></pre>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code></td><td><code>/var/lib/deckox/admin-password.hash</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH</code></td><td>なし</td><td>Server（開発・コンテナ向け）</td></tr>
             <tr><td><code>DECKOX_SECURE_COOKIE</code></td><td><code>false</code></td><td>Server。HTTPS終端時に<code>true</code></td></tr>
+            <tr><td><code>DECKOX_TERMINAL_ENABLED</code></td><td><code>false</code></td><td>Server。<code>true</code>かつ非rootプロセスの場合のみ有効</td></tr>
+            <tr><td><code>DECKOX_TERMINAL_SHELL</code></td><td><code>/bin/sh</code></td><td>Server。許可済みの絶対パスだけ指定可能</td></tr>
+            <tr><td><code>DECKOX_TERMINAL_HOME</code></td><td><code>/var/lib/deckox</code></td><td>Server。PTYの作業ディレクトリ</td></tr>
             <tr><td><code>RUST_LOG</code></td><td>各プロセスの<code>info</code></td><td>Server / Agent</td></tr>
           </tbody>
         </table>
@@ -101,6 +107,9 @@ npm run build</code></pre>
         <p>サービス状態の読み取りは常に可能ですが、変更操作はAgent設定へ完全一致で登録したサービスだけが対象です。</p>
         <pre><code>socket = "/run/deckox/agent.sock"
 
+[system]
+allow_reboot = false
+
 [services]
 allowed = [
   "nginx.service",
@@ -110,6 +119,7 @@ allowed = [
 [ssh]
 managed_user = "operator"</code></pre>
         <p><code>deckox-agent.service</code>と<code>deckox-server.service</code>は登録しても起動時に拒否されます。</p>
+        <p><code>system.allow_reboot</code>は初期値<code>false</code>です。<code>true</code>にした場合だけ、パスワード再確認後のホスト再起動を受け付けます。</p>
         <p><code>ssh.managed_user</code>は既存の非rootローカルユーザーだけを指定できます。省略時はSSH公開鍵管理が無効になります。</p>
       </section>
 
@@ -141,7 +151,7 @@ npm run build</code></pre>
         <h2 id="docker-title">Docker Compose</h2>
         <pre><code>docker compose up --build</code></pre>
         <p>ComposeはServer–Agent通信とUIを確認するための開発構成です。<code>http://127.0.0.1:8080/</code>を開き、固定の開発用パスワード<code>deckox</code>でログインします。パスワードハッシュを環境変数で渡すため、設定画面からのパスワード変更は利用できません。</p>
-        <aside class="note warning"><strong>制限:</strong> コンテナ内のAgentはLinuxホストのsystemdを管理できません。本番のLinux管理用途ではsystemdサービスとして導入します。</aside>
+        <aside class="note warning"><strong>制限:</strong> コンテナ内のAgentはLinuxホストのsystemdを管理できません。Webコンソールもコンテナ内の非rootシェルです。本番のLinux管理用途ではsystemdサービスとして導入します。</aside>
       </section>
       <footer class="footer">Deckox Docs · Development</footer>
     </main>

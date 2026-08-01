@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.0</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.1</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -36,7 +36,7 @@
 
       <section class="section" aria-labelledby="runtime-title">
         <h2 id="runtime-title">実行時アーキテクチャ</h2>
-        <p>ブラウザからの操作と通常取得はREST、閲覧中のメトリクス配信はSSEを使います。ServerとAgentはローカルUnixソケット上のHTTPで通信し、Agentは外部TCPポートを持ちません。</p>
+        <p>ブラウザからの操作と通常取得はREST、閲覧中のメトリクス配信はSSE、非rootコンソールはWebSocketを使います。ServerとAgentはローカルUnixソケット上のHTTPで通信し、Agentは外部TCPポートを持ちません。</p>
         <figure class="diagram">
           <img src="assets/architecture.svg" alt="Vue、Deckox Server、Deckox Agent、Linux Hostの通信構成図">
         </figure>
@@ -48,19 +48,31 @@
           <article class="card">
             <span class="number">WEB</span>
             <h3>Vue + TypeScript</h3>
-            <p>ブラウザ上の管理UIです。Vue Routerで画面URLを分け、SSEメトリクス、SVGグラフ、日本語・英語、端末内に保存する表示設定を提供します。</p>
+            <p>ブラウザ上の管理UIです。Vue Routerで画面URLを分け、SSEメトリクス、SVGグラフ、Webコンソール、日本語・英語、端末内に保存する表示設定を提供します。</p>
           </article>
           <article class="card">
             <span class="number">SERVER</span>
             <h3>Axum Server</h3>
-            <p>Vueの静的配信、管理者認証、公開HTTP API、Agent APIの安全な中継、SSE配信を担当します。一般ユーザーの<code>deckox</code>で動作します。</p>
+            <p>Vueの静的配信、管理者認証、公開HTTP API、Agent APIの中継、SSE配信、非root PTYを担当します。一般ユーザーの<code>deckox</code>で動作します。</p>
           </article>
           <article class="card">
             <span class="number">AGENT</span>
             <h3>Rust Agent</h3>
-            <p>Linuxホスト情報の取得、許可リスト内のsystemdサービス操作、指定ユーザーのSSH公開鍵管理を行います。rootで動き、Serverとは権限境界を分けています。</p>
+            <p>Linuxホスト情報の取得、許可リスト内のsystemdサービス操作、指定ユーザーのSSH公開鍵管理、明示的に許可したホスト再起動を行います。rootで動き、Serverとは権限境界を分けています。</p>
           </article>
         </div>
+      </section>
+
+      <section class="section" aria-labelledby="terminal-title">
+        <h2 id="terminal-title">Webコンソール</h2>
+        <dl class="definition-list">
+          <dt>Transport</dt><dd>認証Cookieと同一Origin確認で保護した<code>/api/v1/terminal/ws</code>のWebSocket</dd>
+          <dt>Privilege</dt><dd>root Agentではなく、<code>deckox-server</code>と同じ非rootの<code>deckox</code>ユーザーでPTYと<code>/bin/sh</code>を起動</dd>
+          <dt>Sandbox</dt><dd><code>NoNewPrivileges</code>、<code>ProtectHome</code>、<code>ProtectSystem=strict</code>を継承し、書き込み先は<code>/var/lib/deckox</code>とPrivateTmpに限定</dd>
+          <dt>Limits</dt><dd>同時2セッション、入力・フレーム16 KiB、端末サイズの上限、15分の入力アイドルタイムアウト</dd>
+          <dt>Lifecycle</dt><dd>コンソール画面を離れたとき、タブが非表示になったとき、WebSocketが切れたときにシェルを終了</dd>
+          <dt>Logging</dt><dd>開始・終了と送信元IP・リクエストIDだけを記録し、端末の入力と出力は記録しない</dd>
+        </dl>
       </section>
 
       <section class="section" aria-labelledby="realtime-title">
@@ -111,10 +123,11 @@
             <tr><td>Agent公開範囲</td><td>Unixソケットのみ。ネットワークポートは使用しない</td></tr>
             <tr><td>Server権限</td><td>専用<code>deckox</code>ユーザー、<code>NoNewPrivileges</code>、<code>ProtectSystem=strict</code></td></tr>
             <tr><td>管理者認証</td><td>Argon2idハッシュ、HttpOnly・SameSite=Strict Cookie、12時間のメモリ内セッション、ログイン・パスワード再確認の試行制限</td></tr>
-            <tr><td>変更API</td><td>認証に加え、ブラウザの<code>Origin</code>と<code>Host</code>が同一であることを確認</td></tr>
-            <tr><td>Agent操作</td><td>systemd変更は完全一致許可リストに限定。SSH鍵管理は設定した非rootユーザーとDeckox管理ブロックだけに限定</td></tr>
+            <tr><td>変更API / WebSocket</td><td>認証に加え、ブラウザの<code>Origin</code>と<code>Host</code>が同一であることを確認</td></tr>
+            <tr><td>Agent操作</td><td>systemd変更は完全一致許可リスト、再起動は明示的な設定とWeb側のパスワード再確認、SSH鍵管理は指定した非rootユーザーに限定</td></tr>
+            <tr><td>Webコンソール</td><td>Server側の非root PTY。同時接続数・入力サイズ・端末サイズ・無操作時間を制限し、root Agentシェルは提供しない</td></tr>
             <tr><td>SSH鍵</td><td>公開鍵だけを受け付け、鍵種別・Base64データ・内部鍵種別を検証。ディレクトリFDと<code>O_NOFOLLOW</code>を用いてリンク差し替えを回避</td></tr>
-            <tr><td>操作ログ</td><td>認証、パスワード変更、サービス・SSH鍵操作を送信元IP・リクエストID付きでjournalへ記録</td></tr>
+            <tr><td>操作ログ</td><td>認証、パスワード変更、サービス・SSH鍵・再起動・コンソール接続を送信元IP・リクエストID付きでjournalへ記録</td></tr>
           </tbody>
         </table>
         <aside class="note warning"><strong>未実装:</strong> 複数ユーザー・ロール・MFA・TLS終端・監査ログの専用閲覧画面はまだ存在しません。</aside>

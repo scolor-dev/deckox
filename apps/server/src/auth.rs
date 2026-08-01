@@ -13,7 +13,7 @@ use axum::{
     extract::{ConnectInfo, Request, State},
     http::{
         HeaderMap, HeaderValue, Method, StatusCode,
-        header::{COOKIE, HOST, ORIGIN, SET_COOKIE},
+        header::{COOKIE, HOST, ORIGIN, SET_COOKIE, UPGRADE},
     },
     middleware::Next,
     response::{IntoResponse, Response},
@@ -89,6 +89,12 @@ enum ChangePasswordResult {
     InvalidNewPassword,
     NotPersistent,
     Failed(String),
+}
+
+pub enum PasswordConfirmationResult {
+    Confirmed,
+    Invalid,
+    RateLimited,
 }
 
 impl AuthManager {
@@ -202,6 +208,32 @@ impl AuthManager {
         self.inner.sessions.lock().await.clear();
         self.inner.failures.lock().await.clear();
         ChangePasswordResult::Changed
+    }
+
+    pub async fn confirm_current_password(
+        &self,
+        source_ip: IpAddr,
+        password: String,
+    ) -> PasswordConfirmationResult {
+        if password.is_empty() || password.len() > MAX_PASSWORD_BYTES {
+            record_failure(&self.inner.password_change_failures, source_ip).await;
+            return PasswordConfirmationResult::Invalid;
+        }
+        if is_rate_limited(&self.inner.password_change_failures, source_ip).await {
+            return PasswordConfirmationResult::RateLimited;
+        }
+
+        let password_hash = self.inner.password_hash.read().await.clone();
+        if !verify_password(password_hash, password).await {
+            record_failure(&self.inner.password_change_failures, source_ip).await;
+            return PasswordConfirmationResult::Invalid;
+        }
+        self.inner
+            .password_change_failures
+            .lock()
+            .await
+            .remove(&source_ip);
+        PasswordConfirmationResult::Confirmed
     }
 
     async fn is_authenticated(&self, headers: &HeaderMap) -> bool {
@@ -566,7 +598,8 @@ pub async fn require_auth(
             "authentication is required",
         );
     }
-    if is_state_changing(request.method()) && !same_origin(request.headers()) {
+    if requires_same_origin(request.method(), request.headers()) && !same_origin(request.headers())
+    {
         warn!(
             event = "auth_origin",
             request_id,
@@ -614,6 +647,13 @@ const fn is_state_changing(method: &Method) -> bool {
     !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS)
 }
 
+fn requires_same_origin(method: &Method, headers: &HeaderMap) -> bool {
+    is_state_changing(method)
+        || headers
+            .get(UPGRADE)
+            .is_some_and(|value| value.as_bytes().eq_ignore_ascii_case(b"websocket"))
+}
+
 fn error_response(status: StatusCode, code: &'static str, message: &'static str) -> Response {
     (
         status,
@@ -627,13 +667,14 @@ fn error_response(status: StatusCode, code: &'static str, message: &'static str)
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, net::IpAddr};
+    use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
-    use axum::http::{HeaderMap, HeaderValue, header};
-    use tokio::sync::Mutex;
+    use axum::http::{HeaderMap, HeaderValue, Method, header};
+    use tokio::sync::{Mutex, RwLock};
 
     use super::{
-        MAX_FAILURES, hash_password, is_rate_limited, record_failure, same_origin, session_token,
+        AuthInner, AuthManager, MAX_FAILURES, PasswordConfirmationResult, hash_password,
+        is_rate_limited, record_failure, requires_same_origin, same_origin, session_token,
     };
 
     #[test]
@@ -663,6 +704,15 @@ mod tests {
         assert!(same_origin(&headers));
     }
 
+    #[test]
+    fn websocket_upgrade_requires_same_origin() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::UPGRADE, HeaderValue::from_static("websocket"));
+
+        assert!(requires_same_origin(&Method::GET, &headers));
+        assert!(!requires_same_origin(&Method::GET, &HeaderMap::new()));
+    }
+
     #[tokio::test]
     async fn rate_limits_password_confirmation_failures() {
         let failures = Mutex::new(HashMap::new());
@@ -671,5 +721,37 @@ mod tests {
             record_failure(&failures, source_ip).await;
         }
         assert!(is_rate_limited(&failures, source_ip).await);
+    }
+
+    #[tokio::test]
+    async fn confirms_current_password_and_clears_failures() {
+        let password = "correct-test-password";
+        let auth = AuthManager {
+            inner: Arc::new(AuthInner {
+                password_hash: RwLock::new(hash_password(password).expect("password should hash")),
+                password_hash_path: None,
+                secure_cookie: false,
+                sessions: Mutex::new(HashMap::new()),
+                failures: Mutex::new(HashMap::new()),
+                password_change_failures: Mutex::new(HashMap::new()),
+                password_change: Mutex::new(()),
+            }),
+        };
+        let source_ip = IpAddr::from([192, 0, 2, 2]);
+
+        assert!(matches!(
+            auth.confirm_current_password(source_ip, "wrong-password".to_owned())
+                .await,
+            PasswordConfirmationResult::Invalid
+        ));
+        assert!(matches!(
+            auth.confirm_current_password(source_ip, password.to_owned())
+                .await,
+            PasswordConfirmationResult::Confirmed
+        ));
+        assert!(
+            !is_rate_limited(&auth.inner.password_change_failures, source_ip).await,
+            "successful confirmation should clear failures"
+        );
     }
 }

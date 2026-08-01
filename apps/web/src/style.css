@@ -237,6 +237,8 @@ nav a.router-link-exact-active::before {
   font-weight: 600;
 }
 .primary-button:hover:not(:disabled) { background: #1f5b96; }
+.primary-button.danger-button { border-color: #9b3030; background: #a93838; }
+.primary-button.danger-button:hover:not(:disabled) { background: #922f2f; }
 
 .settings-view { width: min(920px, 100%); }
 .settings-section {
@@ -576,6 +578,27 @@ td small {
 .usage-row > span { color: #30353c; font-weight: 600; }
 .usage-row small { margin: 0; }
 
+.console-view { width: min(1280px, 100%); }
+.terminal-note {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+  color: #626973;
+  font-size: 11px;
+}
+.terminal-note strong { color: #3f454d; font-weight: 600; }
+.terminal-surface {
+  height: min(680px, calc(100vh - 190px));
+  min-height: 360px;
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid #343a42;
+  border-radius: 5px;
+  background: #1e2329;
+}
+.terminal-surface .xterm { height: 100%; }
+
 @media (max-width: 900px) {
   .metric-grid { grid-template-columns: 1fr; }
   .details { grid-template-columns: 1fr; }
@@ -626,6 +649,8 @@ td small {
   .table-panel { border-radius: 4px; }
   th, td { padding: 11px 12px; }
   .notification-region { top: 58px; right: 10px; width: calc(100vw - 20px); }
+  .terminal-note { flex-direction: column; gap: 2px; }
+  .terminal-surface { height: calc(100vh - 250px); min-height: 320px; padding: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
