@@ -356,6 +356,15 @@ h2 { margin: 0; color: #2b3037; font-size: 17px; line-height: 1.4; }
 .button { min-width: 68px; padding: 7px 14px; color: #3d434b; font-size: 13px; }
 .button:hover:not(:disabled), .action-button:hover:not(:disabled) { border-color: #8e969f; background: #f7f8f9; }
 button:disabled { opacity: .48; cursor: not-allowed; }
+
+.restart-page { min-height: calc(100vh - 64px); display: grid; place-items: center; padding: 32px; }
+.restart-panel { width: min(100%, 440px); padding: 32px; border: 1px solid #d9dde2; border-radius: 8px; background: #fff; text-align: center; }
+.restart-panel h1 { margin: 18px 0 8px; font-size: 22px; }
+.restart-panel p { margin: 0 0 20px; color: #525a64; }
+.restart-panel small { display: block; margin-top: 22px; color: #737b84; }
+.restart-indicator { display: inline-block; width: 12px; height: 12px; border: 2px solid #aeb5bd; border-top-color: #28649e; border-radius: 50%; animation: restart-spin .8s linear infinite; }
+.restart-indicator.ready { border: 0; background: #2f7d4a; animation: none; }
+@keyframes restart-spin { to { transform: rotate(360deg); } }
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,

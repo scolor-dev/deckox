@@ -4,6 +4,7 @@ import ServicesView from "./views/ServicesView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import StorageView from "./views/StorageView.vue";
 import ConsoleView from "./views/ConsoleView.vue";
+import RestartingView from "./views/RestartingView.vue";
 
 export const routes = [
   { path: "/", name: "overview", component: OverviewView, meta: { titleKey: "nav.overview" } },
@@ -11,6 +12,7 @@ export const routes = [
   { path: "/storage", name: "storage", component: StorageView, meta: { titleKey: "nav.storage" } },
   { path: "/console", name: "console", component: ConsoleView, meta: { titleKey: "nav.console" } },
   { path: "/settings", name: "settings", component: SettingsView, meta: { titleKey: "nav.settings" } },
+  { path: "/restarting", name: "restarting", component: RestartingView, meta: { titleKey: "restart.title" } },
 ] as const;
 
 export const router = createRouter({
