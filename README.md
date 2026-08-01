@@ -3,7 +3,8 @@
 Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基盤です。
 
 現在は次の最小構成と、Agentによるシステム情報・リソース・ストレージ取得、
-許可リスト付きsystemdサービス管理を提供します。
+許可リスト付きsystemdサービス管理、管理者パスワード変更、SSH公開鍵管理を
+提供します。
 
 ```text
 Vue管理画面
@@ -145,17 +146,36 @@ journalctl -u deckox-server -u deckox-agent -f
 ```
 
 初回インストール時には、ランダムな管理者パスワードがターミナルへ一度だけ
-表示されます。更新時は既存のパスワードが維持されます。パスワードを再設定
-する場合:
+表示されます。更新時は既存のパスワードが維持されます。ログイン後の
+「設定」画面から、現在のパスワードを確認して12文字以上の新しいパスワードへ
+変更できます。変更後はすべてのセッションが失効します。
+
+管理画面へ入れない場合にパスワードを再設定する手順:
 
 ```bash
 printf '%s' '新しいパスワード' \
   | sudo /usr/local/bin/deckox-server hash-password \
-  | sudo tee /etc/deckox/admin-password.hash >/dev/null
-sudo chown root:deckox /etc/deckox/admin-password.hash
-sudo chmod 0640 /etc/deckox/admin-password.hash
+  | sudo tee /var/lib/deckox/admin-password.hash >/dev/null
+sudo chown deckox:deckox /var/lib/deckox/admin-password.hash
+sudo chmod 0600 /var/lib/deckox/admin-password.hash
 sudo systemctl restart deckox-server
 ```
+
+SSH公開鍵管理を有効にするには、`/etc/deckox/agent.toml`へ管理対象の
+非rootローカルユーザーを指定します。
+
+```toml
+[ssh]
+managed_user = "sorac"
+```
+
+```bash
+sudo systemctl restart deckox-agent
+```
+
+設定画面ではOpenSSH形式の公開鍵を追加・削除できます。秘密鍵は受け付けず、
+既存の`authorized_keys`はDeckox管理ブロック外に保持します。SSH接続手段を
+失わないよう、外部の鍵を含めて最後の1本になる鍵は削除できません。
 
 Serverは既定で`127.0.0.1:8080`だけに待ち受けます。別端末から一時的に
 確認する場合は、SSHトンネルを利用します。
@@ -218,6 +238,8 @@ docker compose up --build
 
 `http://127.0.0.1:8080/`を開き、開発用パスワード`deckox`でログインします。
 これはローカル開発専用の固定値です。
+Composeはハッシュを環境変数で直接渡すため、設定画面からのパスワード変更は
+利用できません。
 
 コンテナ内のAgentはLinuxホストのsystemdなどを管理できません。Linux全体を
 管理する本番用途では、systemdサービスとしてインストールしてください。
@@ -229,6 +251,7 @@ docker compose up --build
 Serverと通信します。
 
 Serverは単一管理者のArgon2idパスワード認証と、12時間のメモリ内セッション
-を提供します。CookieはHttpOnly・SameSite=Strictです。サービス操作と認証
-イベントはリクエストID付きでjournalへ記録します。Agentは任意のシェル
-コマンドを受け付けず、許可済みの型付き操作だけを実行します。
+を提供します。CookieはHttpOnly・SameSite=Strictです。認証、パスワード変更、
+サービス操作、SSH公開鍵操作はリクエストID付きでjournalへ記録します。
+Agentは任意のシェルコマンドを受け付けず、許可済みの型付き操作だけを
+実行します。

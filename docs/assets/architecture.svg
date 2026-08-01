@@ -43,7 +43,7 @@
     <rect x="20" y="20" width="44" height="44" rx="10" fill="#3b2d16"/>
     <text x="42" y="49" text-anchor="middle" fill="#fbbf24" font-family="system-ui,sans-serif" font-size="18">A</text>
     <text x="20" y="92" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="22" font-weight="700">Deckox Agent</text>
-    <text x="20" y="120" fill="#8fa0b6" font-family="system-ui,sans-serif" font-size="14">Linux情報・systemd管理</text>
+    <text x="20" y="120" fill="#8fa0b6" font-family="system-ui,sans-serif" font-size="14">Linux・systemd・SSH鍵管理</text>
     <text x="20" y="142" fill="#617187" font-family="ui-monospace,monospace" font-size="11">deckox-agent</text>
   </g>
 
@@ -55,7 +55,7 @@
     <text x="20" y="40" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="21" font-weight="700">Linux Host</text>
     <text x="20" y="72" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">/etc/hostname</text>
     <text x="20" y="96" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">/proc/uptime</text>
-    <text x="20" y="120" fill="#617187" font-family="system-ui,sans-serif" font-size="12">systemd・OS・リソース</text>
+    <text x="20" y="120" fill="#617187" font-family="system-ui,sans-serif" font-size="12">systemd・OS・authorized_keys</text>
   </g>
 
   <g transform="translate(54 308)">
@@ -67,6 +67,6 @@
     <circle cx="31" cy="116" r="4" fill="#5eead4"/>
     <text x="46" y="121" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">Agentは /run/deckox/agent.sock のみで待受</text>
     <circle cx="31" cy="150" r="4" fill="#fbbf24"/>
-    <text x="46" y="155" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">systemd変更は完全一致の許可リストに限定</text>
+    <text x="46" y="155" fill="#9aabc0" font-family="system-ui,sans-serif" font-size="13">変更対象は許可サービスと指定ユーザーの公開鍵に限定</text>
   </g>
 </svg>

@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.2.0</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>developブランチ</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -71,11 +71,11 @@
         <table class="status-table">
           <thead><tr><th>領域</th><th>状態</th><th>現在提供している内容</th></tr></thead>
           <tbody>
-            <tr><td>Web Server</td><td><span class="status done">実装済み</span></td><td>Vue配信、単一管理者認証、Agentのシステム・メトリクス・ストレージ・サービスAPIの保護されたプロキシ</td></tr>
-            <tr><td>System Agent</td><td><span class="status done">実装済み</span></td><td>システム情報、CPU・メモリ、ストレージ、systemdサービスの取得と制御</td></tr>
-            <tr><td>Vue UI</td><td><span class="status done">実装済み</span></td><td>システム概要、リソース、ストレージ、systemdサービス管理画面</td></tr>
+            <tr><td>Web Server</td><td><span class="status done">実装済み</span></td><td>Vue配信、単一管理者認証、パスワード変更、Agent APIの保護されたプロキシ</td></tr>
+            <tr><td>System Agent</td><td><span class="status done">実装済み</span></td><td>システム情報、CPU・メモリ、ストレージ、systemdサービス制御、SSH公開鍵管理</td></tr>
+            <tr><td>Vue UI</td><td><span class="status done">実装済み</span></td><td>概要、リソース、ストレージ、サービス、パスワード・SSH公開鍵設定</td></tr>
             <tr><td>Service command</td><td><span class="status done">実装済み</span></td><td>許可リストに登録したsystemdサービスの起動・停止・再起動</td></tr>
-            <tr><td>認証</td><td><span class="status done">実装済み</span></td><td>Argon2idパスワード、12時間セッション、ログイン試行制限、同一Origin確認</td></tr>
+            <tr><td>認証</td><td><span class="status done">実装済み</span></td><td>Argon2idパスワード、変更時の全セッション失効、12時間セッション、ログイン試行制限、同一Origin確認</td></tr>
           </tbody>
         </table>
       </section>
