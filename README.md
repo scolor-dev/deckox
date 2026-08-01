@@ -3,7 +3,8 @@
 Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基盤です。
 
 現在は次の最小構成と、Agentによるシステム情報・リソース・ストレージ取得、
-許可リスト付きsystemdサービス管理を提供します。
+許可リスト付きsystemdサービス管理、管理者パスワード変更、SSH公開鍵管理を
+提供します。
 
 ```text
 Vue管理画面
@@ -96,12 +97,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.2.0`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.2.1`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -126,7 +127,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.2.0 sh
+  | sudo DECKOX_VERSION=v0.2.1 sh
 ```
 
 ローカルで作成した配布物を検証する場合は、アーカイブと同じ場所に
@@ -145,17 +146,39 @@ journalctl -u deckox-server -u deckox-agent -f
 ```
 
 初回インストール時には、ランダムな管理者パスワードがターミナルへ一度だけ
-表示されます。更新時は既存のパスワードが維持されます。パスワードを再設定
-する場合:
+表示されます。更新時は既存のパスワードが維持されます。ログイン後の
+「設定」画面から、現在のパスワードを確認して12文字以上の新しいパスワードへ
+変更できます。現在のパスワード確認に5分間で5回失敗すると一時的に制限され、
+変更後はすべてのセッションが失効します。ログイン画面には変更完了が表示されます。
+
+管理画面へ入れない場合にパスワードを再設定する手順:
 
 ```bash
 printf '%s' '新しいパスワード' \
   | sudo /usr/local/bin/deckox-server hash-password \
-  | sudo tee /etc/deckox/admin-password.hash >/dev/null
-sudo chown root:deckox /etc/deckox/admin-password.hash
-sudo chmod 0640 /etc/deckox/admin-password.hash
+  | sudo tee /var/lib/deckox/admin-password.hash >/dev/null
+sudo chown deckox:deckox /var/lib/deckox/admin-password.hash
+sudo chmod 0600 /var/lib/deckox/admin-password.hash
 sudo systemctl restart deckox-server
 ```
+
+SSH公開鍵管理を有効にするには、`/etc/deckox/agent.toml`へ管理対象の
+非rootローカルユーザーを指定します。
+
+```toml
+[ssh]
+managed_user = "sorac"
+```
+
+```bash
+sudo systemctl restart deckox-agent
+```
+
+設定画面ではOpenSSH形式の公開鍵を追加・削除できます。秘密鍵は受け付けず、
+既存の`authorized_keys`はDeckox管理ブロック外に保持します。SSH接続手段を
+失わないよう、外部の鍵を含めて最後の1本になる鍵は削除できません。Agentは
+`.ssh`をシンボリックリンクを辿らずに開き、同じディレクトリFDを基準として
+一時ファイルの作成、権限設定、同期、置換を行います。
 
 Serverは既定で`127.0.0.1:8080`だけに待ち受けます。別端末から一時的に
 確認する場合は、SSHトンネルを利用します。
@@ -218,6 +241,8 @@ docker compose up --build
 
 `http://127.0.0.1:8080/`を開き、開発用パスワード`deckox`でログインします。
 これはローカル開発専用の固定値です。
+Composeはハッシュを環境変数で直接渡すため、設定画面からのパスワード変更は
+利用できません。
 
 コンテナ内のAgentはLinuxホストのsystemdなどを管理できません。Linux全体を
 管理する本番用途では、systemdサービスとしてインストールしてください。
@@ -229,6 +254,8 @@ docker compose up --build
 Serverと通信します。
 
 Serverは単一管理者のArgon2idパスワード認証と、12時間のメモリ内セッション
-を提供します。CookieはHttpOnly・SameSite=Strictです。サービス操作と認証
-イベントはリクエストID付きでjournalへ記録します。Agentは任意のシェル
-コマンドを受け付けず、許可済みの型付き操作だけを実行します。
+を提供します。CookieはHttpOnly・SameSite=Strictです。ログインとパスワード
+再確認には送信元IP単位の試行制限があります。認証、パスワード変更、
+サービス操作、SSH公開鍵操作はリクエストID付きでjournalへ記録します。
+Agentは任意のシェルコマンドを受け付けず、許可済みの型付き操作だけを
+実行します。

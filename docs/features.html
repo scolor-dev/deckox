@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.2.0</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.2.1</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -51,6 +51,10 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス詳細を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/services/{id}/{action}</code></span></td><td><span class="status done">実装済み</span></td><td>起動・停止・再起動。Agentの許可・エラー状態を維持して返却</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/password</code></span></td><td><span class="status done">実装済み</span></td><td>現在のパスワードを確認し、Argon2idハッシュを更新して全セッションを失効。5分間に5回の確認失敗で制限</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/settings/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>管理対象ユーザーとDeckox管理下のSSH公開鍵を取得</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>OpenSSH形式のSSH公開鍵を追加</td></tr>
+            <tr><td><span class="endpoint"><span class="method">DELETE</span><code>/api/v1/settings/ssh/keys/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>ID指定でSSH公開鍵を削除</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/*</code></span></td><td><span class="status done">実装済み</span></td><td>Vue静的ファイル。未知のパスは<code>index.html</code>へSPAフォールバック</td></tr>
           </tbody>
         </table>
@@ -72,6 +76,8 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/start</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを起動</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/stop</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを停止</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/restart</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを再起動</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET / POST</span><code>/v1/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>設定済みユーザーのDeckox管理公開鍵を取得・追加</td></tr>
+            <tr><td><span class="endpoint"><span class="method">DELETE</span><code>/v1/ssh/keys/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>公開鍵を削除。最後のSSH接続鍵は拒否</td></tr>
           </tbody>
         </table>
         <aside class="note">Agent APIはTCPではなく、<code>/run/deckox/agent.sock</code>上で提供されます。</aside>
@@ -86,6 +92,7 @@
           <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>設定</h3><p>管理者パスワードの変更、SSH公開鍵管理、変更・追加・削除後の完了通知を提供します。</p></article>
         </div>
       </section>
 
@@ -101,6 +108,7 @@
             <tr><td><code>SystemInfo</code>ほか</td><td><span class="status done">使用中</span></td><td>システム、メトリクス、ストレージ、サービスの応答型</td></tr>
             <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動</td></tr>
             <tr><td><code>CommandResult</code></td><td><span class="status done">使用中</span></td><td>操作完了時のコマンドID、実行状態、メッセージ</td></tr>
+            <tr><td><code>SshKeyList</code>ほか</td><td><span class="status done">使用中</span></td><td>SSH公開鍵の一覧・追加要求・鍵種別・SHA-256指紋</td></tr>
             <tr><td><code>AgentCommand</code></td><td><span class="status defined">型のみ定義済み</span></td><td>汎用コマンド型。現在のHTTPハンドラーでは未使用</td></tr>
           </tbody>
         </table>

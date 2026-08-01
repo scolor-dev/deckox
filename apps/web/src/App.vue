@@ -5,25 +5,29 @@ import LoginView from "./views/LoginView.vue";
 import OverviewView from "./views/OverviewView.vue";
 import ServicesView from "./views/ServicesView.vue";
 import StorageView from "./views/StorageView.vue";
+import SettingsView from "./views/SettingsView.vue";
 
-type Page = "overview" | "services" | "storage";
+type Page = "overview" | "services" | "storage" | "settings";
 
 const activePage = ref<Page>("overview");
 const status = ref<ServerStatus | null>(null);
 const menuOpen = ref(false);
 const authChecking = ref(true);
 const authenticated = ref(false);
+const loginMessage = ref<string | null>(null);
 
 const activeComponent = computed(() => ({
   overview: OverviewView,
   services: ServicesView,
   storage: StorageView,
+  settings: SettingsView,
 })[activePage.value]);
 
 const pageTitle = computed(() => ({
   overview: "概要",
   services: "サービス",
   storage: "ストレージ",
+  settings: "設定",
 })[activePage.value]);
 
 function navigate(page: Page) {
@@ -54,6 +58,7 @@ async function checkAuthentication() {
 
 function handleAuthenticated() {
   authenticated.value = true;
+  loginMessage.value = null;
   void refreshStatus();
 }
 
@@ -61,6 +66,11 @@ function handleUnauthorized() {
   authenticated.value = false;
   status.value = null;
   menuOpen.value = false;
+}
+
+function handlePasswordChanged() {
+  loginMessage.value = "パスワードを変更しました。新しいパスワードでログインしてください。";
+  handleUnauthorized();
 }
 
 async function logout() {
@@ -93,6 +103,7 @@ onBeforeUnmount(() => {
 
   <LoginView
     v-else-if="!authenticated"
+    :message="loginMessage"
     @authenticated="handleAuthenticated"
   />
 
@@ -142,6 +153,13 @@ onBeforeUnmount(() => {
         >
           ストレージ
         </button>
+        <button
+          type="button"
+          :class="{ active: activePage === 'settings' }"
+          @click="navigate('settings')"
+        >
+          設定
+        </button>
       </nav>
       <div class="agent-state">
         <span :class="['status-dot', status?.agent ? 'online' : 'offline']" />
@@ -158,7 +176,7 @@ onBeforeUnmount(() => {
         >
           ログアウト
         </button>
-        <span>バージョン {{ status?.version ?? "0.2.0" }}</span>
+        <span>バージョン {{ status?.version ?? "0.2.1" }}</span>
       </div>
     </aside>
 
@@ -166,6 +184,7 @@ onBeforeUnmount(() => {
       <component
         :is="activeComponent"
         @status="status = $event"
+        @password-changed="handlePasswordChanged"
       />
     </main>
   </div>
