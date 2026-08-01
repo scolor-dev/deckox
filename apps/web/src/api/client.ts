@@ -127,6 +127,19 @@ export const api = {
       false,
     ),
   logout: () => request<AuthStatus>("/api/v1/auth/logout", { method: "POST" }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<AuthStatus>(
+      "/api/v1/settings/password",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+        headers: { "Content-Type": "application/json" },
+      },
+      false,
+    ),
   serverStatus: () => request<ServerStatus>("/api/v1/status"),
   systemInfo: () => request<SystemInfo>("/api/v1/system"),
   systemMetrics: () => request<SystemMetrics>("/api/v1/system/metrics"),

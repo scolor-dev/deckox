@@ -99,13 +99,17 @@ if [ ! -f /etc/deckox/agent.toml ]; then
   install -m 0640 -o root -g deckox \
     "${work_dir}/release/config/agent.toml" /etc/deckox/agent.toml
 fi
-if [ ! -f /etc/deckox/admin-password.hash ]; then
+if [ -f /etc/deckox/admin-password.hash ] && [ ! -f /var/lib/deckox/admin-password.hash ]; then
+  install -m 0600 -o deckox -g deckox \
+    /etc/deckox/admin-password.hash /var/lib/deckox/admin-password.hash
+fi
+if [ ! -f /var/lib/deckox/admin-password.hash ]; then
   initial_password="$(od -An -N 12 -tx1 /dev/urandom | tr -d ' \n')"
   printf '%s' "$initial_password" \
     | /usr/local/bin/deckox-server hash-password \
     > "${work_dir}/admin-password.hash"
-  install -m 0640 -o root -g deckox \
-    "${work_dir}/admin-password.hash" /etc/deckox/admin-password.hash
+  install -m 0600 -o deckox -g deckox \
+    "${work_dir}/admin-password.hash" /var/lib/deckox/admin-password.hash
 fi
 
 install -m 0644 "${work_dir}/release/systemd/deckox-agent.service" \

@@ -10,7 +10,7 @@
 * { box-sizing: border-box; }
 html { min-width: 320px; min-height: 100%; background: #f5f6f8; }
 body { min-width: 320px; min-height: 100vh; margin: 0; }
-button, input { font: inherit; }
+button, input, textarea { font: inherit; }
 button { color: inherit; }
 .mono, code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .sr-only {
@@ -199,6 +199,42 @@ nav button.active::before {
   font-weight: 600;
 }
 .primary-button:hover:not(:disabled) { background: #1f5b96; }
+
+.settings-view { width: min(920px, 100%); }
+.settings-section {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(280px, 1.5fr);
+  gap: 40px;
+  padding: 24px 0;
+  border-top: 1px solid #dfe2e6;
+}
+.settings-description p,
+.settings-help {
+  margin: 6px 0 0;
+  color: #747b85;
+  font-size: 12px;
+}
+.settings-form {
+  display: grid;
+  gap: 8px;
+  max-width: 440px;
+}
+.settings-form label { margin-top: 7px; color: #3f454d; font-size: 12px; font-weight: 600; }
+.settings-form input,
+.settings-form textarea {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #cbd0d6;
+  border-radius: 4px;
+  outline: none;
+  color: #25282d;
+  background: #fff;
+}
+.settings-form input:focus,
+.settings-form textarea:focus { border-color: #4f83b6; box-shadow: 0 0 0 2px #dceaf7; }
+.settings-form > small { color: #747b85; font-size: 11px; }
+.settings-form .notice { margin: 8px 0 0; }
+.settings-submit { width: fit-content; margin-top: 12px; }
 
 .view {
   width: min(1180px, 100%);
@@ -470,6 +506,7 @@ td small {
   .view { padding: 24px 14px 48px; }
   .view-header { margin-bottom: 18px; }
   h1 { font-size: 22px; }
+  .settings-section { grid-template-columns: 1fr; gap: 16px; }
   .server-summary { align-items: flex-start; flex-direction: column; gap: 14px; padding: 15px; }
   .server-summary dl { width: 100%; gap: 12px; }
   .server-summary dl div { min-width: 0; flex: 1; }

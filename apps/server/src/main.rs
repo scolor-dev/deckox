@@ -102,6 +102,7 @@ async fn main() {
             post(proxy_restart_service),
         )
         .route("/auth/logout", post(auth::logout))
+        .route("/settings/password", post(auth::change_password))
         .route_layer(middleware::from_fn_with_state(
             auth.clone(),
             auth::require_auth,

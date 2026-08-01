@@ -5,8 +5,9 @@ import LoginView from "./views/LoginView.vue";
 import OverviewView from "./views/OverviewView.vue";
 import ServicesView from "./views/ServicesView.vue";
 import StorageView from "./views/StorageView.vue";
+import SettingsView from "./views/SettingsView.vue";
 
-type Page = "overview" | "services" | "storage";
+type Page = "overview" | "services" | "storage" | "settings";
 
 const activePage = ref<Page>("overview");
 const status = ref<ServerStatus | null>(null);
@@ -18,12 +19,14 @@ const activeComponent = computed(() => ({
   overview: OverviewView,
   services: ServicesView,
   storage: StorageView,
+  settings: SettingsView,
 })[activePage.value]);
 
 const pageTitle = computed(() => ({
   overview: "概要",
   services: "サービス",
   storage: "ストレージ",
+  settings: "設定",
 })[activePage.value]);
 
 function navigate(page: Page) {
@@ -142,6 +145,13 @@ onBeforeUnmount(() => {
         >
           ストレージ
         </button>
+        <button
+          type="button"
+          :class="{ active: activePage === 'settings' }"
+          @click="navigate('settings')"
+        >
+          設定
+        </button>
       </nav>
       <div class="agent-state">
         <span :class="['status-dot', status?.agent ? 'online' : 'offline']" />
@@ -166,6 +176,7 @@ onBeforeUnmount(() => {
       <component
         :is="activeComponent"
         @status="status = $event"
+        @password-changed="handleUnauthorized"
       />
     </main>
   </div>

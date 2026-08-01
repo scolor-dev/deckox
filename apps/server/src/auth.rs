@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     env, fs,
     net::{IpAddr, SocketAddr},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -19,17 +19,21 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use tokio::{
+    io::AsyncWriteExt,
+    sync::{Mutex, RwLock},
+};
 use tracing::{info, warn};
 
 use crate::{ErrorResponse, request_context::RequestId};
 
-const DEFAULT_PASSWORD_HASH_FILE: &str = "/etc/deckox/admin-password.hash";
+const DEFAULT_PASSWORD_HASH_FILE: &str = "/var/lib/deckox/admin-password.hash";
 const SESSION_COOKIE: &str = "deckox_session";
 const SESSION_TTL: Duration = Duration::from_secs(12 * 60 * 60);
 const FAILURE_WINDOW: Duration = Duration::from_secs(5 * 60);
 const MAX_FAILURES: u32 = 5;
 const MAX_PASSWORD_BYTES: usize = 1024;
+const MIN_PASSWORD_BYTES: usize = 12;
 
 #[derive(Clone)]
 pub struct AuthManager {
@@ -37,10 +41,12 @@ pub struct AuthManager {
 }
 
 struct AuthInner {
-    password_hash: String,
+    password_hash: RwLock<String>,
+    password_hash_path: Option<PathBuf>,
     secure_cookie: bool,
     sessions: Mutex<HashMap<String, Instant>>,
     failures: Mutex<HashMap<IpAddr, FailedLogins>>,
+    password_change: Mutex<()>,
 }
 
 struct FailedLogins {
@@ -58,6 +64,12 @@ pub struct LoginRequest {
     password: String,
 }
 
+#[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    current_password: String,
+    new_password: String,
+}
+
 #[derive(Serialize)]
 pub struct AuthStatus {
     authenticated: bool,
@@ -69,18 +81,28 @@ enum LoginResult {
     RateLimited,
 }
 
+enum ChangePasswordResult {
+    Changed,
+    InvalidCurrentPassword,
+    InvalidNewPassword,
+    NotPersistent,
+    Failed(String),
+}
+
 impl AuthManager {
     pub fn load() -> Result<Self, String> {
-        let password_hash = if let Ok(password_hash) = env::var("DECKOX_ADMIN_PASSWORD_HASH") {
-            password_hash
-        } else {
-            let hash_path = PathBuf::from(
-                env::var("DECKOX_ADMIN_PASSWORD_HASH_FILE")
-                    .unwrap_or_else(|_| DEFAULT_PASSWORD_HASH_FILE.to_owned()),
-            );
-            fs::read_to_string(&hash_path)
-                .map_err(|error| format!("failed to read {}: {error}", hash_path.display()))?
-        };
+        let (password_hash, password_hash_path) =
+            if let Ok(password_hash) = env::var("DECKOX_ADMIN_PASSWORD_HASH") {
+                (password_hash, None)
+            } else {
+                let hash_path = PathBuf::from(
+                    env::var("DECKOX_ADMIN_PASSWORD_HASH_FILE")
+                        .unwrap_or_else(|_| DEFAULT_PASSWORD_HASH_FILE.to_owned()),
+                );
+                let password_hash = fs::read_to_string(&hash_path)
+                    .map_err(|error| format!("failed to read {}: {error}", hash_path.display()))?;
+                (password_hash, Some(hash_path))
+            };
         let password_hash = password_hash.trim().to_owned();
         PasswordHash::new(&password_hash)
             .map_err(|error| format!("invalid admin password hash: {error}"))?;
@@ -88,10 +110,12 @@ impl AuthManager {
         let secure_cookie = env::var("DECKOX_SECURE_COOKIE").is_ok_and(|value| value == "true");
         Ok(Self {
             inner: Arc::new(AuthInner {
-                password_hash,
+                password_hash: RwLock::new(password_hash),
+                password_hash_path,
                 secure_cookie,
                 sessions: Mutex::new(HashMap::new()),
                 failures: Mutex::new(HashMap::new()),
+                password_change: Mutex::new(()),
             }),
         })
     }
@@ -105,17 +129,8 @@ impl AuthManager {
             return LoginResult::RateLimited;
         }
 
-        let password_hash = self.inner.password_hash.clone();
-        let valid = tokio::task::spawn_blocking(move || {
-            let Ok(parsed_hash) = PasswordHash::new(&password_hash) else {
-                return false;
-            };
-            Argon2::default()
-                .verify_password(password.as_bytes(), &parsed_hash)
-                .is_ok()
-        })
-        .await
-        .unwrap_or(false);
+        let password_hash = self.inner.password_hash.read().await.clone();
+        let valid = verify_password(password_hash, password).await;
 
         if !valid {
             self.record_failure(source_ip).await;
@@ -130,6 +145,45 @@ impl AuthManager {
             .await
             .insert(token.clone(), Instant::now() + SESSION_TTL);
         LoginResult::Authenticated(token)
+    }
+
+    async fn change_password(
+        &self,
+        current_password: String,
+        new_password: String,
+    ) -> ChangePasswordResult {
+        let _change_guard = self.inner.password_change.lock().await;
+        let Some(hash_path) = self.inner.password_hash_path.clone() else {
+            return ChangePasswordResult::NotPersistent;
+        };
+        if new_password.len() < MIN_PASSWORD_BYTES || new_password.len() > MAX_PASSWORD_BYTES {
+            return ChangePasswordResult::InvalidNewPassword;
+        }
+
+        let current_hash = self.inner.password_hash.read().await.clone();
+        if !verify_password(current_hash, current_password).await {
+            return ChangePasswordResult::InvalidCurrentPassword;
+        }
+
+        let password_to_hash = new_password;
+        let new_hash =
+            match tokio::task::spawn_blocking(move || hash_password(&password_to_hash)).await {
+                Ok(Ok(hash)) => hash,
+                Ok(Err(error)) => return ChangePasswordResult::Failed(error),
+                Err(error) => {
+                    return ChangePasswordResult::Failed(format!(
+                        "password hashing task failed: {error}"
+                    ));
+                }
+            };
+        if let Err(error) = write_password_hash(&hash_path, &new_hash).await {
+            return ChangePasswordResult::Failed(error);
+        }
+
+        *self.inner.password_hash.write().await = new_hash;
+        self.inner.sessions.lock().await.clear();
+        self.inner.failures.lock().await.clear();
+        ChangePasswordResult::Changed
     }
 
     async fn is_authenticated(&self, headers: &HeaderMap) -> bool {
@@ -195,6 +249,64 @@ impl AuthManager {
         };
         format!("{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0{secure}")
     }
+}
+
+async fn verify_password(password_hash: String, password: String) -> bool {
+    tokio::task::spawn_blocking(move || {
+        let Ok(parsed_hash) = PasswordHash::new(&password_hash) else {
+            return false;
+        };
+        Argon2::default()
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .is_ok()
+    })
+    .await
+    .unwrap_or(false)
+}
+
+async fn write_password_hash(path: &Path, password_hash: &str) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "password hash path has no parent directory".to_owned())?;
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "password hash path has an invalid file name".to_owned())?;
+    let temporary_path = parent.join(format!(
+        ".{file_name}.{}",
+        hex::encode(rand::random::<[u8; 8]>())
+    ));
+
+    let mut options = tokio::fs::OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+
+    let result = async {
+        let mut file = options
+            .open(&temporary_path)
+            .await
+            .map_err(|error| format!("failed to create password hash file: {error}"))?;
+        file.write_all(password_hash.as_bytes())
+            .await
+            .map_err(|error| format!("failed to write password hash: {error}"))?;
+        file.write_all(b"\n")
+            .await
+            .map_err(|error| format!("failed to write password hash: {error}"))?;
+        file.sync_all()
+            .await
+            .map_err(|error| format!("failed to sync password hash: {error}"))?;
+        drop(file);
+        tokio::fs::rename(&temporary_path, path)
+            .await
+            .map_err(|error| format!("failed to replace password hash: {error}"))
+    }
+    .await;
+
+    if result.is_err() {
+        let _ = tokio::fs::remove_file(&temporary_path).await;
+    }
+    result
 }
 
 pub fn hash_password(password: &str) -> Result<String, String> {
@@ -311,6 +423,68 @@ pub async fn logout(
         response.headers_mut().insert(SET_COOKIE, value);
     }
     response
+}
+
+pub async fn change_password(
+    State(auth): State<AuthManager>,
+    axum::Extension(request_id): axum::Extension<RequestId>,
+    axum::Extension(user): axum::Extension<AuthenticatedUser>,
+    Json(payload): Json<ChangePasswordRequest>,
+) -> Response {
+    match auth
+        .change_password(payload.current_password, payload.new_password)
+        .await
+    {
+        ChangePasswordResult::Changed => {
+            info!(
+                event = "password_change",
+                request_id = %request_id.0,
+                actor = "admin",
+                source_ip = %user.source_ip,
+                result = "success",
+                "administrator password changed"
+            );
+            let mut response = Json(AuthStatus {
+                authenticated: false,
+            })
+            .into_response();
+            if let Ok(value) = HeaderValue::from_str(&auth.expired_cookie()) {
+                response.headers_mut().insert(SET_COOKIE, value);
+            }
+            response
+        }
+        ChangePasswordResult::InvalidCurrentPassword => error_response(
+            StatusCode::UNAUTHORIZED,
+            "invalid_current_password",
+            "current password is incorrect",
+        ),
+        ChangePasswordResult::InvalidNewPassword => error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_new_password",
+            "new password must contain between 12 and 1024 bytes",
+        ),
+        ChangePasswordResult::NotPersistent => error_response(
+            StatusCode::CONFLICT,
+            "password_change_unavailable",
+            "password cannot be changed while DECKOX_ADMIN_PASSWORD_HASH is configured",
+        ),
+        ChangePasswordResult::Failed(error) => {
+            warn!(
+                event = "password_change",
+                request_id = %request_id.0,
+                actor = "admin",
+                source_ip = %user.source_ip,
+                result = "failure",
+                reason = %error,
+                "administrator password change failed"
+            );
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "password_change_failed",
+                "failed to save the new password",
+            )
+        }
+    }
 }
 
 pub async fn require_auth(
