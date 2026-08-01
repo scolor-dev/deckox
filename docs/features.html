@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.2</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.3</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -50,8 +50,6 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みのホスト再起動をAgentへ要求</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのリソースメトリクスAPIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">SSE</span><code>/api/v1/events/metrics?interval=1|2|5</code></span></td><td><span class="status done">実装済み</span></td><td>CPU・メモリ・負荷平均を認証済みブラウザへ配信。購読者0件では採取を休止</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/terminal/status</code></span></td><td><span class="status done">実装済み</span></td><td>隔離Terminalの有効状態、同時接続数、無操作終了時間を中継</td></tr>
-            <tr><td><span class="endpoint"><span class="method">WS</span><code>/api/v1/terminal/ws</code></span></td><td><span class="status done">実装済み</span></td><td>認証・同一Origin確認後、専用Unixソケット上のWebSocketへ入出力を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのストレージAPIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス詳細を中継</td></tr>
@@ -63,19 +61,6 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/*</code></span></td><td><span class="status done">実装済み</span></td><td>Vue静的ファイル。未知のパスは<code>index.html</code>へSPAフォールバック</td></tr>
           </tbody>
         </table>
-      </section>
-
-      <section class="section" aria-labelledby="terminal-api-title">
-        <p class="eyebrow">deckox-terminal</p>
-        <h2 id="terminal-api-title">内部Terminal API</h2>
-        <table class="status-table">
-          <thead><tr><th>Endpoint</th><th>状態</th><th>取得内容</th></tr></thead>
-          <tbody>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>隔離状態、有効状態、接続数と制限値</td></tr>
-            <tr><td><span class="endpoint"><span class="method">WS</span><code>/v1/ws</code></span></td><td><span class="status done">実装済み</span></td><td>PTY入出力と端末サイズ変更。2接続、16 KiBメッセージ、15分入力無操作で終了</td></tr>
-          </tbody>
-        </table>
-        <aside class="note">外部TCPポートは持たず、<code>/run/deckox-terminal/terminal.sock</code>だけで待ち受けます。</aside>
       </section>
 
       <section class="section" aria-labelledby="agent-title">
@@ -111,10 +96,9 @@
           <article class="card"><span class="status done">実装済み</span><h3>管理者ログイン</h3><p>セッション確認、ログイン、ログアウト、APIの401応答時のログイン画面復帰を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>Webコンソール</h3><p>非root PTYへWebSocketで接続し、接続状態、再接続、端末サイズ追従、無操作終了を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ホスト再起動</h3><p>Agent側で明示的に許可した場合だけ、管理者パスワードを再確認して再起動し、新しいServerプロセスを検知してログインへ戻ります。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/console</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>日本語・英語</h3><p>端末言語の自動判定と手動選択に対応し、APIエラーコードも選択言語の文言へ変換します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、SSH公開鍵、ホスト再起動、リアルタイム更新の有効化・1/2/5秒間隔、共通通知を提供します。</p></article>
         </div>
@@ -123,12 +107,11 @@
       <section class="section" aria-labelledby="protocol-title">
         <p class="eyebrow">deckox-protocol</p>
         <h2 id="protocol-title">共有Protocol型</h2>
-        <p>Server・Agent・Terminalが共有するSerialize/Deserialize可能なRust型です。</p>
+        <p>ServerとAgentが共有するSerialize/Deserialize可能なRust型です。</p>
         <table class="status-table">
           <thead><tr><th>型</th><th>状態</th><th>内容</th></tr></thead>
           <tbody>
             <tr><td><code>HealthResponse</code></td><td><span class="status done">使用中</span></td><td>Agentのヘルス応答</td></tr>
-            <tr><td><code>TerminalStatus</code></td><td><span class="status done">使用中</span></td><td>Terminalの隔離・有効状態とセッション制限</td></tr>
             <tr><td><code>AgentStatus</code></td><td><span class="status done">使用中</span></td><td>AgentからServerへ返すホスト状態</td></tr>
             <tr><td><code>SystemInfo</code>ほか</td><td><span class="status done">使用中</span></td><td>システム、メトリクス、ストレージ、サービスの応答型</td></tr>
             <tr><td><code>SystemCapabilities</code></td><td><span class="status done">使用中</span></td><td>Agent設定に基づくホスト再起動の許可状態</td></tr>

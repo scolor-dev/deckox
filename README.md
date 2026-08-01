@@ -5,17 +5,17 @@ Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基
 現在は次の最小構成と、Agentによるシステム情報・リソース・ストレージ取得、
 許可リスト付きsystemdサービス管理、管理者パスワード変更、SSH公開鍵管理、
 パスワード再確認付きのホスト再起動を提供します。SSEによるリアルタイムメトリクス、
-軽量SVGグラフ、日本語・英語の表示切替、専用ユーザーへ隔離したWebコンソール、
-再起動後の自動再接続、画面ごとのURLとブラウザ別表示設定も実装済みです。
+軽量SVGグラフ、日本語・英語の表示切替、再起動後の自動再接続、画面ごとのURLと
+ブラウザ別表示設定も実装済みです。任意コマンドを実行するWebコンソールは提供しません。
 
 ```text
 Vue管理画面
-    ↕ REST / SSE / WebSocket
+    ↕ REST / SSE
 deckox-server（Axum API + Vue配信）
-    ├ HTTP over Unix socket → deckox-agent（Linux操作）
-    └ WebSocket over Unix socket → deckox-terminal（隔離シェル）
-                                  ↓
-                                Linux
+    ↓ HTTP over Unix socket
+deckox-agent（Linux操作）
+    ↓
+Linux
 ```
 
 設計・実装済み機能・導入方法のHTMLドキュメントは
@@ -27,10 +27,9 @@ deckox-server（Axum API + Vue配信）
 apps/
 ├── server/          Axum Web APIサーバー
 ├── agent/           Linux管理Agent
-├── terminal/        専用ユーザーで動くWebコンソール
 └── web/             Vue + TypeScript
 crates/
-└── protocol/        Server・Agent・Terminal間の共有型
+└── protocol/        Server・Agent間の共有型
 packaging/
 ├── config/          Linux向け設定
 ├── scripts/         インストーラー
@@ -51,13 +50,7 @@ printf '%s' '開発用パスワード' \
   > /tmp/deckox-admin-password.hash
 
 DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock cargo run --package deckox-agent
-DECKOX_TERMINAL_SOCKET=/tmp/deckox-terminal.sock \
-DECKOX_TERMINAL_ENABLED=true \
-DECKOX_TERMINAL_HOME=/tmp \
-cargo run --package deckox-terminal
-
 DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
-DECKOX_TERMINAL_SOCKET=/tmp/deckox-terminal.sock \
 DECKOX_WEB_DIR="$PWD/apps/web/dist" \
 DECKOX_ADMIN_PASSWORD_HASH_FILE=/tmp/deckox-admin-password.hash \
 cargo run --package deckox-server
@@ -107,12 +100,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.3.2`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.3.3`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.3.2
-git push origin v0.3.2
+git tag v0.3.3
+git push origin v0.3.3
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -137,7 +130,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.2 sh
+  | sudo DECKOX_VERSION=v0.3.3 sh
 ```
 
 ローカルで作成した配布物を検証する場合は、アーカイブと同じ場所に
@@ -151,8 +144,8 @@ sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
 インストール後:
 
 ```bash
-systemctl status deckox-server deckox-agent deckox-terminal
-journalctl -u deckox-server -u deckox-agent -u deckox-terminal -f
+systemctl status deckox-server deckox-agent
+journalctl -u deckox-server -u deckox-agent -f
 ```
 
 初回インストール時には、ランダムな管理者パスワードがターミナルへ一度だけ
@@ -206,12 +199,10 @@ sudo systemctl restart deckox-agent
 Webサーバーの新しいプロセス識別子を確認し、復帰後にログイン画面へ戻ります。
 パスワード確認の試行制限はパスワード変更と共通です。
 
-Webコンソールはsystemd版で有効になり、専用の`deckox-terminal`ユーザーと
-別プロセス、`NoNewPrivileges`、`ProtectSystem=strict`の制限内で`/bin/sh`を
-起動します。Agentソケット、管理者パスワード、Deckox設定はアクセス不能です。
-同時2セッションまで、15分間入力がなければ終了し、
-画面を離れたりタブを非表示にしたりした場合も接続を閉じます。入力・出力内容は
-ログへ記録せず、セッションの開始・終了だけをjournalへ記録します。
+v0.3.3ではWebコンソールを削除しました。Linuxの対話操作には通常のSSHを利用し、
+Deckoxからは許可された管理APIだけを実行します。v0.3.2から更新すると、旧Terminal
+サービスとバイナリを撤去し、Deckox管理と確認できた専用ユーザー・グループも削除します。
+`/var/lib/deckox-terminal`にファイルがある場合、そのディレクトリは保存されます。
 
 Serverは既定で`127.0.0.1:8080`だけに待ち受けます。別端末から一時的に
 確認する場合は、SSHトンネルを利用します。
@@ -248,13 +239,10 @@ sudo systemctl restart deckox-server
 ```text
 /usr/local/bin/deckox-server
 /usr/local/bin/deckox-agent
-/usr/local/bin/deckox-terminal
 /usr/local/share/deckox/web/
 /etc/deckox/
 /var/lib/deckox/
-/var/lib/deckox-terminal/
 /run/deckox/agent.sock
-/run/deckox-terminal/terminal.sock
 ```
 
 対応アーキテクチャ:
@@ -282,14 +270,13 @@ Composeはハッシュを環境変数で直接渡すため、設定画面から�
 
 コンテナ内のAgentはLinuxホストのsystemdなどを管理できません。Linux全体を
 管理する本番用途では、systemdサービスとしてインストールしてください。
-Webコンソールもコンテナ内の非rootシェルであり、ホストのシェルではありません。
+対話操作はコンテナ内にも提供しません。
 
 ## セキュリティ
 
 `deckox-server`は専用の`deckox`ユーザーで動作します。強い権限が必要になる
 `deckox-agent`は別プロセスとし、外部TCPポートを公開せずUnixソケットだけで
-Serverと通信します。Webコンソールも`deckox-terminal`ユーザーの別プロセスへ
-分離し、Serverは制限された別のUnixソケットを介して入出力だけを中継します。
+Serverと通信します。
 
 Serverは単一管理者のArgon2idパスワード認証と、12時間のメモリ内セッション
 を提供します。CookieはHttpOnly・SameSite=Strictです。ログインとパスワード
@@ -297,5 +284,4 @@ Serverは単一管理者のArgon2idパスワード認証と、12時間のメモ�
 サービス操作、SSH公開鍵操作、ホスト再起動、コンソールの開始・終了は
 リクエストID付きでjournalへ記録します。
 Agentは任意のシェルコマンドを受け付けず、許可済みの型付き操作だけを
-実行します。WebコンソールはAgent・Serverのどちらでもなく、隔離された
-非root Terminalサービスで動作します。
+実行します。任意コマンドを受け付けるWebコンソールは提供しません。
