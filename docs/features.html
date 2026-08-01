@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.2.1</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>developブランチ</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -47,6 +47,7 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>Serverの名前・バージョン・状態とAgent状態。Agent障害時は<code>degraded</code></td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>Agentのシステム情報APIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのリソースメトリクスAPIを中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">SSE</span><code>/api/v1/events/metrics?interval=1|2|5</code></span></td><td><span class="status done">実装済み</span></td><td>CPU・メモリ・負荷平均を認証済みブラウザへ配信。購読者0件では採取を休止</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのストレージAPIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス詳細を中継</td></tr>
@@ -87,12 +88,14 @@
         <p class="eyebrow">Vue web</p>
         <h2 id="web-title">管理画面</h2>
         <div class="grid">
-          <article class="card"><span class="status done">実装済み</span><h3>システム概要</h3><p>OS・カーネル・稼働時間と、CPU・メモリ・ロードアベレージを表示します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>リアルタイム概要</h3><p>OS・カーネル・稼働時間と、CPU・メモリ・ロードアベレージの現在値・最大120点のSVG推移グラフを表示します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>管理者ログイン</h3><p>セッション確認、ログイン、ログアウト、APIの401応答時のログイン画面復帰を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>設定</h3><p>管理者パスワードの変更、SSH公開鍵管理、変更・追加・削除後の完了通知を提供します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>日本語・英語</h3><p>端末言語の自動判定と手動選択に対応し、APIエラーコードも選択言語の文言へ変換します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、SSH公開鍵、リアルタイム更新の有効化・1/2/5秒間隔、共通の成功・警告・失敗通知を提供します。</p></article>
         </div>
       </section>
 
@@ -106,6 +109,7 @@
             <tr><td><code>HealthResponse</code></td><td><span class="status done">使用中</span></td><td>Server・Agentのヘルス応答</td></tr>
             <tr><td><code>AgentStatus</code></td><td><span class="status done">使用中</span></td><td>AgentからServerへ返すホスト状態</td></tr>
             <tr><td><code>SystemInfo</code>ほか</td><td><span class="status done">使用中</span></td><td>システム、メトリクス、ストレージ、サービスの応答型</td></tr>
+            <tr><td><code>RealtimeMetricsEvent</code></td><td><span class="status done">使用中</span></td><td>SSEの連番、取得時刻、Agent接続状態、メトリクス、エラーコード</td></tr>
             <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動</td></tr>
             <tr><td><code>CommandResult</code></td><td><span class="status done">使用中</span></td><td>操作完了時のコマンドID、実行状態、メッセージ</td></tr>
             <tr><td><code>SshKeyList</code>ほか</td><td><span class="status done">使用中</span></td><td>SSH公開鍵の一覧・追加要求・鍵種別・SHA-256指紋</td></tr>

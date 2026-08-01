@@ -4,11 +4,12 @@ Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基
 
 現在は次の最小構成と、Agentによるシステム情報・リソース・ストレージ取得、
 許可リスト付きsystemdサービス管理、管理者パスワード変更、SSH公開鍵管理を
-提供します。
+提供します。developブランチでは、SSEによるリアルタイムメトリクス、軽量SVG
+グラフ、日本語・英語の表示切替、画面ごとのURLとブラウザ別表示設定も実装済みです。
 
 ```text
 Vue管理画面
-    ↓ HTTP
+    ↕ REST / SSE
 deckox-server（Axum API + Vue配信）
     ↓ HTTP over Unix socket
 deckox-agent（Linux操作）
@@ -84,6 +85,7 @@ cd apps/web
 npm ci
 npm run lint
 npm run typecheck
+npm run test
 npm run build
 ```
 
@@ -92,7 +94,7 @@ npm run build
 `main`・`develop`へのpushとPull RequestでGitHub Actionsの通常CIが動きます。
 
 - Rust: `fmt`、厳格なClippy、ワークスペーステスト
-- Vue: 依存関係の固定インストール、ESLint、型チェック、本番ビルド
+- Vue: 依存関係の固定インストール、ESLint、型チェック、単体テスト、本番ビルド
 - Packaging: インストール・リリース用シェルの構文確認
 
 ## GitHubからインストール
