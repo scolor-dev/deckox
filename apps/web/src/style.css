@@ -237,6 +237,8 @@ nav a.router-link-exact-active::before {
   font-weight: 600;
 }
 .primary-button:hover:not(:disabled) { background: #1f5b96; }
+.primary-button.danger-button { border-color: #9b3030; background: #a93838; }
+.primary-button.danger-button:hover:not(:disabled) { background: #922f2f; }
 
 .settings-view { width: min(920px, 100%); }
 .settings-section {

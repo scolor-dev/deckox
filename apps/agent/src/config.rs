@@ -11,9 +11,17 @@ const DEFAULT_SOCKET_PATH: &str = "/run/deckox/agent.sock";
 pub struct AgentConfig {
     pub socket: Option<PathBuf>,
     #[serde(default)]
+    pub system: SystemConfig,
+    #[serde(default)]
     pub services: ServicesConfig,
     #[serde(default)]
     pub ssh: SshConfig,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct SystemConfig {
+    #[serde(default)]
+    pub allow_reboot: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -70,6 +78,9 @@ mod tests {
             r#"
 socket = "/tmp/deckox.sock"
 
+[system]
+allow_reboot = true
+
 [services]
 allowed = ["nginx.service", "postgresql.service"]
 
@@ -80,6 +91,7 @@ managed_user = "operator"
         .expect("config should parse");
 
         assert_eq!(config.services.allowed.len(), 2);
+        assert!(config.system.allow_reboot);
         assert_eq!(config.ssh.managed_user.as_deref(), Some("operator"));
         assert_eq!(
             config

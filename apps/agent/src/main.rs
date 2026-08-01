@@ -12,19 +12,21 @@ use axum::{
 };
 use deckox_protocol::{
     AddSshKeyRequest, AgentStatus, CommandResult, HealthResponse, ServiceAction, ServiceDetails,
-    ServiceSummary, SshKeyList, SshKeySummary, StorageMount, SystemInfo, SystemMetrics,
+    ServiceSummary, SshKeyList, SshKeySummary, StorageMount, SystemCapabilities, SystemInfo,
+    SystemMetrics,
 };
 use tokio::net::UnixListener;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    config::AgentConfig, error::AgentError, services::ServiceManager, ssh_keys::SshKeyManager,
-    storage::read_storage, system::read_system_info,
+    config::AgentConfig, error::AgentError, power::PowerManager, services::ServiceManager,
+    ssh_keys::SshKeyManager, storage::read_storage, system::read_system_info,
 };
 
 mod config;
 mod error;
+mod power;
 mod request_context;
 mod services;
 mod ssh_keys;
@@ -33,6 +35,7 @@ mod system;
 
 #[derive(Clone)]
 struct AppState {
+    power: PowerManager,
     services: ServiceManager,
     ssh_keys: SshKeyManager,
 }
@@ -46,6 +49,7 @@ async fn main() {
         std::process::exit(2);
     });
     let socket_path = config.socket_path();
+    let power = PowerManager::new(config.system.allow_reboot);
     let services = ServiceManager::new(config.services.allowed).unwrap_or_else(|error| {
         eprintln!("invalid service control configuration: {error:?}");
         std::process::exit(2);
@@ -77,6 +81,8 @@ async fn main() {
         .route("/v1/health", get(health))
         .route("/v1/status", get(agent_status))
         .route("/v1/system", get(system_info))
+        .route("/v1/system/capabilities", get(system_capabilities))
+        .route("/v1/system/reboot", post(reboot_system))
         .route("/v1/system/metrics", get(system_metrics))
         .route("/v1/storage", get(storage))
         .route("/v1/services", get(list_services))
@@ -86,7 +92,11 @@ async fn main() {
         .route("/v1/services/{service_id}/restart", post(restart_service))
         .route("/v1/ssh/keys", get(list_ssh_keys).post(add_ssh_key))
         .route("/v1/ssh/keys/{key_id}", delete(remove_ssh_key))
-        .with_state(AppState { services, ssh_keys })
+        .with_state(AppState {
+            power,
+            services,
+            ssh_keys,
+        })
         .layer(middleware::from_fn(request_context::assign_request_id));
 
     info!(path = %socket_path.display(), "deckox agent started");
@@ -158,6 +168,34 @@ async fn agent_status() -> Json<AgentStatus> {
 
 async fn system_info() -> Result<Json<SystemInfo>, AgentError> {
     read_system_info().await.map(Json)
+}
+
+async fn system_capabilities(State(state): State<AppState>) -> Json<SystemCapabilities> {
+    Json(state.power.capabilities())
+}
+
+async fn reboot_system(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<CommandResult>, AgentError> {
+    let result = state.power.reboot().await;
+    match &result {
+        Ok(command) => info!(
+            event = "system_reboot",
+            request_id = %request_id.0,
+            command_id = %command.command_id,
+            result = "accepted",
+            "system reboot accepted"
+        ),
+        Err(error) => warn!(
+            event = "system_reboot",
+            request_id = %request_id.0,
+            error = ?error,
+            result = "rejected",
+            "system reboot rejected"
+        ),
+    }
+    result.map(Json)
 }
 
 async fn system_metrics() -> Result<Json<SystemMetrics>, AgentError> {

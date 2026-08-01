@@ -9,7 +9,7 @@ use axum::{
     routing::{get, post},
 };
 use deckox_protocol::{AddSshKeyRequest, AgentStatus, HealthResponse};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower_http::{
     services::{ServeDir, ServeFile},
@@ -20,7 +20,7 @@ use tracing_subscriber::EnvFilter;
 
 use crate::agent_client::AgentClient;
 use crate::{
-    auth::{AuthManager, AuthenticatedUser},
+    auth::{AuthManager, AuthenticatedUser, PasswordConfirmationResult},
     metrics_stream::MetricsHub,
     request_context::RequestId,
 };
@@ -68,6 +68,11 @@ struct ErrorResponse {
     message: String,
 }
 
+#[derive(Deserialize)]
+struct RebootRequest {
+    current_password: String,
+}
+
 #[tokio::main]
 async fn main() {
     if env::args().nth(1).as_deref() == Some("hash-password") {
@@ -102,6 +107,8 @@ async fn main() {
     let protected_api = Router::new()
         .route("/status", get(status))
         .route("/system", get(proxy_system))
+        .route("/system/capabilities", get(proxy_system_capabilities))
+        .route("/system/reboot", post(reboot_system))
         .route("/system/metrics", get(proxy_metrics))
         .route("/events/metrics", get(metrics_stream::metrics_events))
         .route("/storage", get(proxy_storage))
@@ -232,6 +239,88 @@ async fn proxy_metrics(
     Extension(request_id): Extension<RequestId>,
 ) -> Response {
     proxy_agent(&state.agent, "GET", "/v1/system/metrics", &request_id).await
+}
+
+async fn proxy_system_capabilities(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/system/capabilities", &request_id).await
+}
+
+async fn reboot_system(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(payload): Json<RebootRequest>,
+) -> Response {
+    match state
+        .auth
+        .confirm_current_password(user.source_ip, payload.current_password)
+        .await
+    {
+        PasswordConfirmationResult::Invalid => {
+            warn!(
+                event = "system_reboot",
+                request_id = %request_id.0,
+                actor = "admin",
+                source_ip = %user.source_ip,
+                result = "failure",
+                reason = "invalid_password",
+                "system reboot confirmation failed"
+            );
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    code: "invalid_current_password",
+                    message: "current password is incorrect".to_owned(),
+                }),
+            )
+                .into_response();
+        }
+        PasswordConfirmationResult::RateLimited => {
+            warn!(
+                event = "system_reboot",
+                request_id = %request_id.0,
+                actor = "admin",
+                source_ip = %user.source_ip,
+                result = "rate_limited",
+                "system reboot confirmation rate limited"
+            );
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ErrorResponse {
+                    code: "rate_limited",
+                    message: "too many password confirmation attempts".to_owned(),
+                }),
+            )
+                .into_response();
+        }
+        PasswordConfirmationResult::Confirmed => {}
+    }
+
+    let response = proxy_agent(&state.agent, "POST", "/v1/system/reboot", &request_id).await;
+    if response.status().is_success() {
+        info!(
+            event = "system_reboot",
+            request_id = %request_id.0,
+            actor = "admin",
+            source_ip = %user.source_ip,
+            result = "accepted",
+            "system reboot accepted"
+        );
+    } else {
+        warn!(
+            event = "system_reboot",
+            request_id = %request_id.0,
+            actor = "admin",
+            source_ip = %user.source_ip,
+            result = "failure",
+            status = response.status().as_u16(),
+            "system reboot failed"
+        );
+    }
+    response
 }
 
 async fn proxy_storage(
