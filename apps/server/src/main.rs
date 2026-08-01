@@ -23,14 +23,12 @@ use crate::{
     auth::{AuthManager, AuthenticatedUser, PasswordConfirmationResult},
     metrics_stream::MetricsHub,
     request_context::RequestId,
-    terminal::TerminalClient,
 };
 
 mod agent_client;
 mod auth;
 mod metrics_stream;
 mod request_context;
-mod terminal;
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:8080";
 const DEFAULT_AGENT_SOCKET: &str = "/run/deckox/agent.sock";
@@ -41,7 +39,6 @@ struct AppState {
     agent: AgentClient,
     auth: AuthManager,
     metrics: MetricsHub,
-    terminal: TerminalClient,
     instance_id: String,
 }
 
@@ -54,12 +51,6 @@ impl FromRef<AppState> for AuthManager {
 impl FromRef<AppState> for MetricsHub {
     fn from_ref(state: &AppState) -> Self {
         state.metrics.clone()
-    }
-}
-
-impl FromRef<AppState> for TerminalClient {
-    fn from_ref(state: &AppState) -> Self {
-        state.terminal.clone()
     }
 }
 
@@ -111,10 +102,6 @@ async fn main() {
         eprintln!("failed to load authentication configuration: {error}");
         std::process::exit(2);
     });
-    let terminal = TerminalClient::from_env().unwrap_or_else(|error| {
-        eprintln!("failed to load terminal configuration: {error}");
-        std::process::exit(2);
-    });
     let agent = AgentClient::new(PathBuf::from(
         env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| DEFAULT_AGENT_SOCKET.to_owned()),
     ));
@@ -122,7 +109,6 @@ async fn main() {
         agent: agent.clone(),
         auth: auth.clone(),
         metrics: MetricsHub::new(agent),
-        terminal,
         instance_id: format!("{:016x}", rand::random::<u64>()),
     };
 
@@ -133,8 +119,6 @@ async fn main() {
         .route("/system/reboot", post(reboot_system))
         .route("/system/metrics", get(proxy_metrics))
         .route("/events/metrics", get(metrics_stream::metrics_events))
-        .route("/terminal/status", get(terminal::status))
-        .route("/terminal/ws", get(terminal::websocket))
         .route("/storage", get(proxy_storage))
         .route("/services", get(proxy_services))
         .route("/services/{service_id}", get(proxy_service_details))

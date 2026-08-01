@@ -21,13 +21,12 @@ npm run build
 
 cd "$root_dir"
 cargo build --release --locked --target "$target" \
-  --package deckox-server --package deckox-agent --package deckox-terminal
+  --package deckox-server --package deckox-agent
 
 rm -rf "$stage_dir"
 mkdir -p "$stage_dir/bin" "$stage_dir/web" "$stage_dir/config" "$stage_dir/systemd"
 install -m 0755 "target/${target}/release/deckox-server" "$stage_dir/bin/"
 install -m 0755 "target/${target}/release/deckox-agent" "$stage_dir/bin/"
-install -m 0755 "target/${target}/release/deckox-terminal" "$stage_dir/bin/"
 cp -R apps/web/dist/. "$stage_dir/web/"
 cp packaging/config/*.toml "$stage_dir/config/"
 cp packaging/systemd/*.service "$stage_dir/systemd/"

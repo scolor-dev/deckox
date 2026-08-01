@@ -12,11 +12,7 @@ use tokio::process::Command;
 use crate::error::AgentError;
 
 static COMMAND_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-const PROTECTED_SERVICES: [&str; 3] = [
-    "deckox-agent.service",
-    "deckox-server.service",
-    "deckox-terminal.service",
-];
+const PROTECTED_SERVICES: [&str; 2] = ["deckox-agent.service", "deckox-server.service"];
 
 #[derive(Clone)]
 pub struct ServiceManager {

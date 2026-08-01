@@ -6,16 +6,6 @@ pub struct HealthResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TerminalStatus {
-    pub enabled: bool,
-    pub isolated: bool,
-    pub privileged: bool,
-    pub active_sessions: usize,
-    pub max_sessions: usize,
-    pub idle_timeout_seconds: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentStatus {
     pub status: String,
     pub hostname: String,
