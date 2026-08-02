@@ -10,7 +10,7 @@ export const messages = {
       openMenu: "メニューを開く", mainNavigation: "メインナビゲーション", connected: "接続中",
       stateUnavailable: "状態を確認できません", logout: "ログアウト", passwordChanged: "パスワードを変更しました。新しいパスワードでログインしてください。",
     },
-    nav: { overview: "概要", services: "サービス", storage: "ストレージ", settings: "設定" },
+    nav: { overview: "概要", services: "サービス", storage: "ストレージ", diagnostics: "診断", settings: "設定" },
     restart: { title: "再起動しています", waiting: "再起動の開始を待っています…", offline: "コンピューターの起動を待っています…", ready: "再接続できました。ログイン画面へ戻ります。", timeout: "5分以内に再接続できませんでした。コンピューターの状態を確認してください。", retry: "もう一度確認", keepOpen: "この画面は閉じずにお待ちください。" },
     login: { title: "管理画面にログイン", description: "管理者パスワードを入力してください。", password: "パスワード", submit: "ログイン", submitting: "確認中…" },
     overview: {
@@ -39,6 +39,14 @@ export const messages = {
       title: "ストレージ", summary: "{count}件のマウント", mount: "マウント先", filesystem: "ファイルシステム", capacity: "容量", usage: "使用状況",
       loading: "ストレージ情報を読み込んでいます…", empty: "マウントされたファイルシステムはありません。", available: "空き {value}", used: "{value} 使用",
     },
+    diagnostics: {
+      title: "診断", subtitle: "DeckoxとLinuxホストの動作状態を確認します。", generatedAt: "取得日時 {time}", download: "レポートを保存", downloading: "保存中…",
+      server: "Webサーバー", agent: "Agent", host: "Linuxホスト", services: "Deckoxサービス", config: "設定概要", status: "状態", connected: "接続済み", disconnected: "接続できません",
+      version: "バージョン", hostname: "ホスト名", os: "OS", kernel: "カーネル", architecture: "アーキテクチャ", uptime: "稼働時間", timezone: "タイムゾーン", noHost: "Agentに接続できないためホスト情報を取得できません。",
+      service: "サービス", activeState: "稼働状態", startup: "自動起動", noServices: "サービス状態を取得できません。", enabled: "有効", disabled: "無効",
+      reboot: "ホスト再起動", allowedServices: "操作許可サービス", allowedServicesValue: "{count}件", sshManagement: "SSH公開鍵管理", available: "利用可能", unavailable: "無効", noConfig: "Agentに接続できないため設定概要を取得できません。",
+      partial: "Agentに接続できません。Webサーバーから取得できる情報だけを表示しています。", reportSaved: "診断レポートを保存しました。",
+    },
     settings: {
       title: "設定", subtitle: "Deckoxとサーバーの管理設定", display: "表示とリアルタイム更新", displayDescription: "このブラウザで使う表示言語と更新方法を設定します。",
       language: "表示言語", languageAuto: "端末の設定に合わせる", japanese: "日本語", english: "English", realtime: "リアルタイム更新", realtimeHelp: "概要画面を表示している間だけ接続します。",
@@ -62,6 +70,7 @@ export const messages = {
     errors: {
       login: "ログインできませんでした。しばらくしてから再度お試しください。", overview: "システム情報を取得できませんでした。", services: "サービス一覧を取得できませんでした。",
       serviceAction: "サービス操作に失敗しました。", serviceLogs: "サービスログを取得できませんでした。", storage: "ストレージ情報を取得できませんでした。", password: "パスワードを変更できませんでした。",
+      diagnostics: "診断情報を取得できませんでした。", diagnosticsReport: "診断レポートを保存できませんでした。",
       systemCapabilities: "システム操作の設定を取得できませんでした。", reboot: "コンピューターを再起動できませんでした。",
       sshLoad: "SSH公開鍵を取得できませんでした。", sshAdd: "SSH公開鍵を追加できませんでした。", sshRemove: "SSH公開鍵を削除できませんでした。",
       agentUnavailable: "Agentに接続できません。", badRequest: "入力内容を確認してください。", conflict: "現在の状態では操作できません。", forbidden: "この操作は許可されていません。",
@@ -78,7 +87,7 @@ export const messages = {
       openMenu: "Open menu", mainNavigation: "Main navigation", connected: "Connected",
       stateUnavailable: "Status unavailable", logout: "Log out", passwordChanged: "Password changed. Sign in with your new password.",
     },
-    nav: { overview: "Overview", services: "Services", storage: "Storage", settings: "Settings" },
+    nav: { overview: "Overview", services: "Services", storage: "Storage", diagnostics: "Diagnostics", settings: "Settings" },
     restart: { title: "Restarting", waiting: "Waiting for the restart to begin…", offline: "Waiting for the computer to start…", ready: "Reconnected. Returning to sign in.", timeout: "Could not reconnect within five minutes. Check the computer status.", retry: "Check again", keepOpen: "Keep this page open while Deckox reconnects." },
     login: { title: "Sign in to Deckox", description: "Enter the administrator password.", password: "Password", submit: "Sign in", submitting: "Checking…" },
     overview: {
@@ -107,6 +116,14 @@ export const messages = {
       title: "Storage", summary: "{count} mounts", mount: "Mount point", filesystem: "File system", capacity: "Capacity", usage: "Usage",
       loading: "Loading storage information…", empty: "No mounted file systems.", available: "{value} available", used: "{value} used",
     },
+    diagnostics: {
+      title: "Diagnostics", subtitle: "Check the operating status of Deckox and the Linux host.", generatedAt: "Collected {time}", download: "Save report", downloading: "Saving…",
+      server: "Web server", agent: "Agent", host: "Linux host", services: "Deckox services", config: "Configuration summary", status: "Status", connected: "Connected", disconnected: "Unavailable",
+      version: "Version", hostname: "Hostname", os: "OS", kernel: "Kernel", architecture: "Architecture", uptime: "Uptime", timezone: "Time zone", noHost: "Host information is unavailable because Agent is disconnected.",
+      service: "Service", activeState: "State", startup: "Startup", noServices: "Service status is unavailable.", enabled: "Enabled", disabled: "Disabled",
+      reboot: "Host restart", allowedServices: "Allowed services", allowedServicesValue: "{count}", sshManagement: "SSH public key management", available: "Available", unavailable: "Disabled", noConfig: "Configuration summary is unavailable because Agent is disconnected.",
+      partial: "Agent is disconnected. Only information available from the web server is shown.", reportSaved: "Diagnostic report saved.",
+    },
     settings: {
       title: "Settings", subtitle: "Deckox and server settings", display: "Display and live updates", displayDescription: "Configure the language and update behavior for this browser.",
       language: "Language", languageAuto: "Use device language", japanese: "日本語", english: "English", realtime: "Live updates", realtimeHelp: "Connects only while the Overview page is visible.",
@@ -130,6 +147,7 @@ export const messages = {
     errors: {
       login: "Could not sign in. Try again shortly.", overview: "Could not load system information.", services: "Could not load services.",
       serviceAction: "The service operation failed.", serviceLogs: "Could not load service logs.", storage: "Could not load storage information.", password: "Could not change the password.",
+      diagnostics: "Could not load diagnostic information.", diagnosticsReport: "Could not save the diagnostic report.",
       systemCapabilities: "Could not load system operation settings.", reboot: "Could not restart the computer.",
       sshLoad: "Could not load SSH public keys.", sshAdd: "Could not add the SSH public key.", sshRemove: "Could not remove the SSH public key.",
       agentUnavailable: "Cannot connect to Agent.", badRequest: "Check the information you entered.", conflict: "This operation is not available in the current state.", forbidden: "This operation is not permitted.",

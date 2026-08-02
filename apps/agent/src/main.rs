@@ -11,9 +11,10 @@ use axum::{
     routing::{delete, get, post},
 };
 use deckox_protocol::{
-    AddSshKeyRequest, AgentStatus, CommandResult, HealthResponse, ServiceAction, ServiceDetails,
-    ServiceLogPriority, ServiceLogs, ServiceSummary, SshKeyList, SshKeySummary, StorageMount,
-    SystemCapabilities, SystemInfo, SystemMetrics,
+    AddSshKeyRequest, AgentDiagnostics, AgentStatus, CommandResult, HealthResponse,
+    RuntimeConfigSummary, ServiceAction, ServiceDetails, ServiceLogPriority, ServiceLogs,
+    ServiceSummary, SshKeyList, SshKeySummary, StorageMount, SystemCapabilities, SystemInfo,
+    SystemMetrics,
 };
 use serde::Deserialize;
 use tokio::net::UnixListener;
@@ -26,6 +27,7 @@ use crate::{
 };
 
 mod config;
+mod diagnostics;
 mod error;
 mod power;
 mod request_context;
@@ -39,6 +41,7 @@ struct AppState {
     power: PowerManager,
     services: ServiceManager,
     ssh_keys: SshKeyManager,
+    runtime_config: RuntimeConfigSummary,
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,6 +69,11 @@ async fn main() {
         std::process::exit(2);
     });
     let socket_path = config.socket_path();
+    let runtime_config = RuntimeConfigSummary {
+        reboot_allowed: config.system.allow_reboot,
+        allowed_services_count: config.services.allowed.len(),
+        ssh_management_enabled: config.ssh.managed_user.is_some(),
+    };
     let power = PowerManager::new(config.system.allow_reboot);
     let services = ServiceManager::new(config.services.allowed).unwrap_or_else(|error| {
         eprintln!("invalid service control configuration: {error:?}");
@@ -97,6 +105,7 @@ async fn main() {
     let app = Router::new()
         .route("/v1/health", get(health))
         .route("/v1/status", get(agent_status))
+        .route("/v1/diagnostics", get(agent_diagnostics))
         .route("/v1/system", get(system_info))
         .route("/v1/system/capabilities", get(system_capabilities))
         .route("/v1/system/reboot", post(reboot_system))
@@ -116,6 +125,7 @@ async fn main() {
             power,
             services,
             ssh_keys,
+            runtime_config,
         })
         .layer(middleware::from_fn(request_context::assign_request_id));
 
@@ -184,6 +194,14 @@ async fn agent_status() -> Json<AgentStatus> {
         architecture: env::consts::ARCH.to_owned(),
         uptime_seconds,
     })
+}
+
+async fn agent_diagnostics(
+    State(state): State<AppState>,
+) -> Result<Json<AgentDiagnostics>, AgentError> {
+    diagnostics::read_diagnostics(state.runtime_config)
+        .await
+        .map(Json)
 }
 
 async fn system_info() -> Result<Json<SystemInfo>, AgentError> {

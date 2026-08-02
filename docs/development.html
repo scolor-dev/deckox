@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.6</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.7</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -94,6 +94,13 @@ npm run build</code></pre>
           </tbody>
         </table>
         <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH</code>でハッシュを直接指定した場合は永続的な保存先がないため、設定画面からのパスワード変更は無効になります。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="diagnostics-title">
+        <h2 id="diagnostics-title">診断APIのデータ境界</h2>
+        <p><code>GET /api/v1/diagnostics</code>は画面表示用のJSON、<code>GET /api/v1/diagnostics/report</code>は同じ内容のダウンロード応答です。どちらも管理者認証が必要です。</p>
+        <p>レスポンスは<code>generated_at_ms</code>、Serverのversion・status、Agentのconnected・version・error code、公開可能なhost情報、2つのDeckox systemdユニット状態、runtime configの真偽値と件数に固定されています。Agent APIに接続できない場合もHTTPエラーにはせず、Agent由来のまとまりを<code>null</code>にした部分診断を返します。</p>
+        <aside class="note warning">診断機能へ項目を追加するときは、生の設定・環境変数・ログ・認証情報を転送せず、共有Protocolへ明示した安全な値だけを追加します。パスワード、ハッシュ、セッション、Cookie、SSH鍵、管理対象ユーザー名、boot IDは追加禁止です。</aside>
       </section>
 
       <section class="section" aria-labelledby="allowlist-title">

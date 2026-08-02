@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, appendMetricHistory, usagePercentage } from "./client";
+import {
+  api,
+  appendMetricHistory,
+  DIAGNOSTICS_REPORT_FILENAME,
+  usagePercentage,
+} from "./client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -66,5 +71,39 @@ describe("extended metric helpers", () => {
     expect(usagePercentage(5, 0)).toBeNull();
     expect(usagePercentage(80, 100)).toBe(80);
     expect(appendMetricHistory([1], Number.NaN)).toEqual([1]);
+  });
+});
+
+describe("diagnostics APIs", () => {
+  it("fetches partial diagnostics and the authenticated JSON report", async () => {
+    const partialReport = {
+      generated_at_ms: 1_700_000_000_000,
+      server: { version: "0.3.7", status: "degraded" },
+      agent: { connected: false, version: null, error_code: "agent_unavailable" },
+      host: null,
+      deckox_services: null,
+      runtime_config: null,
+    };
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(partialReport), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(partialReport), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api.diagnostics()).resolves.toEqual(partialReport);
+    const blob = await api.diagnosticsReport();
+
+    expect(blob.type).toBe("application/json");
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/diagnostics/report",
+      expect.objectContaining({ credentials: "same-origin" }),
+    );
+    expect(DIAGNOSTICS_REPORT_FILENAME).toBe("deckox-diagnostics.json");
   });
 });

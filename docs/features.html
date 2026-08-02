@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.6</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.7</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -45,6 +45,8 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/auth/session</code></span></td><td><span class="status done">実装済み</span></td><td>現在の認証状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/auth/logout</code></span></td><td><span class="status done">実装済み</span></td><td>セッションを無効化</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>Serverの名前・バージョン・状態とAgent状態。Agent障害時は<code>degraded</code></td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/diagnostics</code></span></td><td><span class="status done">実装済み</span></td><td>生成時刻、Server、Agent、ホスト、Deckoxのsystemdユニット、機能設定の安全な固定項目をJSONで返却。Agent不通時も部分診断を返す</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/diagnostics/report</code></span></td><td><span class="status done">実装済み</span></td><td>同じ固定スキーマを<code>deckox-diagnostics.json</code>としてダウンロード</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>Agentのシステム情報APIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト再起動がAgent設定で許可されているか取得</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みのホスト再起動をAgentへ要求</td></tr>
@@ -72,6 +74,7 @@
           <tbody>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/health</code></span></td><td><span class="status done">実装済み</span></td><td>Agentプロセスのヘルス状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト名、OS、CPUアーキテクチャ、<code>/proc/uptime</code>の秒数</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/diagnostics</code></span></td><td><span class="status done">実装済み</span></td><td>Agentバージョン、安全なホスト情報、Deckoxの2ユニット状態、再起動許可・許可サービス数・SSH管理有効状態を固定スキーマで返却</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>OS、バージョン、カーネル、ホスト名、稼働時間、boot ID、タイムゾーン</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>設定に基づくホスト再起動の許可状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>許可時のみ<code>systemctl --no-block reboot</code>を実行</td></tr>
@@ -102,7 +105,8 @@
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ホスト再起動</h3><p>Agent側で明示的に許可した場合だけ、管理者パスワードを再確認して再起動し、新しいServerプロセスを検知してログインへ戻ります。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>システム診断</h3><p>Server・Agentの状態、公開可能なホスト情報、Deckoxユニット状態、権限設定の要約を専用画面に表示し、同じ内容をJSONで保存します。Agent不通時もServer側の結果を表示します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/diagnostics</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>日本語・英語</h3><p>端末言語の自動判定と手動選択に対応し、APIエラーコードも選択言語の文言へ変換します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、SSH公開鍵、ホスト再起動、リアルタイム更新の有効化・1/2/5秒間隔、共通通知を提供します。</p></article>
         </div>
@@ -120,12 +124,14 @@
             <tr><td><code>SystemInfo</code>ほか</td><td><span class="status done">使用中</span></td><td>システム、CPU・メモリ・Swap・ネットワーク・ディスクI/O・任意温度のメトリクス、ストレージ、サービスとjournalログの応答型</td></tr>
             <tr><td><code>SystemCapabilities</code></td><td><span class="status done">使用中</span></td><td>Agent設定に基づくホスト再起動の許可状態</td></tr>
             <tr><td><code>RealtimeMetricsEvent</code></td><td><span class="status done">使用中</span></td><td>SSEの連番、取得時刻、Agent接続状態、拡張メトリクス、エラーコード。取得不能な追加値は省略可能</td></tr>
+            <tr><td><code>DiagnosticsReport</code>ほか</td><td><span class="status done">使用中</span></td><td>生成時刻、Server・Agent状態、boot IDを除いたホスト情報、Deckoxユニット状態、再起動許可・許可サービス数・SSH管理有効状態</td></tr>
             <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動、有効化、無効化</td></tr>
             <tr><td><code>CommandResult</code></td><td><span class="status done">使用中</span></td><td>操作完了時のコマンドID、実行状態、メッセージ</td></tr>
             <tr><td><code>SshKeyList</code>ほか</td><td><span class="status done">使用中</span></td><td>SSH公開鍵の一覧・追加要求・鍵種別・SHA-256指紋</td></tr>
             <tr><td><code>AgentCommand</code></td><td><span class="status defined">型のみ定義済み</span></td><td>汎用コマンド型。現在のHTTPハンドラーでは未使用</td></tr>
           </tbody>
         </table>
+        <aside class="note"><strong>診断データの境界:</strong> 診断は固定した安全な項目だけを構築します。生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、セッション、Cookie、SSH鍵、SSH鍵管理対象のユーザー名、boot IDはAPI・画面・ダウンロードへ含めません。</aside>
         <aside class="note"><strong>サービス管理の境界:</strong> 専用HTTPエンドポイントと<code>ServiceAction</code>で実装されています。ログ閲覧も完全一致許可リスト、最大500行、<code>all|error|warning|info</code>だけを受け付け、ダウンロードは提供しません。汎用<code>AgentCommand</code>とWebコンソールは使っていません。</aside>
       </section>
 

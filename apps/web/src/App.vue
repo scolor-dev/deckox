@@ -125,6 +125,9 @@ onBeforeUnmount(() => {
         <RouterLink to="/storage">
           {{ t("nav.storage") }}
         </RouterLink>
+        <RouterLink to="/diagnostics">
+          {{ t("nav.diagnostics") }}
+        </RouterLink>
         <RouterLink to="/settings">
           {{ t("nav.settings") }}
         </RouterLink>
@@ -144,7 +147,7 @@ onBeforeUnmount(() => {
         >
           {{ t("app.logout") }}
         </button>
-        <span>{{ t("common.version") }} {{ status?.version ?? "0.3.6" }}</span>
+        <span>{{ t("common.version") }} {{ status?.version ?? "0.3.7" }}</span>
       </div>
     </aside>
 
