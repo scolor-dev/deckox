@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use deckox_protocol::{AddSshKeyRequest, AgentStatus, ServiceLogPriority};
+use deckox_protocol::{AddSshKeyRequest, AgentStatus, DiagnosticsReport, ServiceLogPriority};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower_http::{
@@ -27,6 +27,7 @@ use crate::{
 
 mod agent_client;
 mod auth;
+mod diagnostics;
 mod metrics_stream;
 mod request_context;
 
@@ -130,6 +131,8 @@ async fn main() {
 
     let protected_api = Router::new()
         .route("/status", get(status))
+        .route("/diagnostics", get(diagnostics))
+        .route("/diagnostics/report", get(diagnostics_report))
         .route("/system", get(proxy_system))
         .route("/system/capabilities", get(proxy_system_capabilities))
         .route("/system/reboot", post(reboot_system))
@@ -256,6 +259,21 @@ async fn status(
             agent_error: Some(error),
         }),
     }
+}
+
+async fn diagnostics(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Json<DiagnosticsReport> {
+    Json(diagnostics::collect(&state.agent, &request_id).await)
+}
+
+async fn diagnostics_report(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    let report = diagnostics::collect(&state.agent, &request_id).await;
+    diagnostics::attachment(&report)
 }
 
 async fn proxy_system(

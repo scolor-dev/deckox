@@ -120,6 +120,59 @@ export interface SshKeyList {
   keys: SshKeySummary[];
 }
 
+export interface DiagnosticsResponse {
+  generated_at_ms: number;
+  server: {
+    version: string;
+    status: string;
+  };
+  agent: {
+    connected: boolean;
+    version: string | null;
+    error_code: string | null;
+  };
+  host: {
+    hostname: string;
+    operating_system: string;
+    os_version: string | null;
+    kernel_version: string;
+    architecture: string;
+    uptime_seconds: number;
+    timezone: string | null;
+  } | null;
+  deckox_services: {
+    agent: {
+      load_state: string;
+      active_state: string;
+      sub_state: string;
+      unit_file_state: string | null;
+    };
+    server: {
+      load_state: string;
+      active_state: string;
+      sub_state: string;
+      unit_file_state: string | null;
+    };
+  } | null;
+  runtime_config: {
+    reboot_allowed: boolean;
+    allowed_services_count: number;
+    ssh_management_enabled: boolean;
+  } | null;
+}
+
+export interface DeckoxServiceDiagnostic {
+  id: string;
+  state: {
+    load_state: string;
+    active_state: string;
+    sub_state: string;
+    unit_file_state: string | null;
+  };
+}
+
+export const DIAGNOSTICS_REPORT_FILENAME = "deckox-diagnostics.json";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -159,6 +212,28 @@ async function request<T>(
   }
 
   return body as T;
+}
+
+async function requestBlob(path: string): Promise<Blob> {
+  const response = await fetch(path, {
+    headers: { Accept: "application/json" },
+    credentials: "same-origin",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as
+      | { code?: string; message?: string }
+      | null;
+    if (response.status === 401) {
+      window.dispatchEvent(new Event("deckox:unauthorized"));
+    }
+    throw new ApiError(
+      body?.message ?? `APIリクエストに失敗しました (${String(response.status)})`,
+      response.status,
+      body?.code,
+    );
+  }
+  return response.blob();
 }
 
 export const api = {
@@ -210,6 +285,8 @@ export const api = {
       headers: { "Content-Type": "application/json" },
     }),
   storage: () => request<StorageMount[]>("/api/v1/storage"),
+  diagnostics: () => request<DiagnosticsResponse>("/api/v1/diagnostics"),
+  diagnosticsReport: () => requestBlob("/api/v1/diagnostics/report"),
   services: () => request<ServiceSummary[]>("/api/v1/services"),
   serviceLogs: (serviceId: string, lines: number, priority: ServiceLogPriority) => {
     const query = new URLSearchParams({ lines: String(lines), priority });

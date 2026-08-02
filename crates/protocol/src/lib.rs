@@ -32,6 +32,69 @@ pub struct SystemCapabilities {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentDiagnostics {
+    pub version: String,
+    pub host: DiagnosticHost,
+    pub deckox_services: DeckoxServiceDiagnostics,
+    pub runtime_config: RuntimeConfigSummary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticsReport {
+    pub generated_at_ms: u64,
+    pub server: DiagnosticServer,
+    pub agent: DiagnosticAgent,
+    pub host: Option<DiagnosticHost>,
+    pub deckox_services: Option<DeckoxServiceDiagnostics>,
+    pub runtime_config: Option<RuntimeConfigSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticServer {
+    pub version: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticAgent {
+    pub connected: bool,
+    pub version: Option<String>,
+    pub error_code: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticHost {
+    pub hostname: String,
+    pub operating_system: String,
+    pub os_version: Option<String>,
+    pub kernel_version: String,
+    pub architecture: String,
+    pub uptime_seconds: u64,
+    pub timezone: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeckoxServiceDiagnostics {
+    pub agent: DiagnosticUnitState,
+    pub server: DiagnosticUnitState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticUnitState {
+    pub load_state: String,
+    pub active_state: String,
+    pub sub_state: String,
+    pub unit_file_state: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeConfigSummary {
+    pub reboot_allowed: bool,
+    pub allowed_services_count: usize,
+    pub ssh_management_enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemMetrics {
     pub cpu: CpuMetrics,
     pub memory: MemoryMetrics,
