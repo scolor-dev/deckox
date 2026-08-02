@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "./client";
+import { api, appendMetricHistory, usagePercentage } from "./client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -49,5 +49,22 @@ describe("service APIs", () => {
       "/api/v1/services/nginx.service/disable",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+});
+
+describe("extended metric helpers", () => {
+  it("keeps only the latest 120 samples", () => {
+    const initial = Array.from({ length: 120 }, (_, index) => index);
+    const history = appendMetricHistory(initial, 120);
+
+    expect(history).toHaveLength(120);
+    expect(history[0]).toBe(1);
+    expect(history[119]).toBe(120);
+  });
+
+  it("treats zero totals and invalid samples as unavailable", () => {
+    expect(usagePercentage(5, 0)).toBeNull();
+    expect(usagePercentage(80, 100)).toBe(80);
+    expect(appendMetricHistory([1], Number.NaN)).toEqual([1]);
   });
 });

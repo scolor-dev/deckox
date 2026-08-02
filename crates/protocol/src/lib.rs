@@ -36,6 +36,10 @@ pub struct SystemMetrics {
     pub cpu: CpuMetrics,
     pub memory: MemoryMetrics,
     pub load_average: LoadAverage,
+    #[serde(default)]
+    pub network: Option<NetworkMetrics>,
+    #[serde(default)]
+    pub disk_io: Option<DiskIoMetrics>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +55,20 @@ pub struct RealtimeMetricsEvent {
 pub struct CpuMetrics {
     pub logical_cores: usize,
     pub usage_percent: f64,
+    #[serde(default)]
+    pub temperature_celsius: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkMetrics {
+    pub received_bytes_per_second: u64,
+    pub transmitted_bytes_per_second: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiskIoMetrics {
+    pub read_bytes_per_second: u64,
+    pub written_bytes_per_second: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

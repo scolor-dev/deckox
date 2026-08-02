@@ -454,6 +454,31 @@ select:focus-visible { outline: 2px solid #2466a8; outline-offset: 2px; }
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
+.metric-chart polyline.secondary { stroke: #b7772c; }
+.compact-metric-card .metric-chart { height: 50px; }
+.metric-card.warning { border-color: #dfbf76; background: #fffdf6; }
+.metric-warning { color: #8a5d08; font-size: 10px; }
+.metric-pairs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 9px 0 8px;
+}
+.metric-pairs div { min-width: 0; }
+.metric-pairs dt { color: #8a9099; font-size: 9px; }
+.metric-pairs dd {
+  margin: 0;
+  overflow: hidden;
+  color: #292e35;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.metric-legend { display: flex; gap: 14px; color: #747b85; font-size: 9px; }
+.metric-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.metric-legend span::before { width: 12px; height: 2px; background: #4f83b6; content: ""; }
+.metric-legend span.secondary::before { background: #b7772c; }
 
 .progress { overflow: hidden; height: 5px; border-radius: 3px; background: #e7eaed; }
 .progress span {

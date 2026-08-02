@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.5</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.6</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -48,7 +48,7 @@
           <article class="card">
             <span class="number">WEB</span>
             <h3>Vue + TypeScript</h3>
-            <p>ブラウザ上の管理UIです。Vue Routerで画面URLを分け、SSEメトリクス、SVGグラフ、日本語・英語、端末内に保存する表示設定を提供します。</p>
+            <p>ブラウザ上の管理UIです。Vue Routerで画面URLを分け、CPU・メモリ・Swap・ネットワーク・ディスクI/OのSSEメトリクス、SVGグラフ、日本語・英語、端末内に保存する表示設定を提供します。</p>
           </article>
           <article class="card">
             <span class="number">SERVER</span>
@@ -67,10 +67,13 @@
         <h2 id="realtime-title">リアルタイムメトリクス</h2>
         <dl class="definition-list">
           <dt>Browser–Server</dt><dd><code>GET /api/v1/events/metrics</code>のServer-Sent Events。操作APIは従来どおりREST</dd>
-          <dt>Sampling</dt><dd>接続中クライアントの最短間隔でAgentから1回取得し、結果を購読者へ共有</dd>
+          <dt>Metrics</dt><dd>CPU・メモリ・Swap・負荷平均に加え、ネットワーク送受信速度、ディスク読み書き速度、取得可能な場合のCPU温度を配信</dd>
+          <dt>Sampling</dt><dd>接続中クライアントの最短間隔でAgentから1回取得し、カウンターの差分を1秒あたりの速度へ変換して購読者へ共有</dd>
           <dt>Idle</dt><dd>購読者が0件ならAgentへのメトリクス要求を停止</dd>
           <dt>Lifecycle</dt><dd>概要画面以外、非表示タブ、リアルタイム更新を無効にしたブラウザではSSE接続を閉じる</dd>
           <dt>Recovery</dt><dd>切断時は最大30秒の指数バックオフで再接続し、15秒ごとにkeep-aliveを送信</dd>
+          <dt>Optional values</dt><dd>CPU温度やI/O統計を取得できない環境では該当値だけを<code>—</code>または非表示とし、取得できるメトリクスの配信は継続</dd>
+          <dt>Warning</dt><dd>Swap使用率が80%以上の場合、概要画面で警告として表示</dd>
         </dl>
       </section>
 

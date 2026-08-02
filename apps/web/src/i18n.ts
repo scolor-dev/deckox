@@ -18,7 +18,10 @@ export const messages = {
       agentUnavailable: "Agentに接続できません", healthy: "サーバーは正常に動作しています", uptime: "稼働時間", architecture: "アーキテクチャ",
       resources: "リソース使用状況", cpu: "CPU使用率", cores: "{count}コア", cpuChart: "CPU使用率の推移", memory: "メモリ",
       total: "全体 {value}", inUse: "{value} 使用中", memoryChart: "メモリ使用率の推移", load: "負荷平均", fiveMinutes: "5分 {value}",
-      loadChart: "1分間負荷平均の推移", fifteenMinutes: "15分 {value}", systemInfo: "システム情報", hostname: "ホスト名", kernel: "カーネル", timezone: "タイムゾーン",
+      loadChart: "1分間負荷平均の推移", fifteenMinutes: "15分 {value}", swapChart: "Swap使用率の推移", notConfigured: "未設定", highUsage: "使用率が高くなっています",
+      network: "ネットワーク", networkChart: "ネットワーク受信・送信速度の推移", received: "受信", transmitted: "送信", diskIo: "ディスクI/O", diskIoChart: "ディスク読み書き速度の推移",
+      read: "読込", write: "書込", hostTotal: "ホスト全体", temperature: "CPU温度", temperatureChart: "CPU温度の推移", notAvailable: "取得できません", sensorValue: "センサー取得値", perSecond: "{value}/秒",
+      systemInfo: "システム情報", hostname: "ホスト名", kernel: "カーネル", timezone: "タイムゾーン",
     },
     services: {
       title: "サービス", summary: "全{total}件のうち{running}件が稼働中", search: "サービスを検索", searchPlaceholder: "サービス名または説明を検索",
@@ -83,7 +86,10 @@ export const messages = {
       agentUnavailable: "Cannot connect to Agent", healthy: "Server is operating normally", uptime: "Uptime", architecture: "Architecture",
       resources: "Resource usage", cpu: "CPU usage", cores: "{count} cores", cpuChart: "CPU usage history", memory: "Memory",
       total: "Total {value}", inUse: "{value} in use", memoryChart: "Memory usage history", load: "Load average", fiveMinutes: "5 min {value}",
-      loadChart: "One-minute load average history", fifteenMinutes: "15 min {value}", systemInfo: "System information", hostname: "Hostname", kernel: "Kernel", timezone: "Time zone",
+      loadChart: "One-minute load average history", fifteenMinutes: "15 min {value}", swapChart: "Swap usage history", notConfigured: "Not configured", highUsage: "Usage is high",
+      network: "Network", networkChart: "Network receive and transmit rate history", received: "Received", transmitted: "Transmitted", diskIo: "Disk I/O", diskIoChart: "Disk read and write rate history",
+      read: "Read", write: "Write", hostTotal: "Host total", temperature: "CPU temperature", temperatureChart: "CPU temperature history", notAvailable: "Unavailable", sensorValue: "Sensor reading", perSecond: "{value}/s",
+      systemInfo: "System information", hostname: "Hostname", kernel: "Kernel", timezone: "Time zone",
     },
     services: {
       title: "Services", summary: "{running} of {total} services running", search: "Search services", searchPlaceholder: "Search by service name or description",

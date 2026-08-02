@@ -4,7 +4,8 @@ Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基
 
 現在は次の最小構成と、Agentによるシステム情報・リソース・ストレージ取得、
 許可リスト付きsystemdサービス管理とjournalログ閲覧、管理者パスワード変更、SSH公開鍵管理、
-パスワード再確認付きのホスト再起動を提供します。SSEによるリアルタイムメトリクス、
+パスワード再確認付きのホスト再起動を提供します。SSEによるCPU・メモリ・Swap・
+ネットワーク送受信速度・ディスクI/O速度のリアルタイムメトリクス、任意取得のCPU温度、
 軽量SVGグラフ、日本語・英語の表示切替、再起動後の自動再接続、画面ごとのURLと
 ブラウザ別表示設定、最終更新時刻、Agent復旧時の状態再取得も実装済みです。任意コマンドを実行するWebコンソールは提供しません。
 
@@ -17,6 +18,12 @@ deckox-agent（Linux操作）
     ↓
 Linux
 ```
+
+概要画面を開いている間は、既存のCPU・メモリ・負荷平均に加え、Swap使用率、
+ネットワーク送受信速度、ディスク読み書き速度をSSEで更新します。CPU温度は
+ホストから取得できる場合だけ表示します。Swap使用率が80%以上になると警告表示へ
+切り替わります。取得できない追加メトリクスは`—`または非表示となり、CPUやメモリなど
+取得可能な値の更新は継続します。管理画面の購読者が0件になるとAgentからの採取も停止します。
 
 設計・実装済み機能・導入方法のHTMLドキュメントは
 [`docs/index.html`](docs/index.html)から参照できます。
@@ -100,12 +107,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.3.5`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.3.6`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.3.5
-git push origin v0.3.5
+git tag v0.3.6
+git push origin v0.3.6
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -130,7 +137,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.5 sh
+  | sudo DECKOX_VERSION=v0.3.6 sh
 ```
 
 ローカルで作成した配布物を検証する場合は、アーカイブと同じ場所に
