@@ -12,7 +12,7 @@
   <g transform="translate(52 92)">
     <rect width="178" height="110" rx="14" fill="#111d2e" stroke="#2d415b"/>
     <text x="20" y="39" fill="#edf4ff" font-family="system-ui,sans-serif" font-size="17" font-weight="700">Git tag</text>
-    <text x="20" y="68" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">v0.3.4</text>
+    <text x="20" y="68" fill="#8fa0b6" font-family="ui-monospace,monospace" font-size="12">v0.3.5</text>
     <text x="20" y="91" fill="#617187" font-family="system-ui,sans-serif" font-size="12">pushで開始</text>
   </g>
 

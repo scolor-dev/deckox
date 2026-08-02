@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.4</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.5</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -56,9 +56,9 @@
       <section class="section" aria-labelledby="release-title">
         <h2 id="release-title">Releaseの作成</h2>
         <p><code>v*</code>タグのpushでRelease Workflowが起動します。</p>
-        <pre><code>git tag v0.3.4
+        <pre><code>git tag v0.3.5
 git push origin main
-git push origin v0.3.4</code></pre>
+git push origin v0.3.5</code></pre>
         <aside class="note"><strong>実行条件:</strong> インストールコマンドを利用するには、対象タグのGitHub Releaseと4つの配布ファイルが公開済みである必要があります。</aside>
       </section>
 
@@ -75,7 +75,7 @@ sudo sh install.sh</code></pre>
         <p>特定バージョンを選ぶ場合:</p>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.4 sh</code></pre>
+  | sudo DECKOX_VERSION=v0.3.5 sh</code></pre>
         <p>ローカル配布物を検証する場合は、アーカイブと同じ場所に<code>.sha256</code>ファイルを置いて指定します。</p>
         <pre><code>sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
   sh install.sh</code></pre>
@@ -128,7 +128,7 @@ allow_reboot = true</code></pre>
         <p>設定画面から実行するときは管理者パスワードの再確認が必要です。要求後は管理画面が新しいServerプロセスを検知し、復帰するとログイン画面へ戻ります。設定変更後はAgentを再起動します。</p>
         <pre><code>sudo systemctl restart deckox-agent</code></pre>
         <h3>systemdサービス操作を許可する</h3>
-        <p><code>/etc/deckox/agent.toml</code>へ、起動・停止・再起動を許可するsystemdサービスを完全一致で指定します。初期値は空で、変更操作はすべて拒否されます。</p>
+        <p><code>/etc/deckox/agent.toml</code>へ、起動・停止・再起動・有効化・無効化とjournalログ閲覧を許可するsystemdサービスを完全一致で指定します。初期値は空で、変更操作とログ閲覧はすべて拒否されます。</p>
         <pre><code>[services]
 allowed = [
   "nginx.service",
@@ -136,6 +136,7 @@ allowed = [
 ]</code></pre>
         <p>変更後はAgentを再起動します。</p>
         <pre><code>sudo systemctl restart deckox-agent</code></pre>
+        <p>管理画面では許可したサービスのjournalログを最大500行まで表示し、全件・エラー・警告・情報で絞り込めます。任意の<code>journalctl</code>引数やログのダウンロードは提供せず、対話操作は通常のSSHを利用します。</p>
         <h3>SSH公開鍵管理を有効にする</h3>
         <p>同じ設定ファイルへ、SSH公開鍵を管理する既存の非rootローカルユーザーを指定します。rootは指定できません。</p>
         <pre><code>[ssh]

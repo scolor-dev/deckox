@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.4</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.5</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -58,7 +58,7 @@
           <article class="card">
             <span class="number">AGENT</span>
             <h3>Rust Agent</h3>
-            <p>Linuxホスト情報の取得、許可リスト内のsystemdサービス操作、指定ユーザーのSSH公開鍵管理、明示的に許可したホスト再起動を行います。rootで動き、Serverとは権限境界を分けています。</p>
+            <p>Linuxホスト情報の取得、許可リスト内のsystemdサービス操作と制限付きjournalログ閲覧、指定ユーザーのSSH公開鍵管理、明示的に許可したホスト再起動を行います。rootで動き、Serverとは権限境界を分けています。</p>
           </article>
         </div>
       </section>
@@ -112,8 +112,9 @@
             <tr><td>Server権限</td><td>専用<code>deckox</code>ユーザー、<code>NoNewPrivileges</code>、<code>ProtectSystem=strict</code></td></tr>
             <tr><td>管理者認証</td><td>Argon2idハッシュ、HttpOnly・SameSite=Strict Cookie、12時間のメモリ内セッション、ログイン・パスワード再確認の試行制限</td></tr>
             <tr><td>変更API</td><td>認証に加え、ブラウザの<code>Origin</code>と<code>Host</code>が同一であることを確認</td></tr>
-            <tr><td>Agent操作</td><td>systemd変更は完全一致許可リスト、再起動は明示的な設定とWeb側のパスワード再確認、SSH鍵管理は指定した非rootユーザーに限定</td></tr>
-            <tr><td>任意コマンド</td><td>Webコンソールを提供せず、Agentは許可済みの型付き操作だけを受け付ける</td></tr>
+            <tr><td>Agent操作</td><td>systemd変更とjournalログ閲覧は完全一致許可リスト、再起動は明示的な設定とWeb側のパスワード再確認、SSH鍵管理は指定した非rootユーザーに限定</td></tr>
+            <tr><td>ログ閲覧</td><td>許可済みサービスのjournalだけを最大500行取得し、<code>all|error|warning|info</code>で絞り込む。任意引数とファイルダウンロードは提供しない</td></tr>
+            <tr><td>任意コマンド</td><td>Webコンソールや対話シェルを提供せず、Agentは許可済みの型付き操作だけを受け付ける</td></tr>
             <tr><td>SSH鍵</td><td>公開鍵だけを受け付け、鍵種別・Base64データ・内部鍵種別を検証。ディレクトリFDと<code>O_NOFOLLOW</code>を用いてリンク差し替えを回避</td></tr>
             <tr><td>操作ログ</td><td>認証、パスワード変更、サービス・SSH鍵・再起動を送信元IP・リクエストID付きでjournalへ記録</td></tr>
           </tbody>

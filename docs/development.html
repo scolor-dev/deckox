@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.4</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.5</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -98,7 +98,7 @@ npm run build</code></pre>
 
       <section class="section" aria-labelledby="allowlist-title">
         <h2 id="allowlist-title">systemd操作の許可リスト</h2>
-        <p>サービス状態の読み取りは常に可能ですが、変更操作はAgent設定へ完全一致で登録したサービスだけが対象です。</p>
+        <p>サービス状態の読み取りは常に可能ですが、起動・停止・再起動・有効化・無効化とjournalログ閲覧は、Agent設定へ完全一致で登録したサービスだけが対象です。</p>
         <pre><code>socket = "/run/deckox/agent.sock"
 
 [system]
@@ -113,6 +113,7 @@ allowed = [
 [ssh]
 managed_user = "operator"</code></pre>
         <p><code>deckox-agent.service</code>と<code>deckox-server.service</code>は登録しても起動時に拒否されます。</p>
+        <p>journalログは最大500行までで、priorityは<code>all</code>・<code>error</code>・<code>warning</code>・<code>info</code>だけを指定できます。任意の<code>journalctl</code>引数、ログのダウンロード、Webコンソールは提供しません。</p>
         <p><code>system.allow_reboot</code>は初期値<code>false</code>です。<code>true</code>にした場合だけ、パスワード再確認後のホスト再起動を受け付けます。</p>
         <p><code>ssh.managed_user</code>は既存の非rootローカルユーザーだけを指定できます。省略時はSSH公開鍵管理が無効になります。</p>
       </section>
