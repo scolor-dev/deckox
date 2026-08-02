@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.7</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.8</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -53,7 +53,7 @@
           <article class="card">
             <span class="number">SERVER</span>
             <h3>Axum Server</h3>
-            <p>Vueの静的配信、管理者認証、公開HTTP API、Agent APIの中継、SSE配信、安全な固定スキーマの診断生成を担当します。一般ユーザーの<code>deckox</code>で動作します。</p>
+            <p>Vueの静的配信、管理者認証、公開HTTP API、Agent APIの中継、SSE配信、安全な固定スキーマの診断生成、最新安定版の確認を担当します。一般ユーザーの<code>deckox</code>で動作します。</p>
           </article>
           <article class="card">
             <span class="number">AGENT</span>
@@ -61,6 +61,17 @@
             <p>Linuxホスト情報の取得、許可リスト内のsystemdサービス操作と制限付きjournalログ閲覧、指定ユーザーのSSH公開鍵管理、明示的に許可したホスト再起動を行います。rootで動き、Serverとは権限境界を分けています。</p>
           </article>
         </div>
+      </section>
+
+      <section class="section" aria-labelledby="update-title">
+        <h2 id="update-title">更新確認の境界</h2>
+        <p>更新確認は認証済みの<code>GET /api/v1/update</code>を手動で呼び出します。Serverだけが固定されたDeckoxのGitHub Latest Release APIへ接続し、SemVerで現在版と比較します。</p>
+        <dl class="definition-list">
+          <dt>Network limit</dt><dd>5秒で打ち切り、リダイレクトを拒否し、応答を64 KiBまでに制限</dd>
+          <dt>Cache</dt><dd>成功・失敗の結果を15分保持し、同時確認を1リクエストへまとめる</dd>
+          <dt>Safe output</dt><dd>外部エラー本文を返さず、Release URLは固定プレフィックスと検証済みタグから生成</dd>
+          <dt>Execution</dt><dd>画面はコマンドを案内するだけで、自動ダウンロードやroot操作を実行しない</dd>
+        </dl>
       </section>
 
       <section class="section" aria-labelledby="diagnostics-title">

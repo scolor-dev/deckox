@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.7</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.8</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -71,9 +71,9 @@
         <table class="status-table">
           <thead><tr><th>領域</th><th>状態</th><th>現在提供している内容</th></tr></thead>
           <tbody>
-            <tr><td>Web Server</td><td><span class="status done">実装済み</span></td><td>Vue配信、単一管理者認証、Agent APIプロキシ、購読者がいる間だけ動作するSSEメトリクス、安全な固定項目だけの診断レポート</td></tr>
+            <tr><td>Web Server</td><td><span class="status done">実装済み</span></td><td>Vue配信、単一管理者認証、Agent APIプロキシ、購読者がいる間だけ動作するSSEメトリクス、安全な固定項目だけの診断レポート、手動更新確認</td></tr>
             <tr><td>System Agent</td><td><span class="status done">実装済み</span></td><td>システム情報、CPU・メモリ・Swap・ネットワーク・ディスクI/O・任意温度、ストレージ、systemdサービス制御と制限付きjournalログ閲覧、SSH公開鍵管理、許可設定付きホスト再起動</td></tr>
-            <tr><td>Vue UI</td><td><span class="status done">実装済み</span></td><td>拡張リアルタイムグラフ、Swap警告、サービスログ、診断表示とJSON保存、画面ごとの固有URL、日本語・英語、再起動後の自動復帰</td></tr>
+            <tr><td>Vue UI</td><td><span class="status done">実装済み</span></td><td>拡張リアルタイムグラフ、Swap警告、サービスログ、診断表示とJSON保存、手動更新確認、画面ごとの固有URL、日本語・英語、再起動後の自動復帰</td></tr>
             <tr><td>システム診断</td><td><span class="status done">実装済み</span></td><td>Server・Agent・ホスト・Deckoxユニット・機能設定の固定スキーマ。Agent不通時もServer側の部分診断を返却</td></tr>
             <tr><td>Service command</td><td><span class="status done">実装済み</span></td><td>完全一致許可リストに登録したsystemdサービスの起動・停止・再起動・有効化・無効化と、最大500行のjournalログ閲覧</td></tr>
             <tr><td>認証</td><td><span class="status done">実装済み</span></td><td>Argon2idパスワード、変更時の全セッション失効、12時間セッション、ログイン・パスワード再確認の試行制限、同一Origin確認</td></tr>
