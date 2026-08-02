@@ -29,6 +29,7 @@ export interface SystemMetrics {
   cpu: {
     logical_cores: number;
     usage_percent: number;
+    temperature_celsius?: number | null;
   };
   memory: {
     total_bytes: number;
@@ -42,6 +43,14 @@ export interface SystemMetrics {
     five_minutes: number;
     fifteen_minutes: number;
   };
+  network?: {
+    received_bytes_per_second: number;
+    transmitted_bytes_per_second: number;
+  } | null;
+  disk_io?: {
+    read_bytes_per_second: number;
+    written_bytes_per_second: number;
+  } | null;
 }
 
 export interface SystemCapabilities {
@@ -227,6 +236,20 @@ export function formatBytes(bytes: number, locale = "en"): string {
     maximumFractionDigits: index === 0 ? 0 : 1,
     minimumFractionDigits: index === 0 ? 0 : 1,
   }).format(value)} ${units[index]}`;
+}
+
+export function usagePercentage(used: number, total: number): number | null {
+  if (!Number.isFinite(used) || !Number.isFinite(total) || used < 0 || total <= 0) return null;
+  return used / total * 100;
+}
+
+export function appendMetricHistory(
+  history: number[],
+  value: number,
+  limit = 120,
+): number[] {
+  if (!Number.isFinite(value) || limit <= 0) return history;
+  return [...history.slice(-(limit - 1)), value];
 }
 
 export function formatUptime(

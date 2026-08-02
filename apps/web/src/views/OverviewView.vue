@@ -3,8 +3,10 @@ import { computed, onMounted, ref, toRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   api,
+  appendMetricHistory,
   formatBytes,
   formatUptime,
+  usagePercentage,
   type ServerStatus,
   type SystemInfo,
   type SystemMetrics,
@@ -29,6 +31,12 @@ const realtimeEnabled = toRef(preferences, "realtimeEnabled");
 const cpuHistory = ref<number[]>([]);
 const memoryHistory = ref<number[]>([]);
 const loadHistory = ref<number[]>([]);
+const swapHistory = ref<number[]>([]);
+const temperatureHistory = ref<number[]>([]);
+const networkReceivedHistory = ref<number[]>([]);
+const networkTransmittedHistory = ref<number[]>([]);
+const diskReadHistory = ref<number[]>([]);
+const diskWrittenHistory = ref<number[]>([]);
 
 const stream = useRealtimeMetrics(intervalSeconds, realtimeEnabled);
 const agentOnline = computed(() => stream.latest.value?.agent_online ?? Boolean(status.value?.agent));
@@ -41,23 +49,59 @@ const lastUpdated = computed(() => {
   }).format(stream.lastReceivedAt.value);
 });
 const memoryPercent = computed(() => {
-  if (!metrics.value || metrics.value.memory.total_bytes === 0) return 0;
-  return metrics.value.memory.used_bytes / metrics.value.memory.total_bytes * 100;
+  const memory = metrics.value?.memory;
+  return memory ? usagePercentage(memory.used_bytes, memory.total_bytes) ?? 0 : 0;
 });
 const loadMaximum = computed(() => Math.max(metrics.value?.cpu.logical_cores ?? 1, 1));
+const swapPercent = computed(() => {
+  const memory = metrics.value?.memory;
+  return memory ? usagePercentage(memory.swap_used_bytes, memory.swap_total_bytes) : null;
+});
+const temperature = computed(() => metrics.value?.cpu.temperature_celsius ?? null);
+const networkMaximum = computed(() => Math.max(
+  1,
+  ...networkReceivedHistory.value,
+  ...networkTransmittedHistory.value,
+));
+const diskMaximum = computed(() => Math.max(
+  1,
+  ...diskReadHistory.value,
+  ...diskWrittenHistory.value,
+));
 
 function appendHistory(target: typeof cpuHistory, value: number) {
-  target.value = [...target.value.slice(-(HISTORY_LIMIT - 1)), value];
+  target.value = appendMetricHistory(target.value, value, HISTORY_LIMIT);
 }
 
 function applyMetrics(value: SystemMetrics) {
   metrics.value = value;
   appendHistory(cpuHistory, value.cpu.usage_percent);
   const percentage = value.memory.total_bytes > 0
-    ? value.memory.used_bytes / value.memory.total_bytes * 100
+    ? usagePercentage(value.memory.used_bytes, value.memory.total_bytes) ?? 0
     : 0;
   appendHistory(memoryHistory, percentage);
   appendHistory(loadHistory, value.load_average.one_minute);
+  if (value.memory.swap_total_bytes > 0) {
+    const percentage = usagePercentage(value.memory.swap_used_bytes, value.memory.swap_total_bytes);
+    if (percentage !== null) appendHistory(swapHistory, percentage);
+  }
+  if (value.cpu.temperature_celsius != null) {
+    appendHistory(temperatureHistory, value.cpu.temperature_celsius);
+  }
+  if (value.network) {
+    appendHistory(networkReceivedHistory, value.network.received_bytes_per_second);
+    appendHistory(networkTransmittedHistory, value.network.transmitted_bytes_per_second);
+  }
+  if (value.disk_io) {
+    appendHistory(diskReadHistory, value.disk_io.read_bytes_per_second);
+    appendHistory(diskWrittenHistory, value.disk_io.written_bytes_per_second);
+  }
+}
+
+function formatRate(value: number | null | undefined) {
+  return value == null ? t("common.none") : t("overview.perSecond", {
+    value: formatBytes(value, locale.value),
+  });
 }
 
 async function refresh() {
@@ -211,6 +255,69 @@ onMounted(refresh);
           :label="t('overview.loadChart')"
         />
         <small class="metric-foot">{{ t("overview.fifteenMinutes", { value: metrics?.load_average.fifteen_minutes.toFixed(2) ?? t("common.none") }) }}</small>
+      </article>
+      <article :class="['metric-card', 'compact-metric-card', { warning: swapPercent !== null && swapPercent >= 80 }]">
+        <div class="metric-head">
+          <span>Swap</span><small>{{ metrics?.memory.swap_total_bytes ? t("overview.total", { value: formatBytes(metrics.memory.swap_total_bytes, locale) }) : t("overview.notConfigured") }}</small>
+        </div>
+        <strong>{{ swapPercent === null ? t("common.none") : `${swapPercent.toFixed(1)}%` }}</strong>
+        <MetricChart
+          :values="swapHistory"
+          :maximum="100"
+          :label="t('overview.swapChart')"
+        />
+        <small
+          v-if="swapPercent !== null && swapPercent >= 80"
+          class="metric-warning"
+        >{{ t("overview.highUsage") }}</small>
+      </article>
+      <article class="metric-card compact-metric-card">
+        <div class="metric-head">
+          <span>{{ t("overview.network") }}</span><small>RX / TX</small>
+        </div>
+        <dl class="metric-pairs">
+          <div><dt>RX</dt><dd>{{ formatRate(metrics?.network?.received_bytes_per_second) }}</dd></div>
+          <div><dt>TX</dt><dd>{{ formatRate(metrics?.network?.transmitted_bytes_per_second) }}</dd></div>
+        </dl>
+        <MetricChart
+          :values="networkReceivedHistory"
+          :secondary-values="networkTransmittedHistory"
+          :maximum="networkMaximum"
+          :label="t('overview.networkChart')"
+        />
+        <div class="metric-legend">
+          <span>{{ t("overview.received") }}</span><span class="secondary">{{ t("overview.transmitted") }}</span>
+        </div>
+      </article>
+      <article class="metric-card compact-metric-card">
+        <div class="metric-head">
+          <span>{{ t("overview.diskIo") }}</span><small>{{ t("overview.hostTotal") }}</small>
+        </div>
+        <dl class="metric-pairs">
+          <div><dt>{{ t("overview.read") }}</dt><dd>{{ formatRate(metrics?.disk_io?.read_bytes_per_second) }}</dd></div>
+          <div><dt>{{ t("overview.write") }}</dt><dd>{{ formatRate(metrics?.disk_io?.written_bytes_per_second) }}</dd></div>
+        </dl>
+        <MetricChart
+          :values="diskReadHistory"
+          :secondary-values="diskWrittenHistory"
+          :maximum="diskMaximum"
+          :label="t('overview.diskIoChart')"
+        />
+        <div class="metric-legend">
+          <span>{{ t("overview.read") }}</span><span class="secondary">{{ t("overview.write") }}</span>
+        </div>
+      </article>
+      <article class="metric-card compact-metric-card">
+        <div class="metric-head">
+          <span>{{ t("overview.temperature") }}</span><small>CPU</small>
+        </div>
+        <strong>{{ temperature === null ? t("common.none") : `${temperature.toFixed(1)} °C` }}</strong>
+        <MetricChart
+          :values="temperatureHistory"
+          :maximum="100"
+          :label="t('overview.temperatureChart')"
+        />
+        <small class="metric-foot">{{ temperature === null ? t("overview.notAvailable") : t("overview.sensorValue") }}</small>
       </article>
     </section>
 
