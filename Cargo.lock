@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "deckox-agent"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "axum",
  "base64",
@@ -190,14 +190,14 @@ dependencies = [
 
 [[package]]
 name = "deckox-protocol"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "deckox-server"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "argon2",
  "async-stream",

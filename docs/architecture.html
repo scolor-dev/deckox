@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.3</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.4</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -115,7 +115,7 @@
             <tr><td>Agent操作</td><td>systemd変更は完全一致許可リスト、再起動は明示的な設定とWeb側のパスワード再確認、SSH鍵管理は指定した非rootユーザーに限定</td></tr>
             <tr><td>任意コマンド</td><td>Webコンソールを提供せず、Agentは許可済みの型付き操作だけを受け付ける</td></tr>
             <tr><td>SSH鍵</td><td>公開鍵だけを受け付け、鍵種別・Base64データ・内部鍵種別を検証。ディレクトリFDと<code>O_NOFOLLOW</code>を用いてリンク差し替えを回避</td></tr>
-            <tr><td>操作ログ</td><td>認証、パスワード変更、サービス・SSH鍵・再起動・コンソール接続を送信元IP・リクエストID付きでjournalへ記録</td></tr>
+            <tr><td>操作ログ</td><td>認証、パスワード変更、サービス・SSH鍵・再起動を送信元IP・リクエストID付きでjournalへ記録</td></tr>
           </tbody>
         </table>
         <aside class="note warning"><strong>未実装:</strong> 複数ユーザー・ロール・MFA・TLS終端・監査ログの専用閲覧画面はまだ存在しません。</aside>

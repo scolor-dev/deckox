@@ -31,6 +31,15 @@ const memoryHistory = ref<number[]>([]);
 const loadHistory = ref<number[]>([]);
 
 const stream = useRealtimeMetrics(intervalSeconds, realtimeEnabled);
+const agentOnline = computed(() => stream.latest.value?.agent_online ?? Boolean(status.value?.agent));
+const lastUpdated = computed(() => {
+  if (stream.lastReceivedAt.value === null) return t("overview.notUpdated");
+  return new Intl.DateTimeFormat(locale.value, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(stream.lastReceivedAt.value);
+});
 const memoryPercent = computed(() => {
   if (!metrics.value || metrics.value.memory.total_bytes === 0) return 0;
   return metrics.value.memory.used_bytes / metrics.value.memory.total_bytes * 100;
@@ -75,9 +84,24 @@ async function recover() {
   await refresh();
 }
 
-watch(stream.latest, (event) => {
+watch(stream.latest, (event, previous) => {
   if (event?.metrics) applyMetrics(event.metrics);
+  if (event?.agent_online && previous?.agent_online === false) void refreshIdentity();
 });
+
+async function refreshIdentity() {
+  try {
+    const [serverStatus, systemInfo] = await Promise.all([
+      api.serverStatus(),
+      api.systemInfo(),
+    ]);
+    status.value = serverStatus;
+    system.value = systemInfo;
+    emit("status", serverStatus);
+  } catch {
+    // The SSE reconnect loop remains responsible for recovery.
+  }
+}
 
 let streamWasDisconnected = false;
 watch(stream.status, (current, previous) => {
@@ -109,8 +133,9 @@ onMounted(refresh);
         >
           {{ stream.status.value === "connected" ? t("overview.realtime") : stream.status.value === "paused" ? t("overview.paused") : t("overview.connecting") }}
         </span>
+        <small class="last-updated">{{ t("overview.lastUpdated", { time: lastUpdated }) }}</small>
         <button
-          v-if="stream.status.value === 'paused' || stream.status.value === 'reconnecting'"
+          v-if="stream.status.value === 'paused' || stream.status.value === 'reconnecting' || !agentOnline"
           class="button"
           type="button"
           :disabled="loading"
@@ -136,9 +161,9 @@ onMounted(refresh);
 
     <section class="server-summary">
       <div class="server-state">
-        <span :class="['status-dot', status?.agent ? 'online' : 'offline']" />
+        <span :class="['status-dot', agentOnline ? 'online' : 'offline']" />
         <div>
-          <strong>{{ status?.agent ? t("overview.healthy") : t("overview.agentUnavailable") }}</strong>
+          <strong>{{ agentOnline ? t("overview.healthy") : t("overview.agentUnavailable") }}</strong>
           <span>{{ system?.operating_system ?? "Linux" }} {{ system?.os_version ?? "" }}</span>
         </div>
       </div>
@@ -194,9 +219,21 @@ onMounted(refresh);
         <h2>{{ t("overview.systemInfo") }}</h2>
       </div>
       <dl class="details">
-        <div><dt>{{ t("overview.hostname") }}</dt><dd>{{ system?.hostname ?? t("common.none") }}</dd></div>
-        <div><dt>OS</dt><dd>{{ system ? `${system.operating_system} ${system.os_version ?? ""}` : t("common.none") }}</dd></div>
-        <div><dt>{{ t("overview.kernel") }}</dt><dd>{{ system?.kernel_version ?? t("common.none") }}</dd></div>
+        <div>
+          <dt>{{ t("overview.hostname") }}</dt><dd :title="system?.hostname ?? undefined">
+            {{ system?.hostname ?? t("common.none") }}
+          </dd>
+        </div>
+        <div>
+          <dt>OS</dt><dd :title="system ? `${system.operating_system} ${system.os_version ?? ''}` : undefined">
+            {{ system ? `${system.operating_system} ${system.os_version ?? ""}` : t("common.none") }}
+          </dd>
+        </div>
+        <div>
+          <dt>{{ t("overview.kernel") }}</dt><dd :title="system?.kernel_version ?? undefined">
+            {{ system?.kernel_version ?? t("common.none") }}
+          </dd>
+        </div>
         <div><dt>{{ t("overview.architecture") }}</dt><dd>{{ system?.architecture ?? t("common.none") }}</dd></div>
         <div><dt>{{ t("overview.timezone") }}</dt><dd>{{ system?.timezone ?? t("common.none") }}</dd></div>
         <div><dt>Deckox</dt><dd>{{ t("common.version") }} {{ status?.version ?? t("common.none") }}</dd></div>

@@ -1,5 +1,5 @@
 import { onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue";
-import { type SystemMetrics } from "../api/client";
+import { api, ApiError, type SystemMetrics } from "../api/client";
 
 export type StreamStatus = "paused" | "connecting" | "connected" | "reconnecting";
 
@@ -39,9 +39,11 @@ export function useRealtimeMetrics(
 ) {
   const status = ref<StreamStatus>("paused");
   const latest = ref<RealtimeMetricsEvent | null>(null);
+  const lastReceivedAt = ref<number | null>(null);
   let eventSource: EventSource | null = null;
   let reconnectTimer: number | null = null;
   let reconnectAttempt = 0;
+  let authCheckPending = false;
   let mounted = false;
 
   function clearReconnectTimer() {
@@ -71,6 +73,21 @@ export function useRealtimeMetrics(
     }, delay);
   }
 
+  async function checkAuthentication() {
+    if (authCheckPending) return;
+    authCheckPending = true;
+    try {
+      const session = await api.authSession();
+      if (!session.authenticated) window.dispatchEvent(new Event("deckox:unauthorized"));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        window.dispatchEvent(new Event("deckox:unauthorized"));
+      }
+    } finally {
+      authCheckPending = false;
+    }
+  }
+
   function connect() {
     if (!shouldConnect()) {
       disconnect();
@@ -88,11 +105,15 @@ export function useRealtimeMetrics(
     source.addEventListener("metrics", (event) => {
       if (!(event instanceof MessageEvent)) return;
       const parsed = parseMetricsEvent(String(event.data));
-      if (parsed) latest.value = parsed;
+      if (parsed) {
+        latest.value = parsed;
+        lastReceivedAt.value = Date.now();
+      }
     });
     source.onerror = () => {
       source.close();
       if (eventSource === source) eventSource = null;
+      void checkAuthentication();
       scheduleReconnect();
     };
   }
@@ -118,5 +139,5 @@ export function useRealtimeMetrics(
     disconnect();
   });
 
-  return { status, latest, reconnect: connect };
+  return { status, latest, lastReceivedAt, reconnect: connect };
 }

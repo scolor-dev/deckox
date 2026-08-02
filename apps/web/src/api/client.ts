@@ -117,6 +117,7 @@ async function request<T>(
     ...init,
     headers,
     credentials: "same-origin",
+    signal: init?.signal ?? AbortSignal.timeout(15_000),
   });
   const body = await response.json().catch(() => null) as
     | { code?: string; message?: string }
