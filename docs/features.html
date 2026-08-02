@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.4</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.5</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -53,7 +53,8 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのストレージAPIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス詳細を中継</td></tr>
-            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/services/{id}/{action}</code></span></td><td><span class="status done">実装済み</span></td><td>起動・停止・再起動。Agentの許可・エラー状態を維持して返却</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/services/{id}/{action}</code></span></td><td><span class="status done">実装済み</span></td><td>起動・停止・再起動・有効化・無効化。Agentの許可・エラー状態を維持して返却</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}/logs</code></span></td><td><span class="status done">実装済み</span></td><td><code>lines</code>と<code>priority=all|error|warning|info</code>を検証し、完全一致許可リスト内のjournalログを中継。最大500行</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/password</code></span></td><td><span class="status done">実装済み</span></td><td>現在のパスワードを確認し、Argon2idハッシュを更新して全セッションを失効。5分間に5回の確認失敗で制限</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/settings/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>管理対象ユーザーとDeckox管理下のSSH公開鍵を取得</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>OpenSSH形式のSSH公開鍵を追加</td></tr>
@@ -81,6 +82,9 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/start</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを起動</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/stop</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを停止</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/restart</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを再起動</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/enable</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを有効化</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/disable</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを無効化</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services/{id}/logs</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスに限定してjournalを取得。最大500行、<code>all|error|warning|info</code>のpriority絞込に対応</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET / POST</span><code>/v1/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>設定済みユーザーのDeckox管理公開鍵を取得・追加</td></tr>
             <tr><td><span class="endpoint"><span class="method">DELETE</span><code>/v1/ssh/keys/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>公開鍵を削除。最後のSSH接続鍵は拒否</td></tr>
           </tbody>
@@ -94,7 +98,7 @@
         <div class="grid">
           <article class="card"><span class="status done">実装済み</span><h3>リアルタイム概要</h3><p>OS・カーネル・稼働時間と、CPU・メモリ・ロードアベレージの現在値・最大120点のSVG推移グラフ、最終更新時刻を表示します。Agent復旧時はシステム情報を自動取得します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>管理者ログイン</h3><p>セッション確認、ログイン、ログアウト、APIの401応答時のログイン画面復帰を提供します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動を提供します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動・有効化・無効化を提供します。許可対象のjournalログは最大500行まで表示し、全件・エラー・警告・情報で絞り込めます。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ホスト再起動</h3><p>Agent側で明示的に許可した場合だけ、管理者パスワードを再確認して再起動し、新しいServerプロセスを検知してログインへ戻ります。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
@@ -113,16 +117,16 @@
           <tbody>
             <tr><td><code>HealthResponse</code></td><td><span class="status done">使用中</span></td><td>Agentのヘルス応答</td></tr>
             <tr><td><code>AgentStatus</code></td><td><span class="status done">使用中</span></td><td>AgentからServerへ返すホスト状態</td></tr>
-            <tr><td><code>SystemInfo</code>ほか</td><td><span class="status done">使用中</span></td><td>システム、メトリクス、ストレージ、サービスの応答型</td></tr>
+            <tr><td><code>SystemInfo</code>ほか</td><td><span class="status done">使用中</span></td><td>システム、メトリクス、ストレージ、サービスとjournalログの応答型</td></tr>
             <tr><td><code>SystemCapabilities</code></td><td><span class="status done">使用中</span></td><td>Agent設定に基づくホスト再起動の許可状態</td></tr>
             <tr><td><code>RealtimeMetricsEvent</code></td><td><span class="status done">使用中</span></td><td>SSEの連番、取得時刻、Agent接続状態、メトリクス、エラーコード</td></tr>
-            <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動</td></tr>
+            <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動、有効化、無効化</td></tr>
             <tr><td><code>CommandResult</code></td><td><span class="status done">使用中</span></td><td>操作完了時のコマンドID、実行状態、メッセージ</td></tr>
             <tr><td><code>SshKeyList</code>ほか</td><td><span class="status done">使用中</span></td><td>SSH公開鍵の一覧・追加要求・鍵種別・SHA-256指紋</td></tr>
             <tr><td><code>AgentCommand</code></td><td><span class="status defined">型のみ定義済み</span></td><td>汎用コマンド型。現在のHTTPハンドラーでは未使用</td></tr>
           </tbody>
         </table>
-        <aside class="note"><strong>サービス制御:</strong> 専用HTTPエンドポイントと<code>ServiceAction</code>で実装されています。汎用<code>AgentCommand</code>は現在使っていません。</aside>
+        <aside class="note"><strong>サービス管理の境界:</strong> 専用HTTPエンドポイントと<code>ServiceAction</code>で実装されています。ログ閲覧も完全一致許可リスト、最大500行、<code>all|error|warning|info</code>だけを受け付け、ダウンロードは提供しません。汎用<code>AgentCommand</code>とWebコンソールは使っていません。</aside>
       </section>
 
       <section class="section" aria-labelledby="not-title">

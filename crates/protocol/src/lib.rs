@@ -119,6 +119,32 @@ pub enum ServiceAction {
     Start,
     Stop,
     Restart,
+    Enable,
+    Disable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceLogs {
+    pub service_id: String,
+    pub entries: Vec<ServiceLogEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceLogEntry {
+    pub timestamp_ms: u64,
+    pub priority: u8,
+    pub message: String,
+    pub process: Option<String>,
+    pub pid: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ServiceLogPriority {
+    All,
+    Error,
+    Warning,
+    Info,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

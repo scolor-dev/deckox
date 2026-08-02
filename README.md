@@ -3,7 +3,7 @@
 Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基盤です。
 
 現在は次の最小構成と、Agentによるシステム情報・リソース・ストレージ取得、
-許可リスト付きsystemdサービス管理、管理者パスワード変更、SSH公開鍵管理、
+許可リスト付きsystemdサービス管理とjournalログ閲覧、管理者パスワード変更、SSH公開鍵管理、
 パスワード再確認付きのホスト再起動を提供します。SSEによるリアルタイムメトリクス、
 軽量SVGグラフ、日本語・英語の表示切替、再起動後の自動再接続、画面ごとのURLと
 ブラウザ別表示設定、最終更新時刻、Agent復旧時の状態再取得も実装済みです。任意コマンドを実行するWebコンソールは提供しません。
@@ -100,12 +100,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.3.4`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.3.5`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.3.4
-git push origin v0.3.4
+git tag v0.3.5
+git push origin v0.3.5
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -130,7 +130,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.4 sh
+  | sudo DECKOX_VERSION=v0.3.5 sh
 ```
 
 ローカルで作成した配布物を検証する場合は、アーカイブと同じ場所に
@@ -198,6 +198,11 @@ sudo systemctl restart deckox-agent
 設定画面から再起動するときは管理者パスワードを再入力します。要求後は専用画面が
 Webサーバーの新しいプロセス識別子を確認し、復帰後にログイン画面へ戻ります。
 パスワード確認の試行制限はパスワード変更と共通です。
+
+systemdサービスは、一覧と状態を確認したうえで、Agent設定の完全一致許可リストに
+登録した対象だけを起動・停止・再起動・有効化・無効化できます。同じ許可対象について
+journalログを最大500行まで表示し、全件・エラー・警告・情報のpriorityで絞り込めます。ログのファイルダウンロードと
+任意のjournalctl引数指定には対応していません。
 
 v0.3.3ではWebコンソールを削除しました。Linuxの対話操作には通常のSSHを利用し、
 Deckoxからは許可された管理APIだけを実行します。v0.3.2から更新すると、旧Terminal
@@ -284,4 +289,6 @@ Serverは単一管理者のArgon2idパスワード認証と、12時間のメモ�
 サービス操作、SSH公開鍵操作、ホスト再起動は
 リクエストID付きでjournalへ記録します。
 Agentは任意のシェルコマンドを受け付けず、許可済みの型付き操作だけを
-実行します。任意コマンドを受け付けるWebコンソールは提供しません。
+実行します。サービスログ閲覧も完全一致許可リスト、500行の上限、全件・
+エラー・警告・情報のpriority選択肢に制限されます。任意コマンドや対話シェルを
+受け付けるWebコンソールは提供しません。
