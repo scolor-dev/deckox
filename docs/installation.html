@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.6</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.7</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -56,9 +56,9 @@
       <section class="section" aria-labelledby="release-title">
         <h2 id="release-title">Releaseの作成</h2>
         <p><code>v*</code>タグのpushでRelease Workflowが起動します。</p>
-        <pre><code>git tag v0.3.6
+        <pre><code>git tag v0.3.7
 git push origin main
-git push origin v0.3.6</code></pre>
+git push origin v0.3.7</code></pre>
         <aside class="note"><strong>実行条件:</strong> インストールコマンドを利用するには、対象タグのGitHub Releaseと4つの配布ファイルが公開済みである必要があります。</aside>
       </section>
 
@@ -75,7 +75,7 @@ sudo sh install.sh</code></pre>
         <p>特定バージョンを選ぶ場合:</p>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.6 sh</code></pre>
+  | sudo DECKOX_VERSION=v0.3.7 sh</code></pre>
         <p>ローカル配布物を検証する場合は、アーカイブと同じ場所に<code>.sha256</code>ファイルを置いて指定します。</p>
         <pre><code>sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
   sh install.sh</code></pre>
@@ -99,6 +99,7 @@ sudo sh install.sh</code></pre>
         <pre><code>systemctl status deckox-server deckox-agent
 journalctl -u deckox-server -u deckox-agent -f</code></pre>
         <p>初回インストール時は管理者パスワードがターミナルへ一度だけ表示されます。更新時は既存のパスワードが維持されます。</p>
+        <p>ログイン後は管理画面の「診断」で、Server・Agentの接続、ホスト情報、Deckoxのsystemdユニット状態をまとめて確認できます。問題を共有するときは、画面から安全な固定項目だけを含むJSONレポートを保存できます。Agentが停止していてもServer側の部分診断は表示されます。</p>
         <h3>管理者パスワードを変更する</h3>
         <p>通常は管理画面の「設定」から、現在のパスワードと12文字以上の新しいパスワードを入力します。現在のパスワード確認に5分間で5回失敗すると一時的に制限されます。変更後は全セッションが失効し、完了案内が表示されたログイン画面から新しいパスワードで再ログインします。</p>
         <p>ログインできない場合は、次のコマンドで再設定します。</p>

@@ -6,7 +6,7 @@
     <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 9 4.5 0 9Z" fill="#5eead4"/></marker>
   </defs>
   <rect width="1040" height="620" rx="24" fill="#080e18"/>
-  <text x="54" y="52" fill="#5eead4" font-family="ui-monospace,monospace" font-size="13" letter-spacing="2">RUNTIME ARCHITECTURE · v0.3.6</text>
+  <text x="54" y="52" fill="#5eead4" font-family="ui-monospace,monospace" font-size="13" letter-spacing="2">RUNTIME ARCHITECTURE · v0.3.7</text>
 
   <g transform="translate(54 88)">
     <rect width="250" height="150" rx="16" fill="url(#panel)" stroke="#2c415c"/>
