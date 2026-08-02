@@ -8,7 +8,9 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use deckox_protocol::{AddSshKeyRequest, AgentStatus, DiagnosticsReport, ServiceLogPriority};
+use deckox_protocol::{
+    AddSshKeyRequest, AgentStatus, DiagnosticsReport, ServiceLogPriority, UpdateStatus,
+};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower_http::{
@@ -30,6 +32,7 @@ mod auth;
 mod diagnostics;
 mod metrics_stream;
 mod request_context;
+mod update;
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:8080";
 const DEFAULT_AGENT_SOCKET: &str = "/run/deckox/agent.sock";
@@ -40,6 +43,7 @@ struct AppState {
     agent: AgentClient,
     auth: AuthManager,
     metrics: MetricsHub,
+    updates: update::UpdateChecker,
     instance_id: String,
 }
 
@@ -122,10 +126,12 @@ async fn main() {
     let agent = AgentClient::new(PathBuf::from(
         env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| DEFAULT_AGENT_SOCKET.to_owned()),
     ));
+    let updates = load_update_checker();
     let state = AppState {
         agent: agent.clone(),
         auth: auth.clone(),
         metrics: MetricsHub::new(agent),
+        updates,
         instance_id: format!("{:016x}", rand::random::<u64>()),
     };
 
@@ -133,6 +139,7 @@ async fn main() {
         .route("/status", get(status))
         .route("/diagnostics", get(diagnostics))
         .route("/diagnostics/report", get(diagnostics_report))
+        .route("/update", get(update_status))
         .route("/system", get(proxy_system))
         .route("/system/capabilities", get(proxy_system_capabilities))
         .route("/system/reboot", post(reboot_system))
@@ -201,6 +208,13 @@ async fn main() {
         error!(%error, "server stopped unexpectedly");
         std::process::exit(1);
     }
+}
+
+fn load_update_checker() -> update::UpdateChecker {
+    update::UpdateChecker::new().unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2);
+    })
 }
 
 fn hash_password_from_stdin() {
@@ -274,6 +288,10 @@ async fn diagnostics_report(
 ) -> Response {
     let report = diagnostics::collect(&state.agent, &request_id).await;
     diagnostics::attachment(&report)
+}
+
+async fn update_status(State(state): State<AppState>) -> Json<UpdateStatus> {
+    Json(state.updates.check().await)
 }
 
 async fn proxy_system(

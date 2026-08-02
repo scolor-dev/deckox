@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
         >
           {{ t("app.logout") }}
         </button>
-        <span>{{ t("common.version") }} {{ status?.version ?? "0.3.7" }}</span>
+        <span>{{ t("common.version") }} {{ status?.version ?? "0.3.8" }}</span>
       </div>
     </aside>
 

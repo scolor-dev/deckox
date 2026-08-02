@@ -312,6 +312,27 @@ nav a.router-link-exact-active::before {
 .ssh-add-form { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #e5e7ea; }
 .ssh-add-form label { margin: 0; }
 .ssh-add-form textarea { resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+.update-settings { max-width: 560px; }
+.update-versions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.update-versions div { padding: 10px 12px; border: 1px solid #dfe2e6; border-radius: 4px; background: #fff; }
+.update-versions dt { color: #858b94; font-size: 10px; }
+.update-versions dd { margin: 1px 0 0; color: #30353c; font: 600 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.update-notice { margin: 6px 0 0; }
+.release-link { width: fit-content; color: #174f88; font-size: 12px; }
+.update-command { display: grid; gap: 8px; margin-top: 6px; }
+.update-command code {
+  display: block;
+  padding: 10px;
+  overflow-x: auto;
+  border: 1px solid #dfe2e6;
+  border-radius: 4px;
+  background: #f8f9fa;
+  color: #30353c;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.update-command .action-button, .update-check-button { width: fit-content; }
+.update-command small { color: #747b85; font-size: 10px; }
 
 .view {
   width: min(1180px, 100%);
@@ -762,6 +783,7 @@ td small {
   .header-actions { max-width: 55%; flex-direction: column; align-items: flex-end; gap: 4px; }
   h1 { font-size: 22px; }
   .settings-section { grid-template-columns: 1fr; gap: 16px; }
+  .update-versions { grid-template-columns: 1fr; }
   .server-summary { align-items: flex-start; flex-direction: column; gap: 14px; padding: 15px; }
   .server-summary dl { width: 100%; gap: 12px; }
   .server-summary dl div { min-width: 0; flex: 1; }
