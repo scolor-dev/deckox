@@ -6,7 +6,7 @@ Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基
 許可リスト付きsystemdサービス管理、管理者パスワード変更、SSH公開鍵管理、
 パスワード再確認付きのホスト再起動を提供します。SSEによるリアルタイムメトリクス、
 軽量SVGグラフ、日本語・英語の表示切替、再起動後の自動再接続、画面ごとのURLと
-ブラウザ別表示設定も実装済みです。任意コマンドを実行するWebコンソールは提供しません。
+ブラウザ別表示設定、最終更新時刻、Agent復旧時の状態再取得も実装済みです。任意コマンドを実行するWebコンソールは提供しません。
 
 ```text
 Vue管理画面
@@ -100,12 +100,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.3.3`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.3.4`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.3.3
-git push origin v0.3.3
+git tag v0.3.4
+git push origin v0.3.4
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -130,7 +130,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.3 sh
+  | sudo DECKOX_VERSION=v0.3.4 sh
 ```
 
 ローカルで作成した配布物を検証する場合は、アーカイブと同じ場所に
@@ -281,7 +281,7 @@ Serverと通信します。
 Serverは単一管理者のArgon2idパスワード認証と、12時間のメモリ内セッション
 を提供します。CookieはHttpOnly・SameSite=Strictです。ログインとパスワード
 再確認には送信元IP単位の試行制限があります。認証、パスワード変更、
-サービス操作、SSH公開鍵操作、ホスト再起動、コンソールの開始・終了は
+サービス操作、SSH公開鍵操作、ホスト再起動は
 リクエストID付きでjournalへ記録します。
 Agentは任意のシェルコマンドを受け付けず、許可済みの型付き操作だけを
 実行します。任意コマンドを受け付けるWebコンソールは提供しません。
