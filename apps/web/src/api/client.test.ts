@@ -2,12 +2,60 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   api,
   appendMetricHistory,
+  buildUpdateCommand,
   DIAGNOSTICS_REPORT_FILENAME,
+  safeReleaseUrl,
   usagePercentage,
+  writeClipboardText,
 } from "./client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("update APIs", () => {
+  it("fetches update status", async () => {
+    const status = {
+      status: "available",
+      current_version: "0.3.8",
+      latest_version: "v0.3.9",
+      update_available: true,
+      release_url: "https://github.com/scolor-dev/deckox/releases/tag/v0.3.9",
+      checked_at_ms: 1_700_000_000_000,
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(status), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api.updateStatus()).resolves.toEqual(status);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/update",
+      expect.objectContaining({ credentials: "same-origin" }),
+    );
+  });
+
+  it("builds only a fixed safe installer command", () => {
+    expect(buildUpdateCommand("0.3.9")).toBe(
+      "curl -fsSL https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh | sudo DECKOX_VERSION=v0.3.9 sh",
+    );
+    expect(buildUpdateCommand("v0.3.9; reboot")).toBeNull();
+  });
+
+  it("accepts only HTTPS GitHub release links", () => {
+    expect(safeReleaseUrl("https://github.com/scolor-dev/deckox/releases/tag/v0.3.9"))
+      .toBe("https://github.com/scolor-dev/deckox/releases/tag/v0.3.9");
+    expect(safeReleaseUrl("javascript:alert(1)")).toBeNull();
+    expect(safeReleaseUrl("https://example.com/release")).toBeNull();
+    expect(safeReleaseUrl("https://github.com/other/project/releases/tag/v0.3.9")).toBeNull();
+  });
+
+  it("reports clipboard failures without throwing", async () => {
+    const clipboard = { writeText: vi.fn().mockRejectedValue(new Error("denied")) };
+    await expect(writeClipboardText("command", clipboard)).resolves.toBe(false);
+    expect(clipboard.writeText).toHaveBeenCalledWith("command");
+  });
 });
 
 describe("service APIs", () => {

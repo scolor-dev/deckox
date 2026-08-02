@@ -95,6 +95,24 @@ pub struct RuntimeConfigSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateStatus {
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub update_available: bool,
+    pub release_url: Option<String>,
+    pub checked_at_ms: Option<u64>,
+    pub status: UpdateCheckStatus,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateCheckStatus {
+    UpToDate,
+    Available,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemMetrics {
     pub cpu: CpuMetrics,
     pub memory: MemoryMetrics,

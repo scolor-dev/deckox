@@ -1,14 +1,23 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
-import { ApiError, api, type SshKeyList, type SystemCapabilities } from "../api/client";
+import {
+  ApiError,
+  api,
+  buildUpdateCommand,
+  safeReleaseUrl,
+  writeClipboardText,
+  type SshKeyList,
+  type SystemCapabilities,
+  type UpdateStatus,
+} from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import { notify } from "../notifications";
 import { preferences } from "../preferences";
 
 const emit = defineEmits<{ passwordChanged: [] }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const router = useRouter();
 
 const currentPassword = ref("");
@@ -26,6 +35,19 @@ const systemCapabilities = ref<SystemCapabilities | null>(null);
 const systemErrorKey = ref<string | null>(null);
 const rebootPassword = ref("");
 const rebooting = ref(false);
+const updateStatus = ref<UpdateStatus | null>(null);
+const updateChecking = ref(false);
+const updateErrorKey = ref<string | null>(null);
+const updateCommand = computed(() => buildUpdateCommand(updateStatus.value?.latest_version));
+const releaseUrl = computed(() => safeReleaseUrl(updateStatus.value?.release_url));
+const updateCheckedAt = computed(() => {
+  const checkedAt = updateStatus.value?.checked_at_ms;
+  if (checkedAt == null) return null;
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(checkedAt);
+});
 
 function displaySettingsChanged() {
   notify("success", t("settings.saved"));
@@ -96,6 +118,32 @@ async function loadSshKeys() {
     sshErrorKey.value = apiErrorKey(caught, "errors.sshLoad");
   } finally {
     sshLoading.value = false;
+  }
+}
+
+async function checkForUpdate() {
+  updateChecking.value = true;
+  updateErrorKey.value = null;
+  try {
+    updateStatus.value = await api.updateStatus();
+  } catch (caught) {
+    updateErrorKey.value = apiErrorKey(caught, "errors.updateCheck");
+  } finally {
+    updateChecking.value = false;
+  }
+}
+
+async function copyUpdateCommand() {
+  if (!updateCommand.value) {
+    updateErrorKey.value = "settings.updateCommandUnavailable";
+    return;
+  }
+  updateErrorKey.value = null;
+  if (await writeClipboardText(updateCommand.value)) {
+    notify("success", t("settings.updateCommandCopied"));
+  } else {
+    updateErrorKey.value = "settings.updateCopyFailed";
+    notify("error", t("settings.updateCopyFailed"));
   }
 }
 
@@ -205,6 +253,87 @@ onMounted(() => {
             {{ t("settings.intervalValue", { seconds }) }}
           </option>
         </select>
+      </div>
+    </section>
+
+    <section
+      class="settings-section"
+      aria-labelledby="update-heading"
+    >
+      <div class="settings-description">
+        <h2 id="update-heading">
+          {{ t("settings.update") }}
+        </h2>
+        <p>{{ t("settings.updateDescription") }}</p>
+      </div>
+      <div class="settings-form update-settings">
+        <p
+          v-if="updateErrorKey"
+          class="notice error"
+          role="alert"
+        >
+          {{ t(updateErrorKey) }}
+        </p>
+        <template v-if="updateStatus">
+          <dl class="update-versions">
+            <div><dt>{{ t("settings.currentVersion") }}</dt><dd>{{ updateStatus.current_version }}</dd></div>
+            <div><dt>{{ t("settings.latestVersion") }}</dt><dd>{{ updateStatus.latest_version ?? t("common.none") }}</dd></div>
+          </dl>
+          <div
+            v-if="updateStatus.status === 'available' && updateStatus.update_available"
+            class="notice success update-notice"
+          >
+            {{ t("settings.updateAvailable") }}
+          </div>
+          <div
+            v-else-if="updateStatus.status === 'up_to_date'"
+            class="notice success update-notice"
+          >
+            {{ t("settings.upToDate") }}
+          </div>
+          <div
+            v-else
+            class="notice warning update-notice"
+          >
+            {{ t("settings.updateUnavailable") }}
+          </div>
+          <small v-if="updateCheckedAt">{{ t("settings.updateCheckedAt", { time: updateCheckedAt }) }}</small>
+          <a
+            v-if="releaseUrl"
+            class="release-link"
+            :href="releaseUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+          >{{ t("settings.openRelease") }}</a>
+          <div
+            v-if="updateStatus.update_available && updateCommand"
+            class="update-command"
+          >
+            <code>{{ updateCommand }}</code>
+            <button
+              class="action-button"
+              type="button"
+              @click="copyUpdateCommand"
+            >
+              {{ t("settings.copyCommand") }}
+            </button>
+            <small>{{ t("settings.manualUpdateOnly") }}</small>
+          </div>
+        </template>
+        <p
+          v-else-if="!updateChecking"
+          class="settings-help"
+        >
+          {{ t("settings.updateNotChecked") }}
+        </p>
+        <button
+          class="button update-check-button"
+          type="button"
+          :disabled="updateChecking"
+          @click="checkForUpdate"
+        >
+          {{ updateChecking ? t("settings.checkingUpdate") : t("settings.checkUpdate") }}
+        </button>
       </div>
     </section>
 

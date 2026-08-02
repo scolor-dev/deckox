@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.7</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.8</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -47,6 +47,7 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>Serverの名前・バージョン・状態とAgent状態。Agent障害時は<code>degraded</code></td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/diagnostics</code></span></td><td><span class="status done">実装済み</span></td><td>生成時刻、Server、Agent、ホスト、Deckoxのsystemdユニット、機能設定の安全な固定項目をJSONで返却。Agent不通時も部分診断を返す</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/diagnostics/report</code></span></td><td><span class="status done">実装済み</span></td><td>同じ固定スキーマを<code>deckox-diagnostics.json</code>としてダウンロード</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/update</code></span></td><td><span class="status done">実装済み</span></td><td>現在版とGitHubの最新安定版を比較。取得失敗時も外部エラーを隠した<code>unavailable</code>を返す</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>Agentのシステム情報APIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト再起動がAgent設定で許可されているか取得</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みのホスト再起動をAgentへ要求</td></tr>
@@ -109,6 +110,7 @@
           <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/diagnostics</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>日本語・英語</h3><p>端末言語の自動判定と手動選択に対応し、APIエラーコードも選択言語の文言へ変換します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、SSH公開鍵、ホスト再起動、リアルタイム更新の有効化・1/2/5秒間隔、共通通知を提供します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>手動更新確認</h3><p>設定画面で現在版と最新安定版を確認し、検証済みのタグに限ってReleaseリンクとコピー可能な更新コマンドを表示します。自動確認・自動インストールは行いません。</p></article>
         </div>
       </section>
 
@@ -123,6 +125,7 @@
             <tr><td><code>AgentStatus</code></td><td><span class="status done">使用中</span></td><td>AgentからServerへ返すホスト状態</td></tr>
             <tr><td><code>SystemInfo</code>ほか</td><td><span class="status done">使用中</span></td><td>システム、CPU・メモリ・Swap・ネットワーク・ディスクI/O・任意温度のメトリクス、ストレージ、サービスとjournalログの応答型</td></tr>
             <tr><td><code>SystemCapabilities</code></td><td><span class="status done">使用中</span></td><td>Agent設定に基づくホスト再起動の許可状態</td></tr>
+            <tr><td><code>UpdateStatus</code></td><td><span class="status done">使用中</span></td><td>現在版、最新版、確認日時と<code>up_to_date</code>・<code>available</code>・<code>unavailable</code>状態</td></tr>
             <tr><td><code>RealtimeMetricsEvent</code></td><td><span class="status done">使用中</span></td><td>SSEの連番、取得時刻、Agent接続状態、拡張メトリクス、エラーコード。取得不能な追加値は省略可能</td></tr>
             <tr><td><code>DiagnosticsReport</code>ほか</td><td><span class="status done">使用中</span></td><td>生成時刻、Server・Agent状態、boot IDを除いたホスト情報、Deckoxユニット状態、再起動許可・許可サービス数・SSH管理有効状態</td></tr>
             <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動、有効化、無効化</td></tr>

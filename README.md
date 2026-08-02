@@ -8,7 +8,8 @@ Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基
 ネットワーク送受信速度・ディスクI/O速度のリアルタイムメトリクス、任意取得のCPU温度、
 軽量SVGグラフ、日本語・英語の表示切替、再起動後の自動再接続、画面ごとのURLと
 ブラウザ別表示設定、最終更新時刻、Agent復旧時の状態再取得、JSONで保存できる
-安全なシステム診断も実装済みです。任意コマンドを実行するWebコンソールは提供しません。
+安全なシステム診断、設定画面からの手動更新確認も実装済みです。任意コマンドを
+実行するWebコンソールや、管理画面からの自動更新は提供しません。
 
 ```text
 Vue管理画面
@@ -112,16 +113,16 @@ npm run build
 
 - Rust: `fmt`、厳格なClippy、ワークスペーステスト
 - Vue: 依存関係の固定インストール、ESLint、型チェック、単体テスト、本番ビルド
-- Packaging: インストール・リリース用シェルの構文確認
+- Packaging: インストール・リリース用シェルの構文確認と、疑似Linux環境での導入・更新・ロールバック・削除テスト
 
 ## GitHubからインストール
 
-`v0.3.7`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.3.8`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.3.7
-git push origin v0.3.7
+git tag v0.3.8
+git push origin v0.3.8
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -146,8 +147,19 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.7 sh
+  | sudo DECKOX_VERSION=v0.3.8 sh
 ```
+
+ダウンロードや変更を行わず、対象アーキテクチャ・取得先・現在の導入状態を確認できます。
+
+```bash
+sh install.sh --dry-run
+sh install.sh --version
+```
+
+管理対象のバイナリ・Web成果物・systemdユニットだけを削除する場合は
+`sudo sh install.sh --uninstall`を使用します。設定、認証データ、バックアップ、
+`deckox`ユーザーとグループは保持されます。
 
 ローカルで作成した配布物を検証する場合は、アーカイブと同じ場所に
 `.sha256`ファイルを置いて指定できます。
@@ -169,6 +181,11 @@ journalctl -u deckox-server -u deckox-agent -f
 「設定」画面から、現在のパスワードを確認して12文字以上の新しいパスワードへ
 変更できます。現在のパスワード確認に5分間で5回失敗すると一時的に制限され、
 変更後はすべてのセッションが失効します。ログイン画面には変更完了が表示されます。
+
+更新時は既存の管理対象ファイルを`/var/lib/deckox/backups/`へ保存し、新しい
+Server・Agentが起動確認できなければ元のファイルへ戻します。不完全な導入状態や、
+Deckox管理と確認できないsystemdユニットは上書きしません。配布物内の`VERSION`と
+指定バージョンも照合します。
 
 管理画面へ入れない場合にパスワードを再設定する手順:
 

@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.7</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.8</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -101,6 +101,12 @@ npm run build</code></pre>
         <p><code>GET /api/v1/diagnostics</code>は画面表示用のJSON、<code>GET /api/v1/diagnostics/report</code>は同じ内容のダウンロード応答です。どちらも管理者認証が必要です。</p>
         <p>レスポンスは<code>generated_at_ms</code>、Serverのversion・status、Agentのconnected・version・error code、公開可能なhost情報、2つのDeckox systemdユニット状態、runtime configの真偽値と件数に固定されています。Agent APIに接続できない場合もHTTPエラーにはせず、Agent由来のまとまりを<code>null</code>にした部分診断を返します。</p>
         <aside class="note warning">診断機能へ項目を追加するときは、生の設定・環境変数・ログ・認証情報を転送せず、共有Protocolへ明示した安全な値だけを追加します。パスワード、ハッシュ、セッション、Cookie、SSH鍵、管理対象ユーザー名、boot IDは追加禁止です。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="update-title">
+        <h2 id="update-title">更新確認API</h2>
+        <p><code>GET /api/v1/update</code>は管理者認証が必要です。固定リポジトリの最新Releaseタグだけを読み、現在の<code>CARGO_PKG_VERSION</code>とSemVer比較します。成功・失敗は15分キャッシュされます。</p>
+        <p>GitHubへの要求はHTTPS、5秒、リダイレクトなし、最大64 KiBです。取得不能・不正JSON・不正タグはいずれもHTTP 200の<code>unavailable</code>へ正規化し、外部の本文やURLはブラウザへ渡しません。</p>
       </section>
 
       <section class="section" aria-labelledby="allowlist-title">

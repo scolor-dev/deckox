@@ -173,6 +173,15 @@ export interface DeckoxServiceDiagnostic {
 
 export const DIAGNOSTICS_REPORT_FILENAME = "deckox-diagnostics.json";
 
+export interface UpdateStatus {
+  status: "up_to_date" | "available" | "unavailable";
+  current_version: string;
+  latest_version?: string | null;
+  update_available: boolean;
+  release_url?: string | null;
+  checked_at_ms?: number | null;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -287,6 +296,7 @@ export const api = {
   storage: () => request<StorageMount[]>("/api/v1/storage"),
   diagnostics: () => request<DiagnosticsResponse>("/api/v1/diagnostics"),
   diagnosticsReport: () => requestBlob("/api/v1/diagnostics/report"),
+  updateStatus: () => request<UpdateStatus>("/api/v1/update"),
   services: () => request<ServiceSummary[]>("/api/v1/services"),
   serviceLogs: (serviceId: string, lines: number, priority: ServiceLogPriority) => {
     const query = new URLSearchParams({ lines: String(lines), priority });
@@ -303,6 +313,45 @@ export const api = {
       { method: "POST" },
     ),
 };
+
+export function buildUpdateCommand(version: string | null | undefined): string | null {
+  if (!version) return null;
+  const normalized = version.startsWith("v") ? version : `v${version}`;
+  if (!/^v\d+\.\d+\.\d+$/.test(normalized)) return null;
+  return "curl -fsSL https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh"
+    + ` | sudo DECKOX_VERSION=${normalized} sh`;
+}
+
+export function safeReleaseUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const prefix = "/scolor-dev/deckox/releases/tag/v";
+    const version = url.pathname.slice(prefix.length);
+    return url.protocol === "https:"
+      && url.hostname === "github.com"
+      && url.pathname.startsWith(prefix)
+      && /^\d+\.\d+\.\d+$/.test(version)
+      && !url.search
+      && !url.hash
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeClipboardText(
+  value: string,
+  clipboard: Pick<Clipboard, "writeText"> = navigator.clipboard,
+): Promise<boolean> {
+  try {
+    await clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function formatBytes(bytes: number, locale = "en"): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";

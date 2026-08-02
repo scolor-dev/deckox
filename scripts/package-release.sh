@@ -25,11 +25,21 @@ cargo build --release --locked --target "$target" \
 
 rm -rf "$stage_dir"
 mkdir -p "$stage_dir/bin" "$stage_dir/web" "$stage_dir/config" "$stage_dir/systemd"
+package_version="$(awk '
+  /^\[workspace\.package\]$/ { workspace_package = 1; next }
+  /^\[/ { workspace_package = 0 }
+  workspace_package && /^version = / { split($0, fields, "\""); print fields[2]; exit }
+' Cargo.toml)"
+if [ -z "$package_version" ]; then
+  echo "workspace package version not found" >&2
+  exit 1
+fi
 install -m 0755 "target/${target}/release/deckox-server" "$stage_dir/bin/"
 install -m 0755 "target/${target}/release/deckox-agent" "$stage_dir/bin/"
 cp -R apps/web/dist/. "$stage_dir/web/"
 cp packaging/config/*.toml "$stage_dir/config/"
 cp packaging/systemd/*.service "$stage_dir/systemd/"
+printf '%s\n' "$package_version" > "$stage_dir/VERSION"
 
 COPYFILE_DISABLE=1 tar -czf "$archive" -C "$stage_dir" .
 
