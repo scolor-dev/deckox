@@ -25,8 +25,12 @@ export const messages = {
       count: "{count}件", service: "サービス", state: "状態", startup: "自動起動", actions: "操作", loading: "サービスを読み込んでいます…",
       empty: "該当するサービスはありません。", noDescription: "説明なし", running: "稼働中", failed: "異常", stopped: "停止中",
       enabled: "有効", disabled: "無効", static: "固定", start: "起動", restart: "再起動", stop: "停止", readOnly: "閲覧のみ",
+      enable: "自動起動を有効", disable: "自動起動を無効", logs: "ログ", confirmDisable: "{id} の自動起動を無効にしますか？",
       confirmStop: "{id} を停止しますか？", confirmRestart: "{id} を再起動しますか？", completed: "{id} の操作が完了しました。",
       allowlist: "変更操作は /etc/deckox/agent.toml の許可リストに登録されたサービスだけ利用できます。",
+      logTitle: "{id} のログ", logDescription: "systemd journalの直近の記録を表示します。", logLines: "行数", logLinesValue: "{count}行",
+      logPriorityLabel: "重要度", logPriority: { all: "すべて", error: "エラー", warning: "警告以上", info: "情報以上" },
+      logPriorityValue: { error: "エラー", warning: "警告", info: "情報" }, logLoading: "ログを読み込んでいます…", logEmpty: "該当するログはありません。",
     },
     storage: {
       title: "ストレージ", summary: "{count}件のマウント", mount: "マウント先", filesystem: "ファイルシステム", capacity: "容量", usage: "使用状況",
@@ -54,7 +58,7 @@ export const messages = {
     notifications: { streamLost: "リアルタイム更新が切断されました。再接続しています。", streamRestored: "リアルタイム更新に再接続しました。" },
     errors: {
       login: "ログインできませんでした。しばらくしてから再度お試しください。", overview: "システム情報を取得できませんでした。", services: "サービス一覧を取得できませんでした。",
-      serviceAction: "サービス操作に失敗しました。", storage: "ストレージ情報を取得できませんでした。", password: "パスワードを変更できませんでした。",
+      serviceAction: "サービス操作に失敗しました。", serviceLogs: "サービスログを取得できませんでした。", storage: "ストレージ情報を取得できませんでした。", password: "パスワードを変更できませんでした。",
       systemCapabilities: "システム操作の設定を取得できませんでした。", reboot: "コンピューターを再起動できませんでした。",
       sshLoad: "SSH公開鍵を取得できませんでした。", sshAdd: "SSH公開鍵を追加できませんでした。", sshRemove: "SSH公開鍵を削除できませんでした。",
       agentUnavailable: "Agentに接続できません。", badRequest: "入力内容を確認してください。", conflict: "現在の状態では操作できません。", forbidden: "この操作は許可されていません。",
@@ -86,8 +90,12 @@ export const messages = {
       count: "{count}", service: "Service", state: "State", startup: "Startup", actions: "Actions", loading: "Loading services…",
       empty: "No matching services.", noDescription: "No description", running: "Running", failed: "Failed", stopped: "Stopped",
       enabled: "Enabled", disabled: "Disabled", static: "Static", start: "Start", restart: "Restart", stop: "Stop", readOnly: "Read only",
+      enable: "Enable at boot", disable: "Disable at boot", logs: "Logs", confirmDisable: "Disable {id} at boot?",
       confirmStop: "Stop {id}?", confirmRestart: "Restart {id}?", completed: "Completed the operation for {id}.",
       allowlist: "Changes are available only for services listed in /etc/deckox/agent.toml.",
+      logTitle: "Logs for {id}", logDescription: "Shows the most recent entries from the systemd journal.", logLines: "Lines", logLinesValue: "{count} lines",
+      logPriorityLabel: "Priority", logPriority: { all: "All", error: "Errors", warning: "Warnings and above", info: "Info and above" },
+      logPriorityValue: { error: "Error", warning: "Warning", info: "Info" }, logLoading: "Loading logs…", logEmpty: "No matching log entries.",
     },
     storage: {
       title: "Storage", summary: "{count} mounts", mount: "Mount point", filesystem: "File system", capacity: "Capacity", usage: "Usage",
@@ -115,7 +123,7 @@ export const messages = {
     notifications: { streamLost: "Live updates disconnected. Reconnecting…", streamRestored: "Live updates reconnected." },
     errors: {
       login: "Could not sign in. Try again shortly.", overview: "Could not load system information.", services: "Could not load services.",
-      serviceAction: "The service operation failed.", storage: "Could not load storage information.", password: "Could not change the password.",
+      serviceAction: "The service operation failed.", serviceLogs: "Could not load service logs.", storage: "Could not load storage information.", password: "Could not change the password.",
       systemCapabilities: "Could not load system operation settings.", reboot: "Could not restart the computer.",
       sshLoad: "Could not load SSH public keys.", sshAdd: "Could not add the SSH public key.", sshRemove: "Could not remove the SSH public key.",
       agentUnavailable: "Cannot connect to Agent.", badRequest: "Check the information you entered.", conflict: "This operation is not available in the current state.", forbidden: "This operation is not permitted.",

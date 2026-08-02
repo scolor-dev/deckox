@@ -73,6 +73,21 @@ export interface ServiceSummary {
   control_allowed: boolean;
 }
 
+export type ServiceLogPriority = "all" | "error" | "warning" | "info";
+
+export interface ServiceLogEntry {
+  timestamp_ms: number;
+  priority: number;
+  message: string;
+  process: string | null;
+  pid: number | null;
+}
+
+export interface ServiceLogs {
+  service_id: string;
+  entries: ServiceLogEntry[];
+}
+
 export interface CommandResult {
   command_id: string;
   status: "accepted" | "running" | "completed" | "failed";
@@ -187,7 +202,16 @@ export const api = {
     }),
   storage: () => request<StorageMount[]>("/api/v1/storage"),
   services: () => request<ServiceSummary[]>("/api/v1/services"),
-  serviceAction: (serviceId: string, action: "start" | "stop" | "restart") =>
+  serviceLogs: (serviceId: string, lines: number, priority: ServiceLogPriority) => {
+    const query = new URLSearchParams({ lines: String(lines), priority });
+    return request<ServiceLogs>(
+      `/api/v1/services/${encodeURIComponent(serviceId)}/logs?${query.toString()}`,
+    );
+  },
+  serviceAction: (
+    serviceId: string,
+    action: "start" | "stop" | "restart" | "enable" | "disable",
+  ) =>
     request<CommandResult>(
       `/api/v1/services/${encodeURIComponent(serviceId)}/${action}`,
       { method: "POST" },

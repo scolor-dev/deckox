@@ -6,15 +6,16 @@ use std::{
 
 use axum::{
     Extension, Json, Router,
-    extract::{Path as AxumPath, State},
+    extract::{Path as AxumPath, Query, State},
     middleware,
     routing::{delete, get, post},
 };
 use deckox_protocol::{
     AddSshKeyRequest, AgentStatus, CommandResult, HealthResponse, ServiceAction, ServiceDetails,
-    ServiceSummary, SshKeyList, SshKeySummary, StorageMount, SystemCapabilities, SystemInfo,
-    SystemMetrics,
+    ServiceLogPriority, ServiceLogs, ServiceSummary, SshKeyList, SshKeySummary, StorageMount,
+    SystemCapabilities, SystemInfo, SystemMetrics,
 };
+use serde::Deserialize;
 use tokio::net::UnixListener;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -38,6 +39,22 @@ struct AppState {
     power: PowerManager,
     services: ServiceManager,
     ssh_keys: SshKeyManager,
+}
+
+#[derive(Debug, Deserialize)]
+struct ServiceLogsQuery {
+    #[serde(default = "default_log_lines")]
+    lines: u16,
+    #[serde(default = "default_log_priority")]
+    priority: ServiceLogPriority,
+}
+
+const fn default_log_lines() -> u16 {
+    100
+}
+
+const fn default_log_priority() -> ServiceLogPriority {
+    ServiceLogPriority::All
 }
 
 #[tokio::main]
@@ -90,6 +107,9 @@ async fn main() {
         .route("/v1/services/{service_id}/start", post(start_service))
         .route("/v1/services/{service_id}/stop", post(stop_service))
         .route("/v1/services/{service_id}/restart", post(restart_service))
+        .route("/v1/services/{service_id}/enable", post(enable_service))
+        .route("/v1/services/{service_id}/disable", post(disable_service))
+        .route("/v1/services/{service_id}/logs", get(service_logs))
         .route("/v1/ssh/keys", get(list_ssh_keys).post(add_ssh_key))
         .route("/v1/ssh/keys/{key_id}", delete(remove_ssh_key))
         .with_state(AppState {
@@ -243,6 +263,34 @@ async fn restart_service(
     control_service(state, service_id, ServiceAction::Restart, request_id).await
 }
 
+async fn enable_service(
+    State(state): State<AppState>,
+    AxumPath(service_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<CommandResult>, AgentError> {
+    control_service(state, service_id, ServiceAction::Enable, request_id).await
+}
+
+async fn disable_service(
+    State(state): State<AppState>,
+    AxumPath(service_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<CommandResult>, AgentError> {
+    control_service(state, service_id, ServiceAction::Disable, request_id).await
+}
+
+async fn service_logs(
+    State(state): State<AppState>,
+    AxumPath(service_id): AxumPath<String>,
+    Query(query): Query<ServiceLogsQuery>,
+) -> Result<Json<ServiceLogs>, AgentError> {
+    state
+        .services
+        .logs(&service_id, query.lines, query.priority)
+        .await
+        .map(Json)
+}
+
 async fn control_service(
     state: AppState,
     service_id: String,
@@ -253,6 +301,8 @@ async fn control_service(
         ServiceAction::Start => "start",
         ServiceAction::Stop => "stop",
         ServiceAction::Restart => "restart",
+        ServiceAction::Enable => "enable",
+        ServiceAction::Disable => "disable",
     };
     let result = state.services.control(&service_id, action).await;
 

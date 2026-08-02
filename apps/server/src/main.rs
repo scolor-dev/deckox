@@ -2,13 +2,13 @@ use std::{env, io::Read, net::SocketAddr, path::PathBuf};
 
 use axum::{
     Extension, Json, Router,
-    extract::{FromRef, Path, State},
+    extract::{FromRef, Path, Query, State},
     http::StatusCode,
     middleware,
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use deckox_protocol::{AddSshKeyRequest, AgentStatus};
+use deckox_protocol::{AddSshKeyRequest, AgentStatus, ServiceLogPriority};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower_http::{
@@ -80,6 +80,22 @@ struct RebootRequest {
     current_password: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct ServiceLogsQuery {
+    #[serde(default = "default_log_lines")]
+    lines: u16,
+    #[serde(default = "default_log_priority")]
+    priority: ServiceLogPriority,
+}
+
+const fn default_log_lines() -> u16 {
+    100
+}
+
+const fn default_log_priority() -> ServiceLogPriority {
+    ServiceLogPriority::All
+}
+
 #[tokio::main]
 async fn main() {
     if env::args().nth(1).as_deref() == Some("hash-password") {
@@ -128,6 +144,12 @@ async fn main() {
             "/services/{service_id}/restart",
             post(proxy_restart_service),
         )
+        .route("/services/{service_id}/enable", post(proxy_enable_service))
+        .route(
+            "/services/{service_id}/disable",
+            post(proxy_disable_service),
+        )
+        .route("/services/{service_id}/logs", get(proxy_service_logs))
         .route("/auth/logout", post(auth::logout))
         .route("/settings/password", post(auth::change_password))
         .route(
@@ -487,6 +509,68 @@ async fn proxy_restart_service(
     .await
 }
 
+async fn proxy_enable_service(
+    State(state): State<AppState>,
+    Path(service_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    proxy_service_request(
+        &state.agent,
+        "POST",
+        &service_id,
+        Some("enable"),
+        &request_id,
+        Some(&user),
+    )
+    .await
+}
+
+async fn proxy_disable_service(
+    State(state): State<AppState>,
+    Path(service_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    proxy_service_request(
+        &state.agent,
+        "POST",
+        &service_id,
+        Some("disable"),
+        &request_id,
+        Some(&user),
+    )
+    .await
+}
+
+async fn proxy_service_logs(
+    State(state): State<AppState>,
+    Path(service_id): Path<String>,
+    Query(query): Query<ServiceLogsQuery>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    if !valid_service_id(&service_id) {
+        return invalid_service_id();
+    }
+    if !valid_log_lines(query.lines) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                code: "bad_request",
+                message: "log lines must be one of 50, 100, 200, or 500".to_owned(),
+            }),
+        )
+            .into_response();
+    }
+
+    let priority = log_priority_name(query.priority);
+    let path = format!(
+        "/v1/services/{service_id}/logs?lines={}&priority={priority}",
+        query.lines
+    );
+    proxy_agent(&state.agent, "GET", &path, &request_id).await
+}
+
 async fn proxy_service_request(
     client: &AgentClient,
     method: &str,
@@ -496,14 +580,7 @@ async fn proxy_service_request(
     user: Option<&AuthenticatedUser>,
 ) -> Response {
     if !valid_service_id(service_id) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                code: "bad_request",
-                message: "invalid systemd service id".to_owned(),
-            }),
-        )
-            .into_response();
+        return invalid_service_id();
     }
 
     let path = action.map_or_else(
@@ -538,6 +615,30 @@ async fn proxy_service_request(
         }
     }
     response
+}
+
+fn invalid_service_id() -> Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(ErrorResponse {
+            code: "bad_request",
+            message: "invalid systemd service id".to_owned(),
+        }),
+    )
+        .into_response()
+}
+
+const fn valid_log_lines(lines: u16) -> bool {
+    matches!(lines, 50 | 100 | 200 | 500)
+}
+
+const fn log_priority_name(priority: ServiceLogPriority) -> &'static str {
+    match priority {
+        ServiceLogPriority::All => "all",
+        ServiceLogPriority::Error => "error",
+        ServiceLogPriority::Warning => "warning",
+        ServiceLogPriority::Info => "info",
+    }
 }
 
 async fn proxy_agent(
@@ -621,7 +722,9 @@ async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use super::valid_service_id;
+    use deckox_protocol::ServiceLogPriority;
+
+    use super::{log_priority_name, valid_log_lines, valid_service_id};
 
     #[test]
     fn validates_service_ids_before_proxying() {
@@ -630,5 +733,17 @@ mod tests {
         assert!(!valid_service_id("-nginx.service"));
         assert!(!valid_service_id("nginx.service/restart"));
         assert!(!valid_service_id("nginx.service\r\nHost: bad"));
+    }
+
+    #[test]
+    fn validates_log_queries_before_proxying() {
+        assert!(valid_log_lines(50));
+        assert!(valid_log_lines(500));
+        assert!(!valid_log_lines(0));
+        assert!(!valid_log_lines(501));
+        assert_eq!(log_priority_name(ServiceLogPriority::All), "all");
+        assert_eq!(log_priority_name(ServiceLogPriority::Error), "error");
+        assert_eq!(log_priority_name(ServiceLogPriority::Warning), "warning");
+        assert_eq!(log_priority_name(ServiceLogPriority::Info), "info");
     }
 }
