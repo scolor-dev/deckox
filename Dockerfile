@@ -3,7 +3,8 @@
 FROM node:24-bookworm-slim AS web-builder
 WORKDIR /usr/src/deckox/apps/web
 COPY apps/web/package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 COPY apps/web ./
 RUN npm run build
 
@@ -16,13 +17,20 @@ COPY crates/protocol/Cargo.toml crates/protocol/Cargo.toml
 COPY apps/agent/src apps/agent/src
 COPY apps/server/src apps/server/src
 COPY crates/protocol/src crates/protocol/src
-RUN cargo build --locked --release --package deckox-server --package deckox-agent
+# `target/` is a cache mount, so its contents don't persist into the image —
+# copy the built binaries into a normal layer before the mount is released.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/usr/src/deckox/target \
+    cargo build --locked --release --package deckox-server --package deckox-agent && \
+    mkdir -p /usr/src/deckox/bin && \
+    cp target/release/deckox-server target/release/deckox-agent /usr/src/deckox/bin/
 
 FROM debian:bookworm-slim
 RUN groupadd --system --gid 10001 deckox \
     && useradd --system --uid 10001 --gid deckox --no-create-home deckox
-COPY --from=rust-builder /usr/src/deckox/target/release/deckox-server /usr/local/bin/
-COPY --from=rust-builder /usr/src/deckox/target/release/deckox-agent /usr/local/bin/
+COPY --from=rust-builder /usr/src/deckox/bin/deckox-server /usr/local/bin/
+COPY --from=rust-builder /usr/src/deckox/bin/deckox-agent /usr/local/bin/
 COPY --from=web-builder /usr/src/deckox/apps/web/dist /usr/local/share/deckox/web
 USER deckox:deckox
 EXPOSE 8080
