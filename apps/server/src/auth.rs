@@ -68,6 +68,11 @@ pub struct Account {
 pub struct TotpSecret {
     pub secret_base32: String,
     pub recovery_code_hashes: Vec<String>,
+    /// The TOTP time-step last accepted for this account, if any. Codes
+    /// matching this step or an older one are rejected so a captured code
+    /// cannot be replayed for the rest of its ~90s (skew ±1) validity window.
+    #[serde(default)]
+    pub last_used_step: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -537,9 +542,9 @@ impl AuthManager {
             Ok(totp) => totp,
             Err(error) => return TotpConfirmResult::Failed(error),
         };
-        if !totp.check_current(&code).unwrap_or(false) {
+        let Some(step) = totp_matching_step(&totp, &code, None) else {
             return TotpConfirmResult::InvalidCode;
-        }
+        };
 
         let recovery_codes = generate_recovery_codes();
         let recovery_code_hashes = match hash_recovery_codes(&recovery_codes).await {
@@ -551,6 +556,7 @@ impl AuthManager {
         account.totp = Some(TotpSecret {
             secret_base32: entry.secret_base32,
             recovery_code_hashes,
+            last_used_step: Some(step),
         });
         account.updated_at_ms = now_ms();
         if let Err(error) = write_account(&account_path, &account).await {
@@ -711,8 +717,11 @@ async fn verify_totp_or_recovery_code(account: &mut Account, code: &str) -> bool
         return false;
     };
     if let Ok(totp) = build_totp(&totp_secret.secret_base32)
-        && totp.check_current(code).unwrap_or(false)
+        && let Some(step) = totp_matching_step(&totp, code, totp_secret.last_used_step)
     {
+        if let Some(totp_mut) = account.totp.as_mut() {
+            totp_mut.last_used_step = Some(step);
+        }
         return true;
     }
 
@@ -726,6 +735,19 @@ async fn verify_totp_or_recovery_code(account: &mut Account, code: &str) -> bool
         }
     }
     false
+}
+
+/// Returns the TOTP time-step `code` matches, if any, restricted to steps
+/// strictly newer than `after_step`. Mirrors [`TOTP::check`]'s skew window
+/// but additionally rejects a code already accepted for an equal-or-older
+/// step, so a captured code cannot be replayed within its validity window.
+fn totp_matching_step(totp: &TOTP, code: &str, after_step: Option<u64>) -> Option<u64> {
+    let now_secs = now_ms() / 1000;
+    let base_step = now_secs / TOTP_STEP;
+    let skew = u64::from(TOTP_SKEW);
+    (base_step.saturating_sub(skew)..=base_step + skew).find(|&step| {
+        after_step.is_none_or(|after| step > after) && totp.generate(step * TOTP_STEP) == code
+    })
 }
 
 /// Resolves the account file path a CLI recovery command should operate on.
@@ -1683,6 +1705,7 @@ mod tests {
                 recovery_code_hashes: vec![
                     hash_password("ABCDE-12345").expect("recovery code should hash"),
                 ],
+                last_used_step: None,
             }),
             updated_at_ms: 0,
         };
@@ -1743,10 +1766,33 @@ mod tests {
             HeaderValue::from_str(&format!("deckox_preauth={preauth_token}"))
                 .expect("cookie header should build"),
         );
-        assert!(matches!(
-            auth.login_totp(source_ip, &headers, code).await,
-            super::LoginTotpResult::Authenticated(_)
-        ));
+        assert!(
+            !matches!(
+                auth.login_totp(source_ip, &headers, code).await,
+                super::LoginTotpResult::Authenticated(_)
+            ),
+            "the code already accepted by confirm must not be replayable for login"
+        );
+
+        let super::LoginResult::TotpRequired(preauth_token) = auth
+            .login(source_ip, "totp-round-trip-password".to_owned())
+            .await
+        else {
+            panic!("login should still require a TOTP code after the failed replay");
+        };
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_str(&format!("deckox_preauth={preauth_token}"))
+                .expect("cookie header should build"),
+        );
+        assert!(
+            matches!(
+                auth.login_totp(source_ip, &headers, recovery_codes[0].clone())
+                    .await,
+                super::LoginTotpResult::Authenticated(_)
+            ),
+            "a fresh recovery code should still authenticate"
+        );
 
         let _ = std::fs::remove_file(&path);
     }

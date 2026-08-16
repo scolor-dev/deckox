@@ -96,6 +96,7 @@ npm run build</code></pre>
         </table>
         <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH</code>でハッシュを直接指定した場合は永続的な保存先がないため、設定画面からのパスワード変更・TOTP設定は無効になります。</aside>
         <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code>の内容はパスワードハッシュとTOTP設定を含むJSONです。旧バージョンが書いた生のArgon2idハッシュ文字列も読み込み時に自動判定し、書き込み時にJSON形式へ移行します。</aside>
+        <aside class="note"><code>DECKOX_AUDIT_LOG_FILE</code>は最大5000件を新しい順に保持するJSON Linesファイルです。超過分は書き込みのたびに古い順から切り詰められます。</aside>
       </section>
 
       <section class="section" aria-labelledby="cli-title">

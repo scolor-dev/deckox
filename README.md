@@ -208,7 +208,8 @@ sudo systemctl restart deckox-server
 ```
 
 どちらの操作も監査ログ(管理画面の「監査ログ」または
-`GET /api/v1/audit`)に記録されます。
+`GET /api/v1/audit`)に記録されます。監査ログは最大5000件を保持し、
+超過分は古いものから切り詰められます。
 
 ホスト再起動は初期状態では無効です。利用する場合は
 `/etc/deckox/agent.toml`で明示的に許可し、Agentを再起動します。
