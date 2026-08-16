@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { api } from "../api/client";
 import { apiErrorKey } from "../api/errors";
+import ForgotPasswordHelp from "../components/ForgotPasswordHelp.vue";
 
 defineProps<{
   message?: string | null;
@@ -85,6 +86,8 @@ async function submit() {
           {{ submitting ? t("login.submitting") : t("login.submit") }}
         </button>
       </form>
+
+      <ForgotPasswordHelp />
     </section>
   </main>
 </template>

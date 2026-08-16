@@ -1,4 +1,9 @@
-use std::{env, io::Read, net::SocketAddr, path::PathBuf};
+use std::{
+    env,
+    io::{Read, Write},
+    net::SocketAddr,
+    path::PathBuf,
+};
 
 use axum::{
     Extension, Json, Router,
@@ -114,8 +119,7 @@ const fn default_log_priority() -> ServiceLogPriority {
 
 #[tokio::main]
 async fn main() {
-    if env::args().nth(1).as_deref() == Some("hash-password") {
-        hash_password_from_stdin();
+    if run_cli_subcommand(env::args().nth(1).as_deref()).await {
         return;
     }
 
@@ -217,6 +221,19 @@ async fn main() {
     }
 }
 
+/// Handles `deckox-server <subcommand>` invocations that exit before the
+/// server starts. Returns `true` when `argument` matched a subcommand, so
+/// `main` knows to return instead of continuing to serve.
+async fn run_cli_subcommand(argument: Option<&str>) -> bool {
+    match argument {
+        Some("hash-password") => hash_password_from_stdin(),
+        Some("reset-password") => reset_password_from_stdin().await,
+        Some("disable-totp") => disable_totp_interactive().await,
+        _ => return false,
+    }
+    true
+}
+
 fn load_update_checker() -> update::UpdateChecker {
     update::UpdateChecker::new().unwrap_or_else(|error| {
         eprintln!("{error}");
@@ -238,6 +255,119 @@ fn hash_password_from_stdin() {
             std::process::exit(2);
         }
     }
+}
+
+/// `deckox-server reset-password` — run from an SSH-connected console when
+/// the admin password is lost. Reads the new password from stdin, exactly
+/// like `hash-password`, and updates only `password_hash` in the account
+/// file; TOTP settings are left untouched (see `disable-totp` for that
+/// recovery path). The running server keeps the old password in memory
+/// until restarted, so this always ends with a restart reminder.
+async fn reset_password_from_stdin() {
+    let account_path = auth::account_path_from_env().unwrap_or_else(|| {
+        eprintln!(
+            "password cannot be reset while DECKOX_ADMIN_PASSWORD_HASH is configured; \
+             remove it and use DECKOX_ADMIN_PASSWORD_HASH_FILE instead"
+        );
+        std::process::exit(2);
+    });
+
+    let mut password = String::new();
+    if let Err(error) = std::io::stdin().take(1025).read_to_string(&mut password) {
+        eprintln!("failed to read password: {error}");
+        std::process::exit(2);
+    }
+    let password = password.trim_end_matches(['\r', '\n']);
+    if let Err(error) = auth::validate_new_password(password) {
+        eprintln!("{error}");
+        std::process::exit(2);
+    }
+
+    let mut account = load_admin_account_or_exit(&account_path);
+    let new_hash = auth::hash_password(password).unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2);
+    });
+    account.password_hash = new_hash;
+    account.updated_at_ms = auth::now_ms();
+    if let Err(error) = auth::write_account(&account_path, &account).await {
+        eprintln!("failed to save the new password: {error}");
+        std::process::exit(2);
+    }
+
+    AuditLog::from_env()
+        .record_cli("password_reset_cli", "success", None)
+        .await;
+    println!("Password updated. Restart deckox-server for the change to take effect:");
+    println!("  sudo systemctl restart deckox-server");
+}
+
+/// `deckox-server disable-totp` — the last-resort recovery path when both
+/// the authenticator app and every recovery code are lost. Interactive
+/// confirmation guards against running it by accident, since it lowers the
+/// account's security to password-only.
+async fn disable_totp_interactive() {
+    let account_path = auth::account_path_from_env().unwrap_or_else(|| {
+        eprintln!(
+            "TOTP cannot be changed while DECKOX_ADMIN_PASSWORD_HASH is configured; \
+             remove it and use DECKOX_ADMIN_PASSWORD_HASH_FILE instead"
+        );
+        std::process::exit(2);
+    });
+
+    let mut account = load_admin_account_or_exit(&account_path);
+    if account.totp.is_none() {
+        println!("Two-factor authentication is not enabled for the admin account.");
+        return;
+    }
+
+    print!("Disable two-factor authentication for the admin account? [y/N] ");
+    if std::io::stdout().flush().is_err() {
+        eprintln!("failed to write prompt");
+        std::process::exit(2);
+    }
+    let mut answer = String::new();
+    if std::io::stdin().read_line(&mut answer).is_err() {
+        eprintln!("failed to read confirmation");
+        std::process::exit(2);
+    }
+    if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
+        println!("Cancelled.");
+        return;
+    }
+
+    account.totp = None;
+    account.updated_at_ms = auth::now_ms();
+    if let Err(error) = auth::write_account(&account_path, &account).await {
+        eprintln!("failed to save the account: {error}");
+        std::process::exit(2);
+    }
+
+    AuditLog::from_env()
+        .record_cli("totp_disabled_cli", "success", None)
+        .await;
+    println!(
+        "Two-factor authentication disabled. Restart deckox-server for the change to take effect:"
+    );
+    println!("  sudo systemctl restart deckox-server");
+}
+
+fn load_admin_account_or_exit(account_path: &std::path::Path) -> auth::Account {
+    let account_file = auth::load_account_file(account_path).unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2);
+    });
+    account_file
+        .accounts
+        .get(auth::ADMIN_ACCOUNT)
+        .cloned()
+        .unwrap_or_else(|| {
+            eprintln!(
+                "{} does not contain an admin account",
+                account_path.display()
+            );
+            std::process::exit(2);
+        })
 }
 
 fn init_tracing() {

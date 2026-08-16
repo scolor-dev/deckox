@@ -212,7 +212,7 @@ impl AuthManager {
         let Some(account_path) = self.inner.account_path.clone() else {
             return ChangePasswordResult::NotPersistent;
         };
-        if new_password.len() < MIN_PASSWORD_BYTES || new_password.len() > MAX_PASSWORD_BYTES {
+        if validate_new_password(&new_password).is_err() {
             return ChangePasswordResult::InvalidNewPassword;
         }
         if is_rate_limited(&self.inner.password_change_failures, source_ip).await {
@@ -326,12 +326,25 @@ impl AuthManager {
     }
 }
 
+/// Resolves the account file path a CLI recovery command should operate on.
+/// Returns `None` when the server is configured for the non-persistent
+/// `DECKOX_ADMIN_PASSWORD_HASH` mode, in which there is no file to edit.
+pub fn account_path_from_env() -> Option<PathBuf> {
+    if env::var("DECKOX_ADMIN_PASSWORD_HASH").is_ok() {
+        return None;
+    }
+    Some(PathBuf::from(
+        env::var("DECKOX_ADMIN_PASSWORD_HASH_FILE")
+            .unwrap_or_else(|_| DEFAULT_PASSWORD_HASH_FILE.to_owned()),
+    ))
+}
+
 /// Parses an account file, transparently upgrading the legacy format (a bare
 /// Argon2id hash string, with no JSON structure) that every Deckox install
 /// before this feature wrote. The upgraded form is only persisted the next
 /// time the account is written (password change, TOTP enable/disable, or a
 /// CLI recovery command) — reading never touches the file on disk.
-fn load_account_file(path: &Path) -> Result<AccountFile, String> {
+pub fn load_account_file(path: &Path) -> Result<AccountFile, String> {
     let content = fs::read_to_string(path)
         .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
     let trimmed = content.trim();
@@ -425,6 +438,17 @@ pub fn hash_password(password: &str) -> Result<String, String> {
         .hash_password(password.as_bytes(), &salt)
         .map(|hash| hash.to_string())
         .map_err(|error| format!("failed to hash password: {error}"))
+}
+
+/// Shared by the web password-change endpoint and the `reset-password` CLI
+/// command so both enforce the same strength floor.
+pub fn validate_new_password(password: &str) -> Result<(), String> {
+    if password.len() < MIN_PASSWORD_BYTES || password.len() > MAX_PASSWORD_BYTES {
+        return Err(format!(
+            "password must contain between {MIN_PASSWORD_BYTES} and {MAX_PASSWORD_BYTES} bytes"
+        ));
+    }
+    Ok(())
 }
 
 pub async fn login(

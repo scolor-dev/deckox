@@ -221,6 +221,21 @@ nav a.router-link-exact-active::before {
   background: #fff;
 }
 .login-card input:focus { border-color: #4f83b6; box-shadow: 0 0 0 2px #dceaf7; }
+.forgot-password { margin-top: 16px; font-size: 12px; }
+.forgot-password summary { color: #4f83b6; cursor: pointer; font-weight: 600; }
+.forgot-password p { margin: 8px 0 0; color: #747b85; }
+.forgot-password pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px solid #dfe2e6;
+  border-radius: 4px;
+  background: #f4f5f6;
+  color: #30353c;
+  font: 11px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre;
+}
+.forgot-password .action-button { margin-top: 8px; }
 .login-error {
   margin: 4px 0 0;
   color: #8c2727;

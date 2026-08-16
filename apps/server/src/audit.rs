@@ -57,11 +57,31 @@ impl AuditLog {
         result: &str,
         detail: Option<String>,
     ) {
+        self.record_raw(event, actor, source_ip.to_string(), result, detail)
+            .await;
+    }
+
+    /// Same as [`record`](Self::record), but for actions taken from the
+    /// `reset-password` / `disable-totp` CLI subcommands, which run outside
+    /// the server process and have no network peer to attribute.
+    pub async fn record_cli(&self, event: &str, result: &str, detail: Option<String>) {
+        self.record_raw(event, "admin", "cli".to_owned(), result, detail)
+            .await;
+    }
+
+    async fn record_raw(
+        &self,
+        event: &str,
+        actor: &str,
+        source_ip: String,
+        result: &str,
+        detail: Option<String>,
+    ) {
         let entry = AuditEvent {
             timestamp_ms: now_ms(),
             event: event.to_owned(),
             actor: actor.to_owned(),
-            source_ip: source_ip.to_string(),
+            source_ip,
             result: result.to_owned(),
             detail,
         };

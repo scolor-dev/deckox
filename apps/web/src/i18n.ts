@@ -4,7 +4,12 @@ import { preferences, resolveLocale } from "./preferences";
 
 export const messages = {
   ja: {
-    common: { refresh: "更新", loading: "読込中…", checking: "確認中…", close: "閉じる", dismiss: "通知を閉じる", version: "バージョン", none: "—" },
+    common: {
+      refresh: "更新", loading: "読込中…", checking: "確認中…", close: "閉じる", dismiss: "通知を閉じる", version: "バージョン", none: "—",
+      forgotPassword: "パスワードを忘れた場合", forgotPasswordIntro: "このサーバーへSSH接続し、次のコマンドを順に実行してください。",
+      forgotPasswordCopy: "コマンドをコピー", forgotPasswordCopied: "コマンドをコピーしました。",
+      forgotPasswordCopyFailed: "コマンドをコピーできませんでした。手動で選択してコピーしてください。",
+    },
     app: {
       checkingAuth: "認証状態を確認しています…", serverManagement: "サーバー管理", menu: "メニュー",
       openMenu: "メニューを開く", mainNavigation: "メインナビゲーション", connected: "接続中",
@@ -79,7 +84,12 @@ export const messages = {
     time: { dayHour: "{days}日 {hours}時間", hourMinute: "{hours}時間 {minutes}分", minute: "{minutes}分" },
   },
   en: {
-    common: { refresh: "Refresh", loading: "Loading…", checking: "Checking…", close: "Close", dismiss: "Dismiss notification", version: "Version", none: "—" },
+    common: {
+      refresh: "Refresh", loading: "Loading…", checking: "Checking…", close: "Close", dismiss: "Dismiss notification", version: "Version", none: "—",
+      forgotPassword: "Forgot your password?", forgotPasswordIntro: "SSH into this server and run the following commands in order.",
+      forgotPasswordCopy: "Copy command", forgotPasswordCopied: "Command copied.",
+      forgotPasswordCopyFailed: "Could not copy the command. Select and copy it manually.",
+    },
     app: {
       checkingAuth: "Checking authentication…", serverManagement: "Server management", menu: "Menu",
       openMenu: "Open menu", mainNavigation: "Main navigation", connected: "Connected",

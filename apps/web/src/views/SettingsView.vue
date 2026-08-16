@@ -11,6 +11,7 @@ import {
   type UpdateStatus,
 } from "../api/client";
 import { apiErrorKey } from "../api/errors";
+import ForgotPasswordHelp from "../components/ForgotPasswordHelp.vue";
 import { notify } from "../notifications";
 import { preferences } from "../preferences";
 
@@ -350,6 +351,7 @@ onMounted(() => {
           autocomplete="current-password"
           required
         >
+        <ForgotPasswordHelp />
 
         <label for="new-password">{{ t("settings.newPassword") }}</label>
         <input
