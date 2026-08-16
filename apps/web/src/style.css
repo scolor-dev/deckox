@@ -572,6 +572,7 @@ select:focus-visible { outline: 2px solid #2466a8; outline-offset: 2px; }
 .search input:focus { border-color: #4f83b6; box-shadow: 0 0 0 2px #dceaf7; }
 .table-count { color: #858b94; font-size: 11px; }
 .table-scroll { max-width: 100%; overflow-x: auto; }
+.audit-load-more { margin: 14px; }
 table { width: 100%; border-collapse: collapse; }
 th, td {
   padding: 12px 14px;

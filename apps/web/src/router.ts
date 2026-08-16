@@ -5,12 +5,14 @@ import SettingsView from "./views/SettingsView.vue";
 import StorageView from "./views/StorageView.vue";
 import RestartingView from "./views/RestartingView.vue";
 import DiagnosticsView from "./views/DiagnosticsView.vue";
+import AuditView from "./views/AuditView.vue";
 
 export const routes = [
   { path: "/", name: "overview", component: OverviewView, meta: { titleKey: "nav.overview" } },
   { path: "/services", name: "services", component: ServicesView, meta: { titleKey: "nav.services" } },
   { path: "/storage", name: "storage", component: StorageView, meta: { titleKey: "nav.storage" } },
   { path: "/diagnostics", name: "diagnostics", component: DiagnosticsView, meta: { titleKey: "nav.diagnostics" } },
+  { path: "/audit", name: "audit", component: AuditView, meta: { titleKey: "nav.audit" } },
   { path: "/settings", name: "settings", component: SettingsView, meta: { titleKey: "nav.settings" } },
   { path: "/restarting", name: "restarting", component: RestartingView, meta: { titleKey: "restart.title" } },
 ] as const;

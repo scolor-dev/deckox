@@ -173,6 +173,21 @@ export interface DeckoxServiceDiagnostic {
 }
 
 export const DIAGNOSTICS_REPORT_FILENAME = "deckox-diagnostics.json";
+export const AUDIT_REPORT_FILENAME = "deckox-audit.json";
+
+export interface AuditEvent {
+  timestamp_ms: number;
+  event: string;
+  actor: string;
+  source_ip: string;
+  result: string;
+  detail: string | null;
+}
+
+export interface AuditPage {
+  events: AuditEvent[];
+  has_more: boolean;
+}
 
 export interface UpdateStatus {
   status: "up_to_date" | "available" | "unavailable";
@@ -310,6 +325,11 @@ export const api = {
   storage: () => request<StorageMount[]>("/api/v1/storage"),
   diagnostics: () => request<DiagnosticsResponse>("/api/v1/diagnostics"),
   diagnosticsReport: () => requestBlob("/api/v1/diagnostics/report"),
+  auditEvents: (beforeMs?: number) =>
+    request<AuditPage>(
+      beforeMs == null ? "/api/v1/audit" : `/api/v1/audit?before_ms=${String(beforeMs)}`,
+    ),
+  auditReport: () => requestBlob("/api/v1/audit/report"),
   updateStatus: () => request<UpdateStatus>("/api/v1/update"),
   services: () => request<ServiceSummary[]>("/api/v1/services"),
   serviceLogs: (serviceId: string, lines: number, priority: ServiceLogPriority) => {

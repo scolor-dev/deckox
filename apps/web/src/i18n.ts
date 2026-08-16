@@ -15,7 +15,7 @@ export const messages = {
       openMenu: "メニューを開く", mainNavigation: "メインナビゲーション", connected: "接続中",
       stateUnavailable: "状態を確認できません", logout: "ログアウト", passwordChanged: "パスワードを変更しました。新しいパスワードでログインしてください。",
     },
-    nav: { overview: "概要", services: "サービス", storage: "ストレージ", diagnostics: "診断", settings: "設定" },
+    nav: { overview: "概要", services: "サービス", storage: "ストレージ", diagnostics: "診断", audit: "監査ログ", settings: "設定" },
     restart: { title: "再起動しています", waiting: "再起動の開始を待っています…", offline: "コンピューターの起動を待っています…", ready: "再接続できました。ログイン画面へ戻ります。", timeout: "5分以内に再接続できませんでした。コンピューターの状態を確認してください。", retry: "もう一度確認", keepOpen: "この画面は閉じずにお待ちください。" },
     login: {
       title: "管理画面にログイン", description: "管理者パスワードを入力してください。", password: "パスワード", submit: "ログイン", submitting: "確認中…",
@@ -56,6 +56,13 @@ export const messages = {
       reboot: "ホスト再起動", allowedServices: "操作許可サービス", allowedServicesValue: "{count}件", noConfig: "Agentに接続できないため設定概要を取得できません。",
       partial: "Agentに接続できません。Webサーバーから取得できる情報だけを表示しています。", reportSaved: "診断レポートを保存しました。",
     },
+    audit: {
+      title: "監査ログ", subtitle: "ログイン・パスワード変更・サービス操作・ホスト再起動などの操作履歴を確認します。",
+      download: "ログを保存", downloading: "保存中…", reportSaved: "監査ログを保存しました。",
+      filterEvent: "イベント種別で絞り込み", filterResult: "結果で絞り込み", allEvents: "すべてのイベント", allResults: "すべての結果",
+      count: "{count}件", time: "時刻", event: "イベント", actor: "実行者", sourceIp: "送信元", result: "結果", detail: "詳細",
+      loading: "監査ログを読み込んでいます…", empty: "該当する記録はありません。", loadMore: "さらに読み込む",
+    },
     settings: {
       title: "設定", subtitle: "Deckoxとサーバーの管理設定", display: "表示とリアルタイム更新", displayDescription: "このブラウザで使う表示言語と更新方法を設定します。",
       language: "表示言語", languageAuto: "端末の設定に合わせる", japanese: "日本語", english: "English", realtime: "リアルタイム更新", realtimeHelp: "概要画面を表示している間だけ接続します。",
@@ -87,6 +94,7 @@ export const messages = {
       login: "ログインできませんでした。しばらくしてから再度お試しください。", overview: "システム情報を取得できませんでした。", services: "サービス一覧を取得できませんでした。",
       serviceAction: "サービス操作に失敗しました。", serviceLogs: "サービスログを取得できませんでした。", storage: "ストレージ情報を取得できませんでした。", password: "パスワードを変更できませんでした。",
       diagnostics: "診断情報を取得できませんでした。", diagnosticsReport: "診断レポートを保存できませんでした。",
+      audit: "監査ログを取得できませんでした。", auditReport: "監査ログを保存できませんでした。",
       updateCheck: "更新情報を確認できませんでした。",
       systemCapabilities: "システム操作の設定を取得できませんでした。", reboot: "コンピューターを再起動できませんでした。",
       agentUnavailable: "Agentに接続できません。", badRequest: "入力内容を確認してください。", conflict: "現在の状態では操作できません。", forbidden: "この操作は許可されていません。",
@@ -113,7 +121,7 @@ export const messages = {
       openMenu: "Open menu", mainNavigation: "Main navigation", connected: "Connected",
       stateUnavailable: "Status unavailable", logout: "Log out", passwordChanged: "Password changed. Sign in with your new password.",
     },
-    nav: { overview: "Overview", services: "Services", storage: "Storage", diagnostics: "Diagnostics", settings: "Settings" },
+    nav: { overview: "Overview", services: "Services", storage: "Storage", diagnostics: "Diagnostics", audit: "Audit log", settings: "Settings" },
     restart: { title: "Restarting", waiting: "Waiting for the restart to begin…", offline: "Waiting for the computer to start…", ready: "Reconnected. Returning to sign in.", timeout: "Could not reconnect within five minutes. Check the computer status.", retry: "Check again", keepOpen: "Keep this page open while Deckox reconnects." },
     login: {
       title: "Sign in to Deckox", description: "Enter the administrator password.", password: "Password", submit: "Sign in", submitting: "Checking…",
@@ -154,6 +162,13 @@ export const messages = {
       reboot: "Host restart", allowedServices: "Allowed services", allowedServicesValue: "{count}", noConfig: "Configuration summary is unavailable because Agent is disconnected.",
       partial: "Agent is disconnected. Only information available from the web server is shown.", reportSaved: "Diagnostic report saved.",
     },
+    audit: {
+      title: "Audit log", subtitle: "Review the history of logins, password changes, service actions, and host restarts.",
+      download: "Save log", downloading: "Saving…", reportSaved: "Audit log saved.",
+      filterEvent: "Filter by event", filterResult: "Filter by result", allEvents: "All events", allResults: "All results",
+      count: "{count} entries", time: "Time", event: "Event", actor: "Actor", sourceIp: "Source", result: "Result", detail: "Detail",
+      loading: "Loading the audit log…", empty: "No matching entries.", loadMore: "Load more",
+    },
     settings: {
       title: "Settings", subtitle: "Deckox and server settings", display: "Display and live updates", displayDescription: "Configure the language and update behavior for this browser.",
       language: "Language", languageAuto: "Use device language", japanese: "日本語", english: "English", realtime: "Live updates", realtimeHelp: "Connects only while the Overview page is visible.",
@@ -185,6 +200,7 @@ export const messages = {
       login: "Could not sign in. Try again shortly.", overview: "Could not load system information.", services: "Could not load services.",
       serviceAction: "The service operation failed.", serviceLogs: "Could not load service logs.", storage: "Could not load storage information.", password: "Could not change the password.",
       diagnostics: "Could not load diagnostic information.", diagnosticsReport: "Could not save the diagnostic report.",
+      audit: "Could not load the audit log.", auditReport: "Could not save the audit log.",
       updateCheck: "Could not check for updates.",
       systemCapabilities: "Could not load system operation settings.", reboot: "Could not restart the computer.",
       agentUnavailable: "Cannot connect to Agent.", badRequest: "Check the information you entered.", conflict: "This operation is not available in the current state.", forbidden: "This operation is not permitted.",
