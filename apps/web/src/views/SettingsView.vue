@@ -3,12 +3,10 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import {
-  ApiError,
   api,
   buildUpdateCommand,
   safeReleaseUrl,
   writeClipboardText,
-  type SshKeyList,
   type SystemCapabilities,
   type UpdateStatus,
 } from "../api/client";
@@ -25,12 +23,6 @@ const newPassword = ref("");
 const passwordConfirmation = ref("");
 const submitting = ref(false);
 const error = ref<string | null>(null);
-const sshKeys = ref<SshKeyList | null>(null);
-const sshLoading = ref(true);
-const sshErrorKey = ref<string | null>(null);
-const publicKey = ref("");
-const addingKey = ref(false);
-const removingKeyId = ref<string | null>(null);
 const systemCapabilities = ref<SystemCapabilities | null>(null);
 const systemErrorKey = ref<string | null>(null);
 const rebootPassword = ref("");
@@ -109,18 +101,6 @@ async function rebootSystem() {
   }
 }
 
-async function loadSshKeys() {
-  sshLoading.value = true;
-  sshErrorKey.value = null;
-  try {
-    sshKeys.value = await api.sshKeys();
-  } catch (caught) {
-    sshErrorKey.value = apiErrorKey(caught, "errors.sshLoad");
-  } finally {
-    sshLoading.value = false;
-  }
-}
-
 async function checkForUpdate() {
   updateChecking.value = true;
   updateErrorKey.value = null;
@@ -147,45 +127,8 @@ async function copyUpdateCommand() {
   }
 }
 
-async function addSshKey() {
-  sshErrorKey.value = null;
-  if (!publicKey.value.trim()) {
-    sshErrorKey.value = "settings.keyRequired";
-    return;
-  }
-  addingKey.value = true;
-  try {
-    const added = await api.addSshKey(publicKey.value.trim());
-    publicKey.value = "";
-    await loadSshKeys();
-    notify("success", t("settings.keyAdded", { label: added.comment ?? added.fingerprint }));
-  } catch (caught) {
-    sshErrorKey.value = apiErrorKey(caught, "errors.sshAdd");
-  } finally {
-    addingKey.value = false;
-  }
-}
-
-async function removeSshKey(keyId: string, label: string) {
-  if (!window.confirm(t("settings.confirmRemove", { label }))) return;
-  removingKeyId.value = keyId;
-  sshErrorKey.value = null;
-  try {
-    const removed = await api.removeSshKey(keyId);
-    await loadSshKeys();
-    notify("success", t("settings.keyRemoved", { label: removed.comment ?? removed.fingerprint }));
-  } catch (caught) {
-    sshErrorKey.value = caught instanceof ApiError && caught.status === 409
-      ? "settings.lastKey"
-      : apiErrorKey(caught, "errors.sshRemove");
-  } finally {
-    removingKeyId.value = null;
-  }
-}
-
 onMounted(() => {
   void loadSystemCapabilities();
-  void loadSshKeys();
 });
 </script>
 
@@ -447,98 +390,6 @@ onMounted(() => {
           {{ t("settings.relogin") }}
         </p>
       </form>
-    </section>
-
-    <section
-      class="settings-section"
-      aria-labelledby="ssh-heading"
-    >
-      <div class="settings-description">
-        <h2 id="ssh-heading">
-          {{ t("settings.ssh") }}
-        </h2>
-        <p>{{ t("settings.sshDescription") }}</p>
-      </div>
-      <div class="settings-form ssh-settings">
-        <p
-          v-if="sshErrorKey"
-          class="notice error"
-          role="alert"
-        >
-          {{ t(sshErrorKey) }}
-        </p>
-        <p
-          v-if="sshLoading"
-          class="settings-help"
-        >
-          {{ t("settings.checkingKeys") }}
-        </p>
-        <div
-          v-else-if="!sshKeys?.enabled"
-          class="notice warning"
-        >
-          {{ t("settings.sshDisabled") }}
-        </div>
-        <template v-else>
-          <p class="managed-user">
-            {{ t("settings.managedUser") }} <strong class="mono">{{ sshKeys.managed_user }}</strong>
-          </p>
-
-          <div
-            v-if="sshKeys.keys.length"
-            class="ssh-key-list"
-          >
-            <article
-              v-for="key in sshKeys.keys"
-              :key="key.id"
-              class="ssh-key-item"
-            >
-              <div>
-                <strong>{{ key.comment ?? t("settings.noComment") }}</strong>
-                <span class="mono">{{ key.key_type }}</span>
-                <code>{{ key.fingerprint }}</code>
-              </div>
-              <button
-                class="action-button danger"
-                type="button"
-                :disabled="removingKeyId !== null"
-                @click="removeSshKey(key.id, key.comment ?? key.fingerprint)"
-              >
-                {{ removingKeyId === key.id ? t("settings.deleting") : t("settings.delete") }}
-              </button>
-            </article>
-          </div>
-          <p
-            v-else
-            class="settings-help"
-          >
-            {{ t("settings.noKeys") }}
-          </p>
-
-          <form
-            class="ssh-add-form"
-            @submit.prevent="addSshKey"
-          >
-            <label for="public-key">{{ t("settings.addKey") }}</label>
-            <textarea
-              id="public-key"
-              v-model="publicKey"
-              rows="4"
-              :placeholder="t('settings.keyPlaceholder')"
-              spellcheck="false"
-              required
-            />
-            <small>{{ t("settings.publicOnly") }}</small>
-            <button
-              class="primary-button settings-submit"
-              type="submit"
-              :disabled="addingKey"
-            >
-              {{ addingKey ? t("settings.adding") : t("settings.addKey") }}
-            </button>
-          </form>
-        </template>
-      </div>
     </section>
   </section>
 </template>

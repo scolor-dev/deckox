@@ -91,7 +91,6 @@ pub struct DiagnosticUnitState {
 pub struct RuntimeConfigSummary {
     pub reboot_allowed: bool,
     pub allowed_services_count: usize,
-    pub ssh_management_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,26 +250,6 @@ pub struct CommandResult {
     pub command_id: String,
     pub status: CommandStatus,
     pub message: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SshKeyList {
-    pub enabled: bool,
-    pub managed_user: Option<String>,
-    pub keys: Vec<SshKeySummary>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SshKeySummary {
-    pub id: String,
-    pub key_type: String,
-    pub fingerprint: String,
-    pub comment: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AddSshKeyRequest {
-    pub public_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

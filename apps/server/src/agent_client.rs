@@ -1,7 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
 use axum::http::StatusCode;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::{
@@ -33,19 +32,6 @@ impl AgentClient {
         request_id: &RequestId,
     ) -> Result<AgentResponse, String> {
         self.request_with_body(method, path, request_id, None).await
-    }
-
-    pub async fn request_json<T: Serialize + Sync>(
-        &self,
-        method: &str,
-        path: &str,
-        request_id: &RequestId,
-        payload: &T,
-    ) -> Result<AgentResponse, String> {
-        let body = serde_json::to_vec(payload)
-            .map_err(|error| format!("failed to encode Agent API request: {error}"))?;
-        self.request_with_body(method, path, request_id, Some(&body))
-            .await
     }
 
     async fn request_with_body(

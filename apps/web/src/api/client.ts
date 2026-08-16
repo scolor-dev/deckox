@@ -107,19 +107,6 @@ export interface AuthStatus {
   authenticated: boolean;
 }
 
-export interface SshKeySummary {
-  id: string;
-  key_type: string;
-  fingerprint: string;
-  comment: string | null;
-}
-
-export interface SshKeyList {
-  enabled: boolean;
-  managed_user: string | null;
-  keys: SshKeySummary[];
-}
-
 export interface DiagnosticsResponse {
   generated_at_ms: number;
   server: {
@@ -157,7 +144,6 @@ export interface DiagnosticsResponse {
   runtime_config: {
     reboot_allowed: boolean;
     allowed_services_count: number;
-    ssh_management_enabled: boolean;
   } | null;
 }
 
@@ -272,17 +258,6 @@ export const api = {
       },
       false,
     ),
-  sshKeys: () => request<SshKeyList>("/api/v1/settings/ssh/keys"),
-  addSshKey: (publicKey: string) =>
-    request<SshKeySummary>("/api/v1/settings/ssh/keys", {
-      method: "POST",
-      body: JSON.stringify({ public_key: publicKey }),
-      headers: { "Content-Type": "application/json" },
-    }),
-  removeSshKey: (keyId: string) =>
-    request<SshKeySummary>(`/api/v1/settings/ssh/keys/${encodeURIComponent(keyId)}`, {
-      method: "DELETE",
-    }),
   serverStatus: () => request<ServerStatus>("/api/v1/status"),
   systemInfo: () => request<SystemInfo>("/api/v1/system"),
   systemMetrics: () => request<SystemMetrics>("/api/v1/system/metrics"),
