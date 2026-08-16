@@ -1,20 +1,23 @@
 :root {
-  color-scheme: dark;
-  --bg: #080d16;
-  --panel: #0d1522;
-  --panel-strong: #111c2c;
-  --line: #1d2b3f;
-  --line-bright: #2b3d55;
-  --text: #e7eef8;
-  --muted: #8b9aae;
-  --faint: #58677c;
-  --accent: #5eead4;
-  --accent-soft: #153934;
-  --blue: #7dd3fc;
-  --warning: #fbbf24;
-  --danger: #fb7185;
+  color-scheme: light;
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --panel-muted: #fafbfc;
+  --line: #dfe2e6;
+  --line-bright: #c7ccd2;
+  --text: #25282d;
+  --muted: #5b6470;
+  --faint: #8a9099;
+  --accent: #2466a8;
+  --accent-soft: #edf4fb;
+  --accent-strong: #174f88;
+  --warning: #b88717;
+  --warning-soft: #fffbea;
+  --danger: #c33d3d;
+  --danger-soft: #fff5f5;
   --sidebar-width: 258px;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI",
+    "Yu Gothic", "Meiryo", "Segoe UI", sans-serif;
   font-synthesis: none;
 }
 
@@ -45,7 +48,7 @@ button {
 code,
 pre,
 .mono {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 .skip-link {
@@ -54,8 +57,8 @@ pre,
   top: 12px;
   left: 12px;
   padding: 9px 12px;
-  border-radius: 7px;
-  color: #06100f;
+  border-radius: 6px;
+  color: #fff;
   background: var(--accent);
   transform: translateY(-180%);
 }
@@ -91,14 +94,14 @@ pre,
 
 .brand-mark {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 10px;
-  color: #071513;
+  border-radius: 6px;
+  color: #fff;
   background: var(--accent);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .brand-copy {
@@ -106,13 +109,14 @@ pre,
 }
 
 .brand-copy strong {
-  font-size: 17px;
+  color: var(--text);
+  font-size: 16px;
 }
 
 .brand-copy small {
   color: var(--faint);
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -121,34 +125,34 @@ pre,
   color: var(--faint);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .nav {
   display: grid;
-  gap: 5px;
+  gap: 3px;
 }
 
 .nav a {
   display: flex;
   gap: 11px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 9px 12px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 5px;
   color: var(--muted);
   text-decoration: none;
 }
 
 .nav a:hover {
   color: var(--text);
-  background: var(--panel);
+  background: var(--panel-muted);
 }
 
 .nav a[aria-current="page"] {
-  border-color: #234139;
-  color: #eafffb;
+  color: var(--accent-strong);
+  font-weight: 600;
   background: var(--accent-soft);
 }
 
@@ -174,46 +178,47 @@ pre,
 .content {
   width: min(1080px, 100%);
   margin: 0 auto;
-  padding: 64px 58px 100px;
+  padding: 56px 58px 100px;
 }
 
 .page-head {
-  margin-bottom: 44px;
-  padding-bottom: 32px;
+  margin-bottom: 40px;
+  padding-bottom: 28px;
   border-bottom: 1px solid var(--line);
 }
 
 .eyebrow {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   color: var(--accent);
-  font: 600 11px/1.4 "SFMono-Regular", Consolas, monospace;
-  letter-spacing: 0.16em;
+  font: 600 11px/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 h1,
 h2,
 h3 {
-  letter-spacing: -0.025em;
+  color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 h1 {
   max-width: 850px;
   margin: 0;
-  font-size: clamp(28px, 4vw, 38px);
-  line-height: 1.2;
+  font-size: clamp(26px, 3.6vw, 34px);
+  line-height: 1.25;
 }
 
 .lead {
   max-width: 760px;
-  margin: 20px 0 0;
+  margin: 16px 0 0;
   color: var(--muted);
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.8;
 }
 
 .section {
-  margin-top: 56px;
+  margin-top: 52px;
   scroll-margin-top: 24px;
 }
 
@@ -223,7 +228,7 @@ h1 {
 
 .section h2 {
   margin: 0 0 12px;
-  font-size: 27px;
+  font-size: 22px;
 }
 
 .section > p,
@@ -236,8 +241,8 @@ h1 {
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 24px;
+  gap: 14px;
+  margin-top: 22px;
 }
 
 .grid.three {
@@ -246,9 +251,9 @@ h1 {
 
 .card {
   display: block;
-  padding: 23px;
+  padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--panel);
 }
 
@@ -258,12 +263,12 @@ a.card {
 }
 
 a.card:hover {
-  border-color: var(--line-bright);
+  border-color: var(--accent);
 }
 
 .card h3 {
-  margin: 13px 0 8px;
-  font-size: 18px;
+  margin: 12px 0 6px;
+  font-size: 16px;
 }
 
 .card p {
@@ -275,21 +280,21 @@ a.card:hover {
 
 .card-arrow {
   display: inline-block;
-  margin-top: 18px;
+  margin-top: 16px;
   color: var(--accent);
   font-size: 13px;
 }
 
 .number {
   color: var(--accent);
-  font: 600 12px/1 "SFMono-Regular", Consolas, monospace;
+  font: 700 12px/1 ui-monospace, "SFMono-Regular", Consolas, monospace;
 }
 
 .status {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  padding: 5px 9px;
+  padding: 4px 9px;
   border: 1px solid;
   border-radius: 999px;
   font-size: 11px;
@@ -297,21 +302,21 @@ a.card:hover {
 }
 
 .status.done {
-  border-color: #256b5e;
-  color: #8ff7e7;
-  background: #10342e;
+  border-color: #a8d5b8;
+  color: #1e6b3e;
+  background: #eafaf0;
 }
 
 .status.defined {
-  border-color: #376681;
-  color: #a5e2ff;
-  background: #122d3d;
+  border-color: #a8c8e0;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 
 .status.missing {
-  border-color: #674b25;
-  color: #fcd681;
-  background: #352813;
+  border-color: #e0c68a;
+  color: var(--warning);
+  background: var(--warning-soft);
 }
 
 .status::before {
@@ -324,17 +329,17 @@ a.card:hover {
 
 .status-table {
   width: 100%;
-  margin-top: 24px;
+  margin-top: 22px;
   border-spacing: 0;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--panel);
 }
 
 .status-table th,
 .status-table td {
-  padding: 15px 17px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
@@ -346,9 +351,9 @@ a.card:hover {
 
 .status-table th {
   color: var(--faint);
-  background: #0b1320;
+  background: var(--panel-muted);
   font-size: 11px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -364,11 +369,11 @@ a.card:hover {
 }
 
 .diagram {
-  margin-top: 24px;
-  padding: 20px;
+  margin-top: 22px;
+  padding: 18px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #0a111d;
+  border-radius: 8px;
+  background: var(--panel);
 }
 
 .diagram img {
@@ -378,18 +383,19 @@ a.card:hover {
 }
 
 .note {
-  margin-top: 24px;
-  padding: 17px 19px;
+  margin-top: 22px;
+  padding: 15px 18px;
+  border: 1px solid var(--line);
   border-left: 3px solid var(--accent);
-  border-radius: 0 9px 9px 0;
+  border-radius: 0 6px 6px 0;
   color: var(--muted);
-  background: #0e1d25;
+  background: var(--accent-soft);
   line-height: 1.7;
 }
 
 .note.warning {
   border-left-color: var(--warning);
-  background: #251d0e;
+  background: var(--warning-soft);
 }
 
 .note strong {
@@ -399,12 +405,12 @@ a.card:hover {
 pre {
   position: relative;
   overflow-x: auto;
-  margin: 20px 0 0;
-  padding: 20px;
+  margin: 18px 0 0;
+  padding: 18px;
   border: 1px solid var(--line);
-  border-radius: 11px;
-  color: #c7f9ef;
-  background: #060b12;
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--panel-muted);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -412,23 +418,23 @@ pre {
 :not(pre) > code {
   padding: 2px 6px;
   border: 1px solid var(--line);
-  border-radius: 5px;
-  color: var(--blue);
-  background: #0b1421;
+  border-radius: 4px;
+  color: var(--accent-strong);
+  background: var(--panel-muted);
   font-size: 0.88em;
 }
 
 .definition-list {
   display: grid;
   grid-template-columns: minmax(160px, 0.35fr) 1fr;
-  margin-top: 24px;
+  margin-top: 22px;
   border-top: 1px solid var(--line);
 }
 
 .definition-list dt,
 .definition-list dd {
   margin: 0;
-  padding: 16px 0;
+  padding: 15px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -452,12 +458,12 @@ pre {
 .method {
   min-width: 44px;
   color: var(--accent);
-  font: 700 11px "SFMono-Regular", Consolas, monospace;
+  font: 700 11px ui-monospace, "SFMono-Regular", Consolas, monospace;
 }
 
 .footer {
-  margin-top: 72px;
-  padding-top: 22px;
+  margin-top: 64px;
+  padding-top: 20px;
   border-top: 1px solid var(--line);
   color: var(--faint);
   font-size: 12px;
@@ -495,19 +501,19 @@ pre {
     justify-content: space-between;
     padding: 13px 18px;
     border-bottom: 1px solid var(--line);
-    background: var(--bg);
+    background: var(--panel);
   }
 
   .menu-button {
     padding: 8px 11px;
-    border: 1px solid var(--line-bright);
-    border-radius: 7px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
     color: var(--text);
     background: var(--panel);
   }
 
   .content {
-    padding: 42px 20px 70px;
+    padding: 40px 20px 70px;
   }
 
   .grid,
@@ -533,4 +539,3 @@ pre {
     padding-top: 0;
   }
 }
-
