@@ -91,7 +91,6 @@ pub struct DiagnosticUnitState {
 pub struct RuntimeConfigSummary {
     pub reboot_allowed: bool,
     pub allowed_services_count: usize,
-    pub ssh_management_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,30 +253,29 @@ pub struct CommandResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SshKeyList {
-    pub enabled: bool,
-    pub managed_user: Option<String>,
-    pub keys: Vec<SshKeySummary>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SshKeySummary {
-    pub id: String,
-    pub key_type: String,
-    pub fingerprint: String,
-    pub comment: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AddSshKeyRequest {
-    pub public_key: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CommandStatus {
     Accepted,
     Running,
     Completed,
     Failed,
+}
+
+/// A single recorded administrative action. `actor` is a username today
+/// (always `"admin"`) so the schema does not need to change if Deckox grows
+/// multiple accounts later.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditEvent {
+    pub timestamp_ms: u64,
+    pub event: String,
+    pub actor: String,
+    pub source_ip: String,
+    pub result: String,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditPage {
+    pub events: Vec<AuditEvent>,
+    pub has_more: bool,
 }

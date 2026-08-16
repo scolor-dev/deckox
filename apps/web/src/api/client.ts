@@ -105,19 +105,21 @@ export interface CommandResult {
 
 export interface AuthStatus {
   authenticated: boolean;
+  totp_required: boolean;
 }
 
-export interface SshKeySummary {
-  id: string;
-  key_type: string;
-  fingerprint: string;
-  comment: string | null;
-}
-
-export interface SshKeyList {
+export interface TotpStatus {
   enabled: boolean;
-  managed_user: string | null;
-  keys: SshKeySummary[];
+  recovery_codes_remaining: number;
+}
+
+export interface TotpSetup {
+  secret_base32: string;
+  otpauth_uri: string;
+}
+
+export interface TotpConfirmResult {
+  recovery_codes: string[];
 }
 
 export interface DiagnosticsResponse {
@@ -157,7 +159,6 @@ export interface DiagnosticsResponse {
   runtime_config: {
     reboot_allowed: boolean;
     allowed_services_count: number;
-    ssh_management_enabled: boolean;
   } | null;
 }
 
@@ -172,6 +173,21 @@ export interface DeckoxServiceDiagnostic {
 }
 
 export const DIAGNOSTICS_REPORT_FILENAME = "deckox-diagnostics.json";
+export const AUDIT_REPORT_FILENAME = "deckox-audit.json";
+
+export interface AuditEvent {
+  timestamp_ms: number;
+  event: string;
+  actor: string;
+  source_ip: string;
+  result: string;
+  detail: string | null;
+}
+
+export interface AuditPage {
+  events: AuditEvent[];
+  has_more: boolean;
+}
 
 export interface UpdateStatus {
   status: "up_to_date" | "available" | "unavailable";
@@ -258,6 +274,16 @@ export const api = {
       },
       false,
     ),
+  loginTotp: (code: string) =>
+    request<AuthStatus>(
+      "/api/v1/auth/login/totp",
+      {
+        method: "POST",
+        body: JSON.stringify({ code }),
+        headers: { "Content-Type": "application/json" },
+      },
+      false,
+    ),
   logout: () => request<AuthStatus>("/api/v1/auth/logout", { method: "POST" }),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<AuthStatus>(
@@ -272,16 +298,19 @@ export const api = {
       },
       false,
     ),
-  sshKeys: () => request<SshKeyList>("/api/v1/settings/ssh/keys"),
-  addSshKey: (publicKey: string) =>
-    request<SshKeySummary>("/api/v1/settings/ssh/keys", {
+  totpStatus: () => request<TotpStatus>("/api/v1/settings/totp/status"),
+  totpSetup: () => request<TotpSetup>("/api/v1/settings/totp/setup", { method: "POST" }),
+  totpConfirm: (code: string) =>
+    request<TotpConfirmResult>("/api/v1/settings/totp/confirm", {
       method: "POST",
-      body: JSON.stringify({ public_key: publicKey }),
+      body: JSON.stringify({ code }),
       headers: { "Content-Type": "application/json" },
     }),
-  removeSshKey: (keyId: string) =>
-    request<SshKeySummary>(`/api/v1/settings/ssh/keys/${encodeURIComponent(keyId)}`, {
-      method: "DELETE",
+  totpDisable: (currentPassword: string, code: string) =>
+    request<TotpStatus>("/api/v1/settings/totp/disable", {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword, code }),
+      headers: { "Content-Type": "application/json" },
     }),
   serverStatus: () => request<ServerStatus>("/api/v1/status"),
   systemInfo: () => request<SystemInfo>("/api/v1/system"),
@@ -296,6 +325,11 @@ export const api = {
   storage: () => request<StorageMount[]>("/api/v1/storage"),
   diagnostics: () => request<DiagnosticsResponse>("/api/v1/diagnostics"),
   diagnosticsReport: () => requestBlob("/api/v1/diagnostics/report"),
+  auditEvents: (beforeMs?: number) =>
+    request<AuditPage>(
+      beforeMs == null ? "/api/v1/audit" : `/api/v1/audit?before_ms=${String(beforeMs)}`,
+    ),
+  auditReport: () => requestBlob("/api/v1/audit/report"),
   updateStatus: () => request<UpdateStatus>("/api/v1/update"),
   services: () => request<ServiceSummary[]>("/api/v1/services"),
   serviceLogs: (serviceId: string, lines: number, priority: ServiceLogPriority) => {

@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.3.8</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.4.0</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -89,18 +89,37 @@ npm run build</code></pre>
             <tr><td><code>DECKOX_WEB_DIR</code></td><td><code>/usr/local/share/deckox/web</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code></td><td><code>/var/lib/deckox/admin-password.hash</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH</code></td><td>なし</td><td>Server（開発・コンテナ向け）</td></tr>
+            <tr><td><code>DECKOX_AUDIT_LOG_FILE</code></td><td><code>/var/lib/deckox/audit.log</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_SECURE_COOKIE</code></td><td><code>false</code></td><td>Server。HTTPS終端時に<code>true</code></td></tr>
             <tr><td><code>RUST_LOG</code></td><td>各プロセスの<code>info</code></td><td>Server / Agent</td></tr>
           </tbody>
         </table>
-        <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH</code>でハッシュを直接指定した場合は永続的な保存先がないため、設定画面からのパスワード変更は無効になります。</aside>
+        <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH</code>でハッシュを直接指定した場合は永続的な保存先がないため、設定画面からのパスワード変更・TOTP設定は無効になります。</aside>
+        <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code>の内容はパスワードハッシュとTOTP設定を含むJSONです。旧バージョンが書いた生のArgon2idハッシュ文字列も読み込み時に自動判定し、書き込み時にJSON形式へ移行します。</aside>
+        <aside class="note"><code>DECKOX_AUDIT_LOG_FILE</code>は最大5000件を新しい順に保持するJSON Linesファイルです。超過分は書き込みのたびに古い順から切り詰められます。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="cli-title">
+        <h2 id="cli-title">CLIサブコマンド</h2>
+        <p><code>deckox-server</code>は先頭引数でサブコマンドを切り替えます。<code>hash-password</code>以外はいずれもアカウントファイルへ直接読み書きするため、実行後は<code>deckox-server</code>を再起動します。</p>
+        <table class="status-table">
+          <thead><tr><th>コマンド</th><th>動作</th></tr></thead>
+          <tbody>
+            <tr><td><code>hash-password</code></td><td>標準入力のパスワードをArgon2idハッシュへ変換して標準出力へ表示。<code>DECKOX_ADMIN_PASSWORD_HASH</code>の初期値作成に使用</td></tr>
+            <tr><td><code>reset-password</code></td><td>標準入力の新しいパスワードで<code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code>のパスワードだけを更新。TOTP設定は変更しない。監査ログへ<code>password_reset_cli</code>を記録</td></tr>
+            <tr><td><code>disable-totp</code></td><td>対話確認後、アカウントのTOTP設定とリカバリーコードを削除。監査ログへ<code>totp_disabled_cli</code>を記録</td></tr>
+          </tbody>
+        </table>
+        <p><code>reset-password</code>・<code>disable-totp</code>は永続化されたアカウントファイルが前提のため、<code>DECKOX_ADMIN_PASSWORD_HASH</code>だけが設定されている場合はエラーで終了します。</p>
+        <pre><code>printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password
+sudo -u deckox deckox-server disable-totp</code></pre>
       </section>
 
       <section class="section" aria-labelledby="diagnostics-title">
         <h2 id="diagnostics-title">診断APIのデータ境界</h2>
         <p><code>GET /api/v1/diagnostics</code>は画面表示用のJSON、<code>GET /api/v1/diagnostics/report</code>は同じ内容のダウンロード応答です。どちらも管理者認証が必要です。</p>
         <p>レスポンスは<code>generated_at_ms</code>、Serverのversion・status、Agentのconnected・version・error code、公開可能なhost情報、2つのDeckox systemdユニット状態、runtime configの真偽値と件数に固定されています。Agent APIに接続できない場合もHTTPエラーにはせず、Agent由来のまとまりを<code>null</code>にした部分診断を返します。</p>
-        <aside class="note warning">診断機能へ項目を追加するときは、生の設定・環境変数・ログ・認証情報を転送せず、共有Protocolへ明示した安全な値だけを追加します。パスワード、ハッシュ、セッション、Cookie、SSH鍵、管理対象ユーザー名、boot IDは追加禁止です。</aside>
+        <aside class="note warning">診断機能へ項目を追加するときは、生の設定・環境変数・ログ・認証情報を転送せず、共有Protocolへ明示した安全な値だけを追加します。パスワード、ハッシュ、セッション、Cookie、boot IDは追加禁止です。</aside>
       </section>
 
       <section class="section" aria-labelledby="update-title">
@@ -121,14 +140,10 @@ allow_reboot = false
 allowed = [
   "nginx.service",
   "postgresql.service",
-]
-
-[ssh]
-managed_user = "operator"</code></pre>
+]</code></pre>
         <p><code>deckox-agent.service</code>と<code>deckox-server.service</code>は登録しても起動時に拒否されます。</p>
         <p>journalログは最大500行までで、priorityは<code>all</code>・<code>error</code>・<code>warning</code>・<code>info</code>だけを指定できます。任意の<code>journalctl</code>引数、ログのダウンロード、Webコンソールは提供しません。</p>
         <p><code>system.allow_reboot</code>は初期値<code>false</code>です。<code>true</code>にした場合だけ、パスワード再確認後のホスト再起動を受け付けます。</p>
-        <p><code>ssh.managed_user</code>は既存の非rootローカルユーザーだけを指定できます。省略時はSSH公開鍵管理が無効になります。</p>
       </section>
 
       <section class="section" aria-labelledby="test-title">

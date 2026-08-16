@@ -12,6 +12,11 @@ const ERROR_KEYS: Readonly<Record<string, string>> = {
   not_found: "errors.notFound",
   rate_limited: "errors.rateLimited",
   unavailable: "errors.unavailable",
+  invalid_totp_code: "errors.invalidTotpCode",
+  totp_session_expired: "errors.totpSessionExpired",
+  totp_unavailable: "errors.totpUnavailable",
+  totp_setup_expired: "errors.totpSetupExpired",
+  totp_not_enabled: "errors.totpNotEnabled",
 };
 
 export function apiErrorKey(error: unknown, fallbackKey: string): string {

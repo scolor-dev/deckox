@@ -1,4 +1,9 @@
-use std::{env, io::Read, net::SocketAddr, path::PathBuf};
+use std::{
+    env,
+    io::{Read, Write},
+    net::SocketAddr,
+    path::PathBuf,
+};
 
 use axum::{
     Extension, Json, Router,
@@ -9,7 +14,7 @@ use axum::{
     routing::{get, post},
 };
 use deckox_protocol::{
-    AddSshKeyRequest, AgentStatus, DiagnosticsReport, ServiceLogPriority, UpdateStatus,
+    AgentStatus, AuditPage, DiagnosticsReport, ServiceLogPriority, UpdateStatus,
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
@@ -22,14 +27,17 @@ use tracing_subscriber::EnvFilter;
 
 use crate::agent_client::AgentClient;
 use crate::{
+    audit::AuditLog,
     auth::{AuthManager, AuthenticatedUser, PasswordConfirmationResult},
     metrics_stream::MetricsHub,
     request_context::RequestId,
 };
 
 mod agent_client;
+mod audit;
 mod auth;
 mod diagnostics;
+mod fsutil;
 mod metrics_stream;
 mod request_context;
 mod update;
@@ -42,6 +50,7 @@ const DEFAULT_WEB_DIR: &str = "/usr/local/share/deckox/web";
 struct AppState {
     agent: AgentClient,
     auth: AuthManager,
+    audit: AuditLog,
     metrics: MetricsHub,
     updates: update::UpdateChecker,
     instance_id: String,
@@ -93,6 +102,13 @@ struct ServiceLogsQuery {
     priority: ServiceLogPriority,
 }
 
+#[derive(Debug, Deserialize)]
+struct AuditQuery {
+    #[serde(default = "audit::default_limit")]
+    limit: usize,
+    before_ms: Option<u64>,
+}
+
 const fn default_log_lines() -> u16 {
     100
 }
@@ -103,8 +119,7 @@ const fn default_log_priority() -> ServiceLogPriority {
 
 #[tokio::main]
 async fn main() {
-    if env::args().nth(1).as_deref() == Some("hash-password") {
-        hash_password_from_stdin();
+    if run_cli_subcommand(env::args().nth(1).as_deref()).await {
         return;
     }
 
@@ -119,7 +134,8 @@ async fn main() {
         });
     let web_dir =
         PathBuf::from(env::var("DECKOX_WEB_DIR").unwrap_or_else(|_| DEFAULT_WEB_DIR.to_owned()));
-    let auth = AuthManager::load().unwrap_or_else(|error| {
+    let audit = AuditLog::from_env();
+    let auth = AuthManager::load(audit.clone()).unwrap_or_else(|error| {
         eprintln!("failed to load authentication configuration: {error}");
         std::process::exit(2);
     });
@@ -130,6 +146,7 @@ async fn main() {
     let state = AppState {
         agent: agent.clone(),
         auth: auth.clone(),
+        audit,
         metrics: MetricsHub::new(agent),
         updates,
         instance_id: format!("{:016x}", rand::random::<u64>()),
@@ -139,6 +156,8 @@ async fn main() {
         .route("/status", get(status))
         .route("/diagnostics", get(diagnostics))
         .route("/diagnostics/report", get(diagnostics_report))
+        .route("/audit", get(audit_events))
+        .route("/audit/report", get(audit_report))
         .route("/update", get(update_status))
         .route("/system", get(proxy_system))
         .route("/system/capabilities", get(proxy_system_capabilities))
@@ -162,14 +181,10 @@ async fn main() {
         .route("/services/{service_id}/logs", get(proxy_service_logs))
         .route("/auth/logout", post(auth::logout))
         .route("/settings/password", post(auth::change_password))
-        .route(
-            "/settings/ssh/keys",
-            get(proxy_ssh_keys).post(proxy_add_ssh_key),
-        )
-        .route(
-            "/settings/ssh/keys/{key_id}",
-            axum::routing::delete(proxy_remove_ssh_key),
-        )
+        .route("/settings/totp/status", get(auth::totp_status))
+        .route("/settings/totp/setup", post(auth::totp_setup))
+        .route("/settings/totp/confirm", post(auth::totp_confirm))
+        .route("/settings/totp/disable", post(auth::totp_disable))
         .route_layer(middleware::from_fn_with_state(
             auth.clone(),
             auth::require_auth,
@@ -177,6 +192,7 @@ async fn main() {
         .fallback(api_not_found);
     let public_api = Router::new()
         .route("/auth/login", post(auth::login))
+        .route("/auth/login/totp", post(auth::login_totp))
         .route("/auth/session", get(auth::status))
         .merge(protected_api);
     let static_files =
@@ -210,6 +226,19 @@ async fn main() {
     }
 }
 
+/// Handles `deckox-server <subcommand>` invocations that exit before the
+/// server starts. Returns `true` when `argument` matched a subcommand, so
+/// `main` knows to return instead of continuing to serve.
+async fn run_cli_subcommand(argument: Option<&str>) -> bool {
+    match argument {
+        Some("hash-password") => hash_password_from_stdin(),
+        Some("reset-password") => reset_password_from_stdin().await,
+        Some("disable-totp") => disable_totp_interactive().await,
+        _ => return false,
+    }
+    true
+}
+
 fn load_update_checker() -> update::UpdateChecker {
     update::UpdateChecker::new().unwrap_or_else(|error| {
         eprintln!("{error}");
@@ -231,6 +260,119 @@ fn hash_password_from_stdin() {
             std::process::exit(2);
         }
     }
+}
+
+/// `deckox-server reset-password` — run from an SSH-connected console when
+/// the admin password is lost. Reads the new password from stdin, exactly
+/// like `hash-password`, and updates only `password_hash` in the account
+/// file; TOTP settings are left untouched (see `disable-totp` for that
+/// recovery path). The running server keeps the old password in memory
+/// until restarted, so this always ends with a restart reminder.
+async fn reset_password_from_stdin() {
+    let account_path = auth::account_path_from_env().unwrap_or_else(|| {
+        eprintln!(
+            "password cannot be reset while DECKOX_ADMIN_PASSWORD_HASH is configured; \
+             remove it and use DECKOX_ADMIN_PASSWORD_HASH_FILE instead"
+        );
+        std::process::exit(2);
+    });
+
+    let mut password = String::new();
+    if let Err(error) = std::io::stdin().take(1025).read_to_string(&mut password) {
+        eprintln!("failed to read password: {error}");
+        std::process::exit(2);
+    }
+    let password = password.trim_end_matches(['\r', '\n']);
+    if let Err(error) = auth::validate_new_password(password) {
+        eprintln!("{error}");
+        std::process::exit(2);
+    }
+
+    let mut account = load_admin_account_or_exit(&account_path);
+    let new_hash = auth::hash_password(password).unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2);
+    });
+    account.password_hash = new_hash;
+    account.updated_at_ms = auth::now_ms();
+    if let Err(error) = auth::write_account(&account_path, &account).await {
+        eprintln!("failed to save the new password: {error}");
+        std::process::exit(2);
+    }
+
+    AuditLog::from_env()
+        .record_cli("password_reset_cli", "success", None)
+        .await;
+    println!("Password updated. Restart deckox-server for the change to take effect:");
+    println!("  sudo systemctl restart deckox-server");
+}
+
+/// `deckox-server disable-totp` — the last-resort recovery path when both
+/// the authenticator app and every recovery code are lost. Interactive
+/// confirmation guards against running it by accident, since it lowers the
+/// account's security to password-only.
+async fn disable_totp_interactive() {
+    let account_path = auth::account_path_from_env().unwrap_or_else(|| {
+        eprintln!(
+            "TOTP cannot be changed while DECKOX_ADMIN_PASSWORD_HASH is configured; \
+             remove it and use DECKOX_ADMIN_PASSWORD_HASH_FILE instead"
+        );
+        std::process::exit(2);
+    });
+
+    let mut account = load_admin_account_or_exit(&account_path);
+    if account.totp.is_none() {
+        println!("Two-factor authentication is not enabled for the admin account.");
+        return;
+    }
+
+    print!("Disable two-factor authentication for the admin account? [y/N] ");
+    if std::io::stdout().flush().is_err() {
+        eprintln!("failed to write prompt");
+        std::process::exit(2);
+    }
+    let mut answer = String::new();
+    if std::io::stdin().read_line(&mut answer).is_err() {
+        eprintln!("failed to read confirmation");
+        std::process::exit(2);
+    }
+    if !matches!(answer.trim(), "y" | "Y" | "yes" | "YES") {
+        println!("Cancelled.");
+        return;
+    }
+
+    account.totp = None;
+    account.updated_at_ms = auth::now_ms();
+    if let Err(error) = auth::write_account(&account_path, &account).await {
+        eprintln!("failed to save the account: {error}");
+        std::process::exit(2);
+    }
+
+    AuditLog::from_env()
+        .record_cli("totp_disabled_cli", "success", None)
+        .await;
+    println!(
+        "Two-factor authentication disabled. Restart deckox-server for the change to take effect:"
+    );
+    println!("  sudo systemctl restart deckox-server");
+}
+
+fn load_admin_account_or_exit(account_path: &std::path::Path) -> auth::Account {
+    let account_file = auth::load_account_file(account_path).unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2);
+    });
+    account_file
+        .accounts
+        .get(auth::ADMIN_ACCOUNT)
+        .cloned()
+        .unwrap_or_else(|| {
+            eprintln!(
+                "{} does not contain an admin account",
+                account_path.display()
+            );
+            std::process::exit(2);
+        })
 }
 
 fn init_tracing() {
@@ -290,6 +432,18 @@ async fn diagnostics_report(
     diagnostics::attachment(&report)
 }
 
+async fn audit_events(
+    State(state): State<AppState>,
+    Query(query): Query<AuditQuery>,
+) -> Json<AuditPage> {
+    Json(state.audit.page(query.limit, query.before_ms).await)
+}
+
+async fn audit_report(State(state): State<AppState>) -> Response {
+    let page = state.audit.export().await;
+    audit::attachment(&page)
+}
+
 async fn update_status(State(state): State<AppState>) -> Json<UpdateStatus> {
     Json(state.updates.check().await)
 }
@@ -336,6 +490,15 @@ async fn reboot_system(
                 reason = "invalid_password",
                 "system reboot confirmation failed"
             );
+            state
+                .audit
+                .record_admin(
+                    "system_reboot",
+                    user.source_ip,
+                    "failure",
+                    Some("invalid_password".to_owned()),
+                )
+                .await;
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse {
@@ -354,6 +517,10 @@ async fn reboot_system(
                 result = "rate_limited",
                 "system reboot confirmation rate limited"
             );
+            state
+                .audit
+                .record_admin("system_reboot", user.source_ip, "rate_limited", None)
+                .await;
             return (
                 StatusCode::TOO_MANY_REQUESTS,
                 Json(ErrorResponse {
@@ -376,6 +543,10 @@ async fn reboot_system(
             result = "accepted",
             "system reboot accepted"
         );
+        state
+            .audit
+            .record_admin("system_reboot", user.source_ip, "accepted", None)
+            .await;
     } else {
         warn!(
             event = "system_reboot",
@@ -386,6 +557,15 @@ async fn reboot_system(
             status = response.status().as_u16(),
             "system reboot failed"
         );
+        state
+            .audit
+            .record_admin(
+                "system_reboot",
+                user.source_ip,
+                "failure",
+                Some(format!("status={}", response.status().as_u16())),
+            )
+            .await;
     }
     response
 }
@@ -404,94 +584,21 @@ async fn proxy_services(
     proxy_agent(&state.agent, "GET", "/v1/services", &request_id).await
 }
 
-async fn proxy_ssh_keys(
-    State(state): State<AppState>,
-    Extension(request_id): Extension<RequestId>,
-) -> Response {
-    proxy_agent(&state.agent, "GET", "/v1/ssh/keys", &request_id).await
-}
-
-async fn proxy_add_ssh_key(
-    State(state): State<AppState>,
-    Extension(request_id): Extension<RequestId>,
-    Extension(user): Extension<AuthenticatedUser>,
-    Json(payload): Json<AddSshKeyRequest>,
-) -> Response {
-    let response = match state
-        .agent
-        .request_json("POST", "/v1/ssh/keys", &request_id, &payload)
-        .await
-    {
-        Ok(response) => (response.status, Json(response.body)).into_response(),
-        Err(message) => agent_unavailable(message),
-    };
-    log_ssh_action("add", &response, &request_id, &user);
-    response
-}
-
-async fn proxy_remove_ssh_key(
-    State(state): State<AppState>,
-    Path(key_id): Path<String>,
-    Extension(request_id): Extension<RequestId>,
-    Extension(user): Extension<AuthenticatedUser>,
-) -> Response {
-    if key_id.len() != 64 || !key_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                code: "bad_request",
-                message: "invalid SSH key ID".to_owned(),
-            }),
-        )
-            .into_response();
-    }
-    let response = proxy_agent(
-        &state.agent,
-        "DELETE",
-        &format!("/v1/ssh/keys/{key_id}"),
-        &request_id,
-    )
-    .await;
-    log_ssh_action("remove", &response, &request_id, &user);
-    response
-}
-
-fn log_ssh_action(
-    action: &str,
-    response: &Response,
-    request_id: &RequestId,
-    user: &AuthenticatedUser,
-) {
-    if response.status().is_success() {
-        info!(
-            event = "ssh_key_action",
-            request_id = %request_id.0,
-            actor = "admin",
-            source_ip = %user.source_ip,
-            action,
-            result = "success",
-            "SSH public key action completed"
-        );
-    } else {
-        warn!(
-            event = "ssh_key_action",
-            request_id = %request_id.0,
-            actor = "admin",
-            source_ip = %user.source_ip,
-            action,
-            result = "failure",
-            status = response.status().as_u16(),
-            "SSH public key action failed"
-        );
-    }
-}
-
 async fn proxy_service_details(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
     Extension(request_id): Extension<RequestId>,
 ) -> Response {
-    proxy_service_request(&state.agent, "GET", &service_id, None, &request_id, None).await
+    proxy_service_request(
+        &state.agent,
+        &state.audit,
+        "GET",
+        &service_id,
+        None,
+        &request_id,
+        None,
+    )
+    .await
 }
 
 async fn proxy_start_service(
@@ -502,6 +609,7 @@ async fn proxy_start_service(
 ) -> Response {
     proxy_service_request(
         &state.agent,
+        &state.audit,
         "POST",
         &service_id,
         Some("start"),
@@ -519,6 +627,7 @@ async fn proxy_stop_service(
 ) -> Response {
     proxy_service_request(
         &state.agent,
+        &state.audit,
         "POST",
         &service_id,
         Some("stop"),
@@ -536,6 +645,7 @@ async fn proxy_restart_service(
 ) -> Response {
     proxy_service_request(
         &state.agent,
+        &state.audit,
         "POST",
         &service_id,
         Some("restart"),
@@ -553,6 +663,7 @@ async fn proxy_enable_service(
 ) -> Response {
     proxy_service_request(
         &state.agent,
+        &state.audit,
         "POST",
         &service_id,
         Some("enable"),
@@ -570,6 +681,7 @@ async fn proxy_disable_service(
 ) -> Response {
     proxy_service_request(
         &state.agent,
+        &state.audit,
         "POST",
         &service_id,
         Some("disable"),
@@ -609,6 +721,7 @@ async fn proxy_service_logs(
 
 async fn proxy_service_request(
     client: &AgentClient,
+    audit: &AuditLog,
     method: &str,
     service_id: &str,
     action: Option<&str>,
@@ -636,6 +749,14 @@ async fn proxy_service_request(
                 result = "success",
                 "service action completed"
             );
+            audit
+                .record_admin(
+                    "service_action",
+                    user.source_ip,
+                    "success",
+                    Some(format!("service={service_id} action={action}")),
+                )
+                .await;
         } else {
             warn!(
                 event = "service_action",
@@ -648,6 +769,17 @@ async fn proxy_service_request(
                 status = response.status().as_u16(),
                 "service action failed"
             );
+            audit
+                .record_admin(
+                    "service_action",
+                    user.source_ip,
+                    "failure",
+                    Some(format!(
+                        "service={service_id} action={action} status={}",
+                        response.status().as_u16()
+                    )),
+                )
+                .await;
         }
     }
     response
@@ -694,17 +826,6 @@ async fn proxy_agent(
         )
             .into_response(),
     }
-}
-
-fn agent_unavailable(message: String) -> Response {
-    (
-        StatusCode::BAD_GATEWAY,
-        Json(ErrorResponse {
-            code: "agent_unavailable",
-            message,
-        }),
-    )
-        .into_response()
 }
 
 fn valid_service_id(service_id: &str) -> bool {

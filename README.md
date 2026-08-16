@@ -3,8 +3,11 @@
 Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基盤です。
 
 現在は次の最小構成と、Agentによるシステム情報・リソース・ストレージ取得、
-許可リスト付きsystemdサービス管理とjournalログ閲覧、管理者パスワード変更、SSH公開鍵管理、
-パスワード再確認付きのホスト再起動を提供します。SSEによるCPU・メモリ・Swap・
+許可リスト付きsystemdサービス管理とjournalログ閲覧、管理者パスワード変更、
+任意のTOTP二要素認証、パスワード再確認付きのホスト再起動を提供します。
+SSHコンソールからの`reset-password`・`disable-totp`サブコマンドによる
+認証情報の復旧、ログイン・設定変更・サービス操作などを記録し管理画面から
+閲覧・保存できる監査ログも実装済みです。SSEによるCPU・メモリ・Swap・
 ネットワーク送受信速度・ディスクI/O速度のリアルタイムメトリクス、任意取得のCPU温度、
 軽量SVGグラフ、日本語・英語の表示切替、再起動後の自動再接続、画面ごとのURLと
 ブラウザ別表示設定、最終更新時刻、Agent復旧時の状態再取得、JSONで保存できる
@@ -33,7 +36,7 @@ Linux
 Server側の診断結果は表示・保存され、Agent側の項目だけが取得不能として示されます。
 
 診断結果には、生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、
-セッション、Cookie、SSH鍵、SSH鍵管理対象のユーザー名、boot IDを含めません。
+セッション、Cookie、boot IDを含めません。
 
 設計・実装済み機能・導入方法のHTMLドキュメントは
 [`docs/index.html`](docs/index.html)から参照できます。
@@ -117,12 +120,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.3.8`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.4.0`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.3.8
-git push origin v0.3.8
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -147,7 +150,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.3.8 sh
+  | sudo DECKOX_VERSION=v0.4.0 sh
 ```
 
 ダウンロードや変更を行わず、対象アーキテクチャ・取得先・現在の導入状態を確認できます。
@@ -187,34 +190,26 @@ Server・Agentが起動確認できなければ元のファイルへ戻します
 Deckox管理と確認できないsystemdユニットは上書きしません。配布物内の`VERSION`と
 指定バージョンも照合します。
 
-管理画面へ入れない場合にパスワードを再設定する手順:
+管理画面へ入れない場合は、SSH接続したコンソールから`reset-password`
+サブコマンドでパスワードだけを再設定できます。二要素認証の設定は変更
+されません。
 
 ```bash
-printf '%s' '新しいパスワード' \
-  | sudo /usr/local/bin/deckox-server hash-password \
-  | sudo tee /var/lib/deckox/admin-password.hash >/dev/null
-sudo chown deckox:deckox /var/lib/deckox/admin-password.hash
-sudo chmod 0600 /var/lib/deckox/admin-password.hash
+printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password
 sudo systemctl restart deckox-server
 ```
 
-SSH公開鍵管理を有効にするには、`/etc/deckox/agent.toml`へ管理対象の
-非rootローカルユーザーを指定します。
-
-```toml
-[ssh]
-managed_user = "sorac"
-```
+二要素認証(TOTP)を有効にしたまま認証アプリとリカバリーコードを両方
+失った場合は、`disable-totp`で二要素認証だけを無効化できます。
 
 ```bash
-sudo systemctl restart deckox-agent
+sudo -u deckox deckox-server disable-totp
+sudo systemctl restart deckox-server
 ```
 
-設定画面ではOpenSSH形式の公開鍵を追加・削除できます。秘密鍵は受け付けず、
-既存の`authorized_keys`はDeckox管理ブロック外に保持します。SSH接続手段を
-失わないよう、外部の鍵を含めて最後の1本になる鍵は削除できません。Agentは
-`.ssh`をシンボリックリンクを辿らずに開き、同じディレクトリFDを基準として
-一時ファイルの作成、権限設定、同期、置換を行います。
+どちらの操作も監査ログ(管理画面の「監査ログ」または
+`GET /api/v1/audit`)に記録されます。監査ログは最大5000件を保持し、
+超過分は古いものから切り詰められます。
 
 ホスト再起動は初期状態では無効です。利用する場合は
 `/etc/deckox/agent.toml`で明示的に許可し、Agentを再起動します。
@@ -318,9 +313,12 @@ Serverと通信します。
 
 Serverは単一管理者のArgon2idパスワード認証と、12時間のメモリ内セッション
 を提供します。CookieはHttpOnly・SameSite=Strictです。ログインとパスワード
-再確認には送信元IP単位の試行制限があります。認証、パスワード変更、
-サービス操作、SSH公開鍵操作、ホスト再起動は
-リクエストID付きでjournalへ記録します。
+再確認には送信元IP単位の試行制限があります。設定画面からTOTPによる
+二要素認証を任意で有効化でき、有効時はログインがパスワード確認後の
+コード入力を含む2段階になります。認証、パスワード変更、TOTP設定変更、
+サービス操作、ホスト再起動、SSHコンソールからのパスワードリセットは
+リクエストID付きでjournalへ記録するとともに、監査ログ専用ファイルにも
+記録し、管理画面の「監査ログ」から閲覧・JSONダウンロードできます。
 Agentは任意のシェルコマンドを受け付けず、許可済みの型付き操作だけを
 実行します。サービスログ閲覧も完全一致許可リスト、500行の上限、全件・
 エラー・警告・情報のpriority選択肢に制限されます。任意コマンドや対話シェルを

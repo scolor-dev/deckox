@@ -118,7 +118,6 @@ mod tests {
             runtime_config: RuntimeConfigSummary {
                 reboot_allowed: false,
                 allowed_services_count: 2,
-                ssh_management_enabled: true,
             },
         }
     }
@@ -149,10 +148,6 @@ mod tests {
             "session",
             "sessions",
             "logs",
-            "ssh_key",
-            "ssh_keys",
-            "managed_user",
-            "managed_username",
             "socket",
             "socket_path",
             "socket_error",

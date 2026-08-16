@@ -3,16 +3,16 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import {
-  ApiError,
   api,
   buildUpdateCommand,
   safeReleaseUrl,
   writeClipboardText,
-  type SshKeyList,
   type SystemCapabilities,
+  type TotpStatus,
   type UpdateStatus,
 } from "../api/client";
 import { apiErrorKey } from "../api/errors";
+import ForgotPasswordHelp from "../components/ForgotPasswordHelp.vue";
 import { notify } from "../notifications";
 import { preferences } from "../preferences";
 
@@ -25,12 +25,6 @@ const newPassword = ref("");
 const passwordConfirmation = ref("");
 const submitting = ref(false);
 const error = ref<string | null>(null);
-const sshKeys = ref<SshKeyList | null>(null);
-const sshLoading = ref(true);
-const sshErrorKey = ref<string | null>(null);
-const publicKey = ref("");
-const addingKey = ref(false);
-const removingKeyId = ref<string | null>(null);
 const systemCapabilities = ref<SystemCapabilities | null>(null);
 const systemErrorKey = ref<string | null>(null);
 const rebootPassword = ref("");
@@ -38,6 +32,16 @@ const rebooting = ref(false);
 const updateStatus = ref<UpdateStatus | null>(null);
 const updateChecking = ref(false);
 const updateErrorKey = ref<string | null>(null);
+const totpStatus = ref<TotpStatus | null>(null);
+const totpLoading = ref(true);
+const totpErrorKey = ref<string | null>(null);
+const totpSetupSecret = ref<string | null>(null);
+const totpConfirmCode = ref("");
+const totpConfirming = ref(false);
+const totpRecoveryCodes = ref<string[] | null>(null);
+const totpDisablePassword = ref("");
+const totpDisableCode = ref("");
+const totpDisabling = ref(false);
 const updateCommand = computed(() => buildUpdateCommand(updateStatus.value?.latest_version));
 const releaseUrl = computed(() => safeReleaseUrl(updateStatus.value?.release_url));
 const updateCheckedAt = computed(() => {
@@ -78,6 +82,81 @@ async function changePassword() {
   }
 }
 
+async function loadTotpStatus() {
+  totpLoading.value = true;
+  totpErrorKey.value = null;
+  try {
+    totpStatus.value = await api.totpStatus();
+  } catch (caught) {
+    totpErrorKey.value = apiErrorKey(caught, "errors.totpStatus");
+  } finally {
+    totpLoading.value = false;
+  }
+}
+
+async function startTotpSetup() {
+  totpErrorKey.value = null;
+  try {
+    const setup = await api.totpSetup();
+    totpSetupSecret.value = setup.secret_base32;
+  } catch (caught) {
+    totpErrorKey.value = apiErrorKey(caught, "errors.totpSetup");
+  }
+}
+
+function cancelTotpSetup() {
+  totpSetupSecret.value = null;
+  totpConfirmCode.value = "";
+  totpErrorKey.value = null;
+}
+
+async function copyTotpSecret() {
+  if (!totpSetupSecret.value) return;
+  if (await writeClipboardText(totpSetupSecret.value)) {
+    notify("success", t("settings.totpSecretCopied"));
+  } else {
+    notify("error", t("settings.totpCopyFailed"));
+  }
+}
+
+async function confirmTotpSetup() {
+  totpErrorKey.value = null;
+  totpConfirming.value = true;
+  try {
+    const result = await api.totpConfirm(totpConfirmCode.value);
+    totpRecoveryCodes.value = result.recovery_codes;
+    totpConfirmCode.value = "";
+    totpSetupSecret.value = null;
+    await loadTotpStatus();
+  } catch (caught) {
+    totpErrorKey.value = apiErrorKey(caught, "errors.totpConfirm");
+  } finally {
+    totpConfirming.value = false;
+  }
+}
+
+function acknowledgeRecoveryCodes() {
+  totpRecoveryCodes.value = null;
+  notify("success", t("settings.totpEnabled"));
+}
+
+async function disableTotp() {
+  totpErrorKey.value = null;
+  if (!window.confirm(t("settings.confirmTotpDisable"))) return;
+
+  totpDisabling.value = true;
+  try {
+    totpStatus.value = await api.totpDisable(totpDisablePassword.value, totpDisableCode.value);
+    totpDisablePassword.value = "";
+    totpDisableCode.value = "";
+    notify("success", t("settings.totpDisabled"));
+  } catch (caught) {
+    totpErrorKey.value = apiErrorKey(caught, "errors.totpDisable");
+  } finally {
+    totpDisabling.value = false;
+  }
+}
+
 async function loadSystemCapabilities() {
   systemErrorKey.value = null;
   try {
@@ -109,18 +188,6 @@ async function rebootSystem() {
   }
 }
 
-async function loadSshKeys() {
-  sshLoading.value = true;
-  sshErrorKey.value = null;
-  try {
-    sshKeys.value = await api.sshKeys();
-  } catch (caught) {
-    sshErrorKey.value = apiErrorKey(caught, "errors.sshLoad");
-  } finally {
-    sshLoading.value = false;
-  }
-}
-
 async function checkForUpdate() {
   updateChecking.value = true;
   updateErrorKey.value = null;
@@ -147,45 +214,9 @@ async function copyUpdateCommand() {
   }
 }
 
-async function addSshKey() {
-  sshErrorKey.value = null;
-  if (!publicKey.value.trim()) {
-    sshErrorKey.value = "settings.keyRequired";
-    return;
-  }
-  addingKey.value = true;
-  try {
-    const added = await api.addSshKey(publicKey.value.trim());
-    publicKey.value = "";
-    await loadSshKeys();
-    notify("success", t("settings.keyAdded", { label: added.comment ?? added.fingerprint }));
-  } catch (caught) {
-    sshErrorKey.value = apiErrorKey(caught, "errors.sshAdd");
-  } finally {
-    addingKey.value = false;
-  }
-}
-
-async function removeSshKey(keyId: string, label: string) {
-  if (!window.confirm(t("settings.confirmRemove", { label }))) return;
-  removingKeyId.value = keyId;
-  sshErrorKey.value = null;
-  try {
-    const removed = await api.removeSshKey(keyId);
-    await loadSshKeys();
-    notify("success", t("settings.keyRemoved", { label: removed.comment ?? removed.fingerprint }));
-  } catch (caught) {
-    sshErrorKey.value = caught instanceof ApiError && caught.status === 409
-      ? "settings.lastKey"
-      : apiErrorKey(caught, "errors.sshRemove");
-  } finally {
-    removingKeyId.value = null;
-  }
-}
-
 onMounted(() => {
   void loadSystemCapabilities();
-  void loadSshKeys();
+  void loadTotpStatus();
 });
 </script>
 
@@ -407,6 +438,7 @@ onMounted(() => {
           autocomplete="current-password"
           required
         >
+        <ForgotPasswordHelp />
 
         <label for="new-password">{{ t("settings.newPassword") }}</label>
         <input
@@ -451,93 +483,132 @@ onMounted(() => {
 
     <section
       class="settings-section"
-      aria-labelledby="ssh-heading"
+      aria-labelledby="totp-heading"
     >
       <div class="settings-description">
-        <h2 id="ssh-heading">
-          {{ t("settings.ssh") }}
+        <h2 id="totp-heading">
+          {{ t("settings.totp") }}
         </h2>
-        <p>{{ t("settings.sshDescription") }}</p>
+        <p>{{ t("settings.totpDescription") }}</p>
       </div>
-      <div class="settings-form ssh-settings">
+      <div class="settings-form">
         <p
-          v-if="sshErrorKey"
+          v-if="totpErrorKey"
           class="notice error"
           role="alert"
         >
-          {{ t(sshErrorKey) }}
+          {{ t(totpErrorKey) }}
         </p>
         <p
-          v-if="sshLoading"
+          v-if="totpLoading"
           class="settings-help"
         >
-          {{ t("settings.checkingKeys") }}
+          {{ t("settings.totpChecking") }}
         </p>
-        <div
-          v-else-if="!sshKeys?.enabled"
-          class="notice warning"
-        >
-          {{ t("settings.sshDisabled") }}
-        </div>
-        <template v-else>
-          <p class="managed-user">
-            {{ t("settings.managedUser") }} <strong class="mono">{{ sshKeys.managed_user }}</strong>
-          </p>
 
-          <div
-            v-if="sshKeys.keys.length"
-            class="ssh-key-list"
-          >
-            <article
-              v-for="key in sshKeys.keys"
-              :key="key.id"
-              class="ssh-key-item"
-            >
-              <div>
-                <strong>{{ key.comment ?? t("settings.noComment") }}</strong>
-                <span class="mono">{{ key.key_type }}</span>
-                <code>{{ key.fingerprint }}</code>
-              </div>
-              <button
-                class="action-button danger"
-                type="button"
-                :disabled="removingKeyId !== null"
-                @click="removeSshKey(key.id, key.comment ?? key.fingerprint)"
-              >
-                {{ removingKeyId === key.id ? t("settings.deleting") : t("settings.delete") }}
-              </button>
-            </article>
+        <template v-else-if="totpRecoveryCodes">
+          <div class="notice warning">
+            <p>{{ t("settings.totpRecoveryCodesIntro") }}</p>
+            <pre class="recovery-codes"><code>{{ totpRecoveryCodes.join("\n") }}</code></pre>
           </div>
-          <p
-            v-else
-            class="settings-help"
+          <button
+            class="primary-button settings-submit"
+            type="button"
+            @click="acknowledgeRecoveryCodes"
           >
-            {{ t("settings.noKeys") }}
-          </p>
+            {{ t("settings.totpRecoveryCodesAck") }}
+          </button>
+        </template>
 
-          <form
-            class="ssh-add-form"
-            @submit.prevent="addSshKey"
+        <template v-else-if="totpSetupSecret">
+          <p>{{ t("settings.totpSetupIntro") }}</p>
+          <dl class="totp-secret">
+            <div>
+              <dt>{{ t("settings.totpSecret") }}</dt><dd class="mono">
+                {{ totpSetupSecret }}
+              </dd>
+            </div>
+          </dl>
+          <button
+            class="action-button"
+            type="button"
+            @click="copyTotpSecret"
           >
-            <label for="public-key">{{ t("settings.addKey") }}</label>
-            <textarea
-              id="public-key"
-              v-model="publicKey"
-              rows="4"
-              :placeholder="t('settings.keyPlaceholder')"
-              spellcheck="false"
+            {{ t("settings.totpCopySecret") }}
+          </button>
+          <form
+            class="totp-confirm-form"
+            @submit.prevent="confirmTotpSetup"
+          >
+            <label for="totp-confirm-code">{{ t("settings.totpConfirmCode") }}</label>
+            <input
+              id="totp-confirm-code"
+              v-model="totpConfirmCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
               required
-            />
-            <small>{{ t("settings.publicOnly") }}</small>
+            >
             <button
               class="primary-button settings-submit"
               type="submit"
-              :disabled="addingKey"
+              :disabled="totpConfirming || totpConfirmCode.length === 0"
             >
-              {{ addingKey ? t("settings.adding") : t("settings.addKey") }}
+              {{ totpConfirming ? t("settings.totpConfirming") : t("settings.totpConfirmSubmit") }}
+            </button>
+            <button
+              class="action-button"
+              type="button"
+              @click="cancelTotpSetup"
+            >
+              {{ t("settings.cancel") }}
             </button>
           </form>
         </template>
+
+        <template v-else-if="totpStatus?.enabled">
+          <p class="settings-help">
+            {{ t("settings.totpEnabledStatus", { count: totpStatus.recovery_codes_remaining }) }}
+          </p>
+          <form
+            class="settings-form"
+            @submit.prevent="disableTotp"
+          >
+            <label for="totp-disable-password">{{ t("settings.currentPassword") }}</label>
+            <input
+              id="totp-disable-password"
+              v-model="totpDisablePassword"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+            <label for="totp-disable-code">{{ t("login.totpCode") }}</label>
+            <input
+              id="totp-disable-code"
+              v-model="totpDisableCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              required
+            >
+            <button
+              class="primary-button danger-button settings-submit"
+              type="submit"
+              :disabled="totpDisabling"
+            >
+              {{ totpDisabling ? t("settings.totpDisabling") : t("settings.totpDisable") }}
+            </button>
+          </form>
+        </template>
+
+        <button
+          v-else
+          class="primary-button settings-submit"
+          type="button"
+          @click="startTotpSetup"
+        >
+          {{ t("settings.totpEnable") }}
+        </button>
       </div>
     </section>
   </section>
