@@ -31,9 +31,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   color: var(--text);
-  background:
-    radial-gradient(circle at 75% -15%, #123b45 0, transparent 30rem),
-    var(--bg);
+  background: var(--bg);
 }
 
 a {
@@ -80,8 +78,7 @@ pre,
   height: 100vh;
   padding: 28px 20px;
   border-right: 1px solid var(--line);
-  background: rgba(10, 17, 29, 0.96);
-  backdrop-filter: blur(16px);
+  background: var(--panel);
 }
 
 .brand {
@@ -203,8 +200,8 @@ h3 {
 h1 {
   max-width: 850px;
   margin: 0;
-  font-size: clamp(36px, 6vw, 62px);
-  line-height: 1.06;
+  font-size: clamp(28px, 4vw, 38px);
+  line-height: 1.2;
 }
 
 .lead {
@@ -252,17 +249,16 @@ h1 {
   padding: 23px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: linear-gradient(145deg, rgba(17, 28, 44, 0.96), rgba(11, 18, 30, 0.96));
+  background: var(--panel);
 }
 
 a.card {
   text-decoration: none;
-  transition: border-color 150ms ease, transform 150ms ease;
+  transition: border-color 150ms ease;
 }
 
 a.card:hover {
   border-color: var(--line-bright);
-  transform: translateY(-2px);
 }
 
 .card h3 {
@@ -499,8 +495,7 @@ pre {
     justify-content: space-between;
     padding: 13px 18px;
     border-bottom: 1px solid var(--line);
-    background: rgba(8, 13, 22, 0.94);
-    backdrop-filter: blur(14px);
+    background: var(--bg);
   }
 
   .menu-button {
