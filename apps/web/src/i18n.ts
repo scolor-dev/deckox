@@ -33,7 +33,7 @@ export const messages = {
       systemInfo: "システム情報", hostname: "ホスト名", kernel: "カーネル", timezone: "タイムゾーン",
     },
     services: {
-      title: "サービス", summary: "全{total}件のうち{running}件が稼働中", search: "サービスを検索", searchPlaceholder: "サービス名または説明を検索",
+      title: "サービス", summary: "全{total}件のうち{running}件が稼働中", search: "サービスを検索", searchPlaceholder: "サービス名・説明・タグを検索",
       count: "{count}件", service: "サービス", state: "状態", startup: "自動起動", actions: "操作", loading: "サービスを読み込んでいます…",
       empty: "該当するサービスはありません。", noDescription: "説明なし", running: "稼働中", failed: "異常", stopped: "停止中",
       enabled: "有効", disabled: "無効", static: "固定", start: "起動", restart: "再起動", stop: "停止", readOnly: "閲覧のみ",
@@ -43,6 +43,7 @@ export const messages = {
       logTitle: "{id} のログ", logDescription: "systemd journalの直近の記録を表示します。", logLines: "行数", logLinesValue: "{count}行",
       logPriorityLabel: "重要度", logPriority: { all: "すべて", error: "エラー", warning: "警告以上", info: "情報以上" },
       logPriorityValue: { error: "エラー", warning: "警告", info: "情報" }, logLoading: "ログを読み込んでいます…", logEmpty: "該当するログはありません。",
+      tagVisibility: "表示するタグ", tagStandard: "標準", tagDeckox: "Deckox", tagOther: "その他",
     },
     storage: {
       title: "ストレージ", summary: "{count}件のマウント", mount: "マウント先", filesystem: "ファイルシステム", capacity: "容量", usage: "使用状況",
@@ -139,7 +140,7 @@ export const messages = {
       systemInfo: "System information", hostname: "Hostname", kernel: "Kernel", timezone: "Time zone",
     },
     services: {
-      title: "Services", summary: "{running} of {total} services running", search: "Search services", searchPlaceholder: "Search by service name or description",
+      title: "Services", summary: "{running} of {total} services running", search: "Search services", searchPlaceholder: "Search by name, description, or tag",
       count: "{count}", service: "Service", state: "State", startup: "Startup", actions: "Actions", loading: "Loading services…",
       empty: "No matching services.", noDescription: "No description", running: "Running", failed: "Failed", stopped: "Stopped",
       enabled: "Enabled", disabled: "Disabled", static: "Static", start: "Start", restart: "Restart", stop: "Stop", readOnly: "Read only",
@@ -149,6 +150,7 @@ export const messages = {
       logTitle: "Logs for {id}", logDescription: "Shows the most recent entries from the systemd journal.", logLines: "Lines", logLinesValue: "{count} lines",
       logPriorityLabel: "Priority", logPriority: { all: "All", error: "Errors", warning: "Warnings and above", info: "Info and above" },
       logPriorityValue: { error: "Error", warning: "Warning", info: "Info" }, logLoading: "Loading logs…", logEmpty: "No matching log entries.",
+      tagVisibility: "Visible tags", tagStandard: "Standard", tagDeckox: "Deckox", tagOther: "Other",
     },
     storage: {
       title: "Storage", summary: "{count} mounts", mount: "Mount point", filesystem: "File system", capacity: "Capacity", usage: "Usage",

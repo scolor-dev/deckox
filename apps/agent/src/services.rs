@@ -16,6 +16,10 @@ use crate::error::AgentError;
 
 static COMMAND_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 const PROTECTED_SERVICES: [&str; 2] = ["deckox-agent.service", "deckox-server.service"];
+/// Unit file directories owned by the OS/package manager. A service whose
+/// `FragmentPath` lives here ships with the distro or an installed package
+/// rather than being written locally, so it is tagged `standard_system`.
+const VENDOR_UNIT_DIRS: [&str; 2] = ["/usr/lib/systemd/system/", "/lib/systemd/system/"];
 const ALLOWED_LOG_LINES: [u16; 4] = [50, 100, 200, 500];
 const MAX_JOURNAL_OUTPUT_BYTES: usize = 2 * 1024 * 1024;
 const MAX_LOG_RESPONSE_BYTES: usize = 512 * 1024;
@@ -53,8 +57,18 @@ impl ServiceManager {
             "--plain",
         ])
         .await?;
+        let ids: Vec<String> = output
+            .lines()
+            .filter_map(|line| line.split_whitespace().next().map(str::to_owned))
+            .collect();
+        let fragment_paths = read_fragment_paths(&ids).await?;
 
-        Ok(parse_service_list(&output, &enabled_states, &self.allowed))
+        Ok(parse_service_list(
+            &output,
+            &enabled_states,
+            &fragment_paths,
+            &self.allowed,
+        ))
     }
 
     pub async fn details(&self, service_id: &str) -> Result<ServiceDetails, AgentError> {
@@ -65,7 +79,7 @@ impl ServiceManager {
             "show",
             service_id,
             "--no-pager",
-            "--property=Id,Description,LoadState,ActiveState,SubState,UnitFileState,MainPID",
+            "--property=Id,Description,LoadState,ActiveState,SubState,UnitFileState,MainPID,FragmentPath",
         ])
         .await?;
         let values = parse_properties(&output);
@@ -97,6 +111,10 @@ impl ServiceManager {
                 .and_then(|value| value.parse::<u32>().ok())
                 .filter(|pid| *pid != 0),
             control_allowed: self.allowed.contains(service_id),
+            standard_system: values
+                .get("FragmentPath")
+                .is_some_and(|path| is_standard_system(path)),
+            deckox_managed: PROTECTED_SERVICES.contains(&service_id),
         })
     }
 
@@ -381,6 +399,7 @@ async fn read_unit_file_states() -> Result<HashMap<String, String>, AgentError> 
 fn parse_service_list(
     input: &str,
     unit_file_states: &HashMap<String, String>,
+    fragment_paths: &HashMap<String, String>,
     allowed: &HashSet<String>,
 ) -> Vec<ServiceSummary> {
     input
@@ -392,15 +411,55 @@ fn parse_service_list(
             let active_state = fields.next()?.to_owned();
             let sub_state = fields.next()?.to_owned();
             let description = fields.collect::<Vec<_>>().join(" ");
+            let standard_system = fragment_paths
+                .get(&id)
+                .is_some_and(|path| is_standard_system(path));
+            let deckox_managed = PROTECTED_SERVICES.contains(&id.as_str());
             Some(ServiceSummary {
                 control_allowed: allowed.contains(&id),
                 unit_file_state: unit_file_states.get(&id).cloned(),
+                standard_system,
+                deckox_managed,
                 id,
                 description,
                 load_state,
                 active_state,
                 sub_state,
             })
+        })
+        .collect()
+}
+
+/// A service is `standard_system` when its unit file lives under a
+/// package/vendor-owned directory rather than one created locally (Deckox's
+/// own units, and any other locally installed service, live under
+/// `/etc/systemd/system`).
+fn is_standard_system(fragment_path: &str) -> bool {
+    VENDOR_UNIT_DIRS
+        .iter()
+        .any(|prefix| fragment_path.starts_with(prefix))
+}
+
+/// Batches a `FragmentPath` lookup for every given unit ID into a single
+/// `systemctl show` call instead of one round trip per service.
+async fn read_fragment_paths(ids: &[String]) -> Result<HashMap<String, String>, AgentError> {
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let mut args = vec!["show", "--no-pager", "--property=Id,FragmentPath"];
+    args.extend(ids.iter().map(String::as_str));
+    let output = systemctl(&args).await?;
+    Ok(parse_fragment_paths(&output))
+}
+
+fn parse_fragment_paths(input: &str) -> HashMap<String, String> {
+    input
+        .split("\n\n")
+        .filter_map(|block| {
+            let properties = parse_properties(block);
+            let id = properties.get("Id")?.clone();
+            let fragment_path = properties.get("FragmentPath").cloned().unwrap_or_default();
+            Some((id, fragment_path))
         })
         .collect()
 }
@@ -432,8 +491,8 @@ mod tests {
 
     use super::{
         MAX_LOG_MESSAGE_BYTES, PROTECTED_SERVICES, ServiceManager, journal_priority,
-        parse_journal_entries, parse_properties, parse_service_list, truncate_message,
-        validate_log_lines,
+        parse_fragment_paths, parse_journal_entries, parse_properties, parse_service_list,
+        truncate_message, validate_log_lines,
     };
 
     #[test]
@@ -459,17 +518,50 @@ mod tests {
     fn parses_service_rows() {
         let mut states = HashMap::new();
         states.insert("nginx.service".to_owned(), "enabled".to_owned());
+        let mut fragment_paths = HashMap::new();
+        fragment_paths.insert(
+            "nginx.service".to_owned(),
+            "/usr/lib/systemd/system/nginx.service".to_owned(),
+        );
+        fragment_paths.insert(
+            "deckox-agent.service".to_owned(),
+            "/etc/systemd/system/deckox-agent.service".to_owned(),
+        );
         let allowed = HashSet::from(["nginx.service".to_owned()]);
         let services = parse_service_list(
-            "nginx.service loaded active running A high performance web server\n",
+            "nginx.service loaded active running A high performance web server\ndeckox-agent.service loaded active running Deckox Agent\n",
             &states,
+            &fragment_paths,
             &allowed,
         );
 
-        assert_eq!(services.len(), 1);
+        assert_eq!(services.len(), 2);
         assert_eq!(services[0].description, "A high performance web server");
         assert_eq!(services[0].unit_file_state.as_deref(), Some("enabled"));
         assert!(services[0].control_allowed);
+        assert!(services[0].standard_system, "nginx ships under /usr/lib");
+        assert!(!services[0].deckox_managed);
+        assert!(
+            !services[1].standard_system,
+            "a locally installed unit is not vendor-provided"
+        );
+        assert!(services[1].deckox_managed);
+    }
+
+    #[test]
+    fn parses_fragment_paths_from_batched_systemctl_show() {
+        let paths = parse_fragment_paths(
+            "Id=nginx.service\nFragmentPath=/usr/lib/systemd/system/nginx.service\n\nId=deckox-agent.service\nFragmentPath=/etc/systemd/system/deckox-agent.service\n",
+        );
+
+        assert_eq!(
+            paths.get("nginx.service").map(String::as_str),
+            Some("/usr/lib/systemd/system/nginx.service")
+        );
+        assert_eq!(
+            paths.get("deckox-agent.service").map(String::as_str),
+            Some("/etc/systemd/system/deckox-agent.service")
+        );
     }
 
     #[test]

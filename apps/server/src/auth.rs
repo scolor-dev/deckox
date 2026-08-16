@@ -21,10 +21,10 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 use totp_rs::{Algorithm, Secret, TOTP};
-use tracing::{info, warn};
+use tracing::warn;
 
 use crate::{
-    ErrorResponse, audit::AuditLog, fsutil::atomic_write_secure, request_context::RequestId,
+    audit::AuditLog, error_response, fsutil::atomic_write_secure, request_context::RequestId,
 };
 
 const DEFAULT_PASSWORD_HASH_FILE: &str = "/var/lib/deckox/admin-password.hash";
@@ -803,6 +803,39 @@ pub async fn write_account(path: &Path, account: &Account) -> Result<(), String>
     atomic_write_secure(path, &serialized).await
 }
 
+/// Reads the single admin account out of `path`. Shared by the CLI recovery
+/// commands, which — unlike the running server — have no in-memory
+/// [`AuthManager`] to read from and always go straight to disk.
+pub fn load_admin_account(path: &Path) -> Result<Account, String> {
+    let account_file = load_account_file(path)?;
+    account_file
+        .accounts
+        .get(ADMIN_ACCOUNT)
+        .cloned()
+        .ok_or_else(|| format!("{} does not contain an admin account", path.display()))
+}
+
+/// `reset-password` CLI service: overwrites only `password_hash`, leaving
+/// TOTP untouched. See [`disable_totp_cli`] for the separate TOTP recovery
+/// path.
+pub async fn reset_password_cli(path: &Path, new_password: &str) -> Result<(), String> {
+    validate_new_password(new_password)?;
+    let mut account = load_admin_account(path)?;
+    account.password_hash = hash_password(new_password)?;
+    account.updated_at_ms = now_ms();
+    write_account(path, &account).await
+}
+
+/// `disable-totp` CLI service: clears TOTP and its recovery codes. The
+/// caller is responsible for checking whether TOTP is enabled and for any
+/// interactive confirmation before calling this.
+pub async fn disable_totp_cli(path: &Path) -> Result<(), String> {
+    let mut account = load_admin_account(path)?;
+    account.totp = None;
+    account.updated_at_ms = now_ms();
+    write_account(path, &account).await
+}
+
 pub fn now_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
@@ -900,16 +933,15 @@ pub async fn login(
 
     match auth.login(peer.ip(), payload.password).await {
         LoginResult::Authenticated(token) => {
-            info!(
-                event = "auth_login",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %peer.ip(),
-                result = "success",
-                "administrator logged in"
-            );
             auth.audit()
-                .record_admin("auth_login", peer.ip(), "success", None)
+                .log_admin(
+                    &request_id,
+                    peer.ip(),
+                    "auth_login",
+                    "success",
+                    None,
+                    "administrator logged in",
+                )
                 .await;
             let mut response = Json(AuthStatus::authenticated()).into_response();
             if let Ok(value) = HeaderValue::from_str(&auth.session_cookie(&token)) {
@@ -918,16 +950,15 @@ pub async fn login(
             response
         }
         LoginResult::TotpRequired(preauth_token) => {
-            info!(
-                event = "auth_login",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %peer.ip(),
-                result = "totp_required",
-                "administrator password confirmed; two-factor code required"
-            );
             auth.audit()
-                .record_admin("auth_login", peer.ip(), "totp_required", None)
+                .log_admin(
+                    &request_id,
+                    peer.ip(),
+                    "auth_login",
+                    "totp_required",
+                    None,
+                    "administrator password confirmed; two-factor code required",
+                )
                 .await;
             let mut response = Json(AuthStatus::totp_required()).into_response();
             if let Ok(value) = HeaderValue::from_str(&auth.preauth_cookie(&preauth_token)) {
@@ -936,15 +967,15 @@ pub async fn login(
             response
         }
         LoginResult::Invalid => {
-            warn!(
-                event = "auth_login",
-                request_id = %request_id.0,
-                source_ip = %peer.ip(),
-                result = "failure",
-                "administrator login failed"
-            );
             auth.audit()
-                .record_admin("auth_login", peer.ip(), "failure", None)
+                .log_admin(
+                    &request_id,
+                    peer.ip(),
+                    "auth_login",
+                    "failure",
+                    None,
+                    "administrator login failed",
+                )
                 .await;
             error_response(
                 StatusCode::UNAUTHORIZED,
@@ -953,15 +984,15 @@ pub async fn login(
             )
         }
         LoginResult::RateLimited => {
-            warn!(
-                event = "auth_login",
-                request_id = %request_id.0,
-                source_ip = %peer.ip(),
-                result = "rate_limited",
-                "administrator login rate limited"
-            );
             auth.audit()
-                .record_admin("auth_login", peer.ip(), "rate_limited", None)
+                .log_admin(
+                    &request_id,
+                    peer.ip(),
+                    "auth_login",
+                    "rate_limited",
+                    None,
+                    "administrator login rate limited",
+                )
                 .await;
             error_response(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -997,16 +1028,15 @@ pub async fn login_totp(
 
     match auth.login_totp(peer.ip(), &headers, payload.code).await {
         LoginTotpResult::Authenticated(token) => {
-            info!(
-                event = "auth_login_totp",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %peer.ip(),
-                result = "success",
-                "administrator completed two-factor login"
-            );
             auth.audit()
-                .record_admin("auth_login_totp", peer.ip(), "success", None)
+                .log_admin(
+                    &request_id,
+                    peer.ip(),
+                    "auth_login_totp",
+                    "success",
+                    None,
+                    "administrator completed two-factor login",
+                )
                 .await;
             let mut response = Json(AuthStatus::authenticated()).into_response();
             if let Ok(value) = HeaderValue::from_str(&auth.session_cookie(&token)) {
@@ -1018,15 +1048,15 @@ pub async fn login_totp(
             response
         }
         LoginTotpResult::Invalid => {
-            warn!(
-                event = "auth_login_totp",
-                request_id = %request_id.0,
-                source_ip = %peer.ip(),
-                result = "failure",
-                "two-factor code was incorrect"
-            );
             auth.audit()
-                .record_admin("auth_login_totp", peer.ip(), "failure", None)
+                .log_admin(
+                    &request_id,
+                    peer.ip(),
+                    "auth_login_totp",
+                    "failure",
+                    None,
+                    "two-factor code was incorrect",
+                )
                 .await;
             error_response(
                 StatusCode::UNAUTHORIZED,
@@ -1035,15 +1065,15 @@ pub async fn login_totp(
             )
         }
         LoginTotpResult::RateLimited => {
-            warn!(
-                event = "auth_login_totp",
-                request_id = %request_id.0,
-                source_ip = %peer.ip(),
-                result = "rate_limited",
-                "two-factor login rate limited"
-            );
             auth.audit()
-                .record_admin("auth_login_totp", peer.ip(), "rate_limited", None)
+                .log_admin(
+                    &request_id,
+                    peer.ip(),
+                    "auth_login_totp",
+                    "rate_limited",
+                    None,
+                    "two-factor login rate limited",
+                )
                 .await;
             error_response(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -1074,16 +1104,15 @@ pub async fn logout(
     headers: HeaderMap,
 ) -> Response {
     auth.logout(&headers).await;
-    info!(
-        event = "auth_logout",
-        request_id = %request_id.0,
-        actor = "admin",
-        source_ip = %user.source_ip,
-        result = "success",
-        "administrator logged out"
-    );
     auth.audit()
-        .record_admin("auth_logout", user.source_ip, "success", None)
+        .log_admin(
+            &request_id,
+            user.source_ip,
+            "auth_logout",
+            "success",
+            None,
+            "administrator logged out",
+        )
         .await;
     signed_out_response(&auth)
 }
@@ -1114,35 +1143,27 @@ pub async fn change_password(
         .await
     {
         ChangePasswordResult::Changed => {
-            info!(
-                event = "password_change",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %user.source_ip,
-                result = "success",
-                "administrator password changed"
-            );
             auth.audit()
-                .record_admin("password_change", user.source_ip, "success", None)
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "password_change",
+                    "success",
+                    None,
+                    "administrator password changed",
+                )
                 .await;
             signed_out_response(&auth)
         }
         ChangePasswordResult::InvalidCurrentPassword => {
-            warn!(
-                event = "password_change",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %user.source_ip,
-                result = "failure",
-                reason = "invalid_current_password",
-                "administrator password confirmation failed"
-            );
             auth.audit()
-                .record_admin(
-                    "password_change",
+                .log_admin(
+                    &request_id,
                     user.source_ip,
+                    "password_change",
                     "failure",
                     Some("invalid_current_password".to_owned()),
+                    "administrator password confirmation failed",
                 )
                 .await;
             error_response(
@@ -1152,16 +1173,15 @@ pub async fn change_password(
             )
         }
         ChangePasswordResult::RateLimited => {
-            warn!(
-                event = "password_change",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %user.source_ip,
-                result = "rate_limited",
-                "administrator password confirmation rate limited"
-            );
             auth.audit()
-                .record_admin("password_change", user.source_ip, "rate_limited", None)
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "password_change",
+                    "rate_limited",
+                    None,
+                    "administrator password confirmation rate limited",
+                )
                 .await;
             error_response(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -1180,17 +1200,15 @@ pub async fn change_password(
             "password cannot be changed while DECKOX_ADMIN_PASSWORD_HASH is configured",
         ),
         ChangePasswordResult::Failed(error) => {
-            warn!(
-                event = "password_change",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %user.source_ip,
-                result = "failure",
-                reason = %error,
-                "administrator password change failed"
-            );
             auth.audit()
-                .record_admin("password_change", user.source_ip, "failure", Some(error))
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "password_change",
+                    "failure",
+                    Some(error),
+                    "administrator password change failed",
+                )
                 .await;
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -1267,16 +1285,15 @@ pub async fn totp_confirm(
     };
     match auth.totp_confirm(&token, payload.code).await {
         TotpConfirmResult::Confirmed(recovery_codes) => {
-            info!(
-                event = "totp_enabled",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %user.source_ip,
-                result = "success",
-                "two-factor authentication enabled"
-            );
             auth.audit()
-                .record_admin("totp_enabled", user.source_ip, "success", None)
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "totp_enabled",
+                    "success",
+                    None,
+                    "two-factor authentication enabled",
+                )
                 .await;
             Json(TotpConfirmResponse { recovery_codes }).into_response()
         }
@@ -1296,17 +1313,15 @@ pub async fn totp_confirm(
             "two-factor authentication cannot be changed while DECKOX_ADMIN_PASSWORD_HASH is configured",
         ),
         TotpConfirmResult::Failed(error) => {
-            warn!(
-                event = "totp_enabled",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %user.source_ip,
-                result = "failure",
-                reason = %error,
-                "failed to enable two-factor authentication"
-            );
             auth.audit()
-                .record_admin("totp_enabled", user.source_ip, "failure", Some(error))
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "totp_enabled",
+                    "failure",
+                    Some(error),
+                    "failed to enable two-factor authentication",
+                )
                 .await;
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -1328,16 +1343,15 @@ pub async fn totp_disable(
         .await
     {
         TotpDisableResult::Disabled => {
-            info!(
-                event = "totp_disabled",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %user.source_ip,
-                result = "success",
-                "two-factor authentication disabled"
-            );
             auth.audit()
-                .record_admin("totp_disabled", user.source_ip, "success", None)
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "totp_disabled",
+                    "success",
+                    None,
+                    "two-factor authentication disabled",
+                )
                 .await;
             Json(TotpStatusResponse {
                 enabled: false,
@@ -1359,16 +1373,15 @@ pub async fn totp_disable(
             "the code is incorrect",
         ),
         TotpDisableResult::RateLimited => {
-            warn!(
-                event = "totp_disabled",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %user.source_ip,
-                result = "rate_limited",
-                "two-factor disable confirmation rate limited"
-            );
             auth.audit()
-                .record_admin("totp_disabled", user.source_ip, "rate_limited", None)
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "totp_disabled",
+                    "rate_limited",
+                    None,
+                    "two-factor disable confirmation rate limited",
+                )
                 .await;
             error_response(
                 StatusCode::TOO_MANY_REQUESTS,
@@ -1382,17 +1395,15 @@ pub async fn totp_disable(
             "two-factor authentication cannot be changed while DECKOX_ADMIN_PASSWORD_HASH is configured",
         ),
         TotpDisableResult::Failed(error) => {
-            warn!(
-                event = "totp_disabled",
-                request_id = %request_id.0,
-                actor = "admin",
-                source_ip = %user.source_ip,
-                result = "failure",
-                reason = %error,
-                "failed to disable two-factor authentication"
-            );
             auth.audit()
-                .record_admin("totp_disabled", user.source_ip, "failure", Some(error))
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "totp_disabled",
+                    "failure",
+                    Some(error),
+                    "failed to disable two-factor authentication",
+                )
                 .await;
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -1408,21 +1419,14 @@ async fn totp_invalid_current_password_response(
     request_id: &RequestId,
     user: &AuthenticatedUser,
 ) -> Response {
-    warn!(
-        event = "totp_disabled",
-        request_id = %request_id.0,
-        actor = "admin",
-        source_ip = %user.source_ip,
-        result = "failure",
-        reason = "invalid_current_password",
-        "two-factor disable confirmation failed"
-    );
     auth.audit()
-        .record_admin(
-            "totp_disabled",
+        .log_admin(
+            request_id,
             user.source_ip,
+            "totp_disabled",
             "failure",
             Some("invalid_current_password".to_owned()),
+            "two-factor disable confirmation failed",
         )
         .await;
     error_response(
@@ -1524,17 +1528,6 @@ fn requires_same_origin(method: &Method, headers: &HeaderMap) -> bool {
             .is_some_and(|value| value.as_bytes().eq_ignore_ascii_case(b"websocket"))
 }
 
-fn error_response(status: StatusCode, code: &'static str, message: &'static str) -> Response {
-    (
-        status,
-        Json(ErrorResponse {
-            code,
-            message: message.to_owned(),
-        }),
-    )
-        .into_response()
-}
-
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, net::IpAddr, sync::Arc};
@@ -1544,8 +1537,9 @@ mod tests {
 
     use super::{
         Account, AuditLog, AuthInner, AuthManager, MAX_FAILURES, PasswordConfirmationResult,
-        hash_password, is_rate_limited, load_account_file, record_failure, requires_same_origin,
-        same_origin, session_token,
+        TotpSecret, disable_totp_cli, hash_password, is_rate_limited, load_account_file,
+        load_admin_account, record_failure, requires_same_origin, reset_password_cli, same_origin,
+        session_token, write_account,
     };
 
     fn test_auth(password: &str) -> AuthManager {
@@ -1692,6 +1686,76 @@ mod tests {
             .expect("admin account should exist");
         assert_eq!(account.password_hash, hash);
         assert_eq!(account.updated_at_ms, 123);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn reset_password_cli_updates_only_the_password_hash() {
+        let path = std::env::temp_dir().join(format!(
+            "deckox-account-reset-cli-{}.json",
+            hex::encode(rand::random::<[u8; 8]>())
+        ));
+        let account = Account {
+            password_hash: hash_password("old-password").expect("password should hash"),
+            totp: Some(TotpSecret {
+                secret_base32: "JBSWY3DPEHPK3PXP".to_owned(),
+                recovery_code_hashes: vec![
+                    hash_password("ABCDE-12345").expect("recovery code should hash"),
+                ],
+                last_used_step: None,
+            }),
+            updated_at_ms: 0,
+        };
+        write_account(&path, &account)
+            .await
+            .expect("account should write");
+
+        reset_password_cli(&path, "brand-new-password")
+            .await
+            .expect("reset should succeed");
+
+        let reloaded = load_admin_account(&path).expect("account should reload");
+        assert_ne!(reloaded.password_hash, account.password_hash);
+        assert!(
+            reloaded.totp.is_some(),
+            "reset-password must leave TOTP untouched"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn disable_totp_cli_clears_totp_and_recovery_codes() {
+        let path = std::env::temp_dir().join(format!(
+            "deckox-account-disable-totp-cli-{}.json",
+            hex::encode(rand::random::<[u8; 8]>())
+        ));
+        let account = Account {
+            password_hash: hash_password("some-password").expect("password should hash"),
+            totp: Some(TotpSecret {
+                secret_base32: "JBSWY3DPEHPK3PXP".to_owned(),
+                recovery_code_hashes: vec![
+                    hash_password("ABCDE-12345").expect("recovery code should hash"),
+                ],
+                last_used_step: None,
+            }),
+            updated_at_ms: 0,
+        };
+        write_account(&path, &account)
+            .await
+            .expect("account should write");
+
+        disable_totp_cli(&path)
+            .await
+            .expect("disable should succeed");
+
+        let reloaded = load_admin_account(&path).expect("account should reload");
+        assert!(reloaded.totp.is_none());
+        assert_eq!(
+            reloaded.password_hash, account.password_hash,
+            "disable-totp must leave the password untouched"
+        );
 
         let _ = std::fs::remove_file(&path);
     }

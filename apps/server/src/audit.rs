@@ -12,9 +12,9 @@ use axum::{
 };
 use deckox_protocol::{AuditEvent, AuditPage};
 use tokio::sync::Mutex;
-use tracing::warn;
+use tracing::{info, warn};
 
-use crate::fsutil::atomic_write_secure;
+use crate::{fsutil::atomic_write_secure, request_context::RequestId};
 
 const DEFAULT_AUDIT_LOG_FILE: &str = "/var/lib/deckox/audit.log";
 const MAX_AUDIT_ENTRIES: usize = 5000;
@@ -100,6 +100,45 @@ impl AuditLog {
         detail: Option<String>,
     ) {
         self.record(event, "admin", source_ip, result, detail).await;
+    }
+
+    /// Pairs a journald line with an [`record_admin`](Self::record_admin)
+    /// call so both destinations record the same `event`/`result`/`detail`
+    /// instead of drifting apart. `result` selects the log level:
+    /// `"success"`, `"accepted"`, and `"totp_required"` log at `info`,
+    /// everything else (failures, rejections, rate limiting) at `warn`.
+    /// `message` is the human-readable sentence shown in `journalctl`.
+    pub async fn log_admin(
+        &self,
+        request_id: &RequestId,
+        source_ip: IpAddr,
+        event: &'static str,
+        result: &'static str,
+        detail: Option<String>,
+        message: &'static str,
+    ) {
+        if matches!(result, "success" | "accepted" | "totp_required") {
+            info!(
+                event,
+                request_id = %request_id.0,
+                actor = "admin",
+                source_ip = %source_ip,
+                result,
+                detail = ?detail,
+                "{message}"
+            );
+        } else {
+            warn!(
+                event,
+                request_id = %request_id.0,
+                actor = "admin",
+                source_ip = %source_ip,
+                result,
+                detail = ?detail,
+                "{message}"
+            );
+        }
+        self.record_admin(event, source_ip, result, detail).await;
     }
 
     async fn append(&self, entry: AuditEvent) -> Result<(), String> {

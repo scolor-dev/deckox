@@ -187,6 +187,13 @@ pub struct ServiceSummary {
     pub sub_state: String,
     pub unit_file_state: Option<String>,
     pub control_allowed: bool,
+    /// The unit file lives under a package/vendor path (e.g.
+    /// `/usr/lib/systemd/system`) rather than one written locally, so this
+    /// service ships with the OS or a distro package instead of being
+    /// custom-installed.
+    pub standard_system: bool,
+    /// `true` for Deckox's own `deckox-agent.service` / `deckox-server.service`.
+    pub deckox_managed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -199,6 +206,8 @@ pub struct ServiceDetails {
     pub unit_file_state: Option<String>,
     pub main_pid: Option<u32>,
     pub control_allowed: bool,
+    pub standard_system: bool,
+    pub deckox_managed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

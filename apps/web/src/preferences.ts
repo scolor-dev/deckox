@@ -2,11 +2,15 @@ import { reactive, watch } from "vue";
 
 export type LocalePreference = "auto" | "ja" | "en";
 export type MetricsInterval = 1 | 2 | 5;
+export type ServiceTagFilterKey = "standard" | "deckox" | "other";
+
+const SERVICE_TAG_FILTER_KEYS: ServiceTagFilterKey[] = ["standard", "deckox", "other"];
 
 export interface Preferences {
   locale: LocalePreference;
   realtimeEnabled: boolean;
   metricsInterval: MetricsInterval;
+  hiddenServiceTags: ServiceTagFilterKey[];
 }
 
 const STORAGE_KEY = "deckox:preferences";
@@ -14,6 +18,7 @@ const DEFAULT_PREFERENCES: Preferences = {
   locale: "auto",
   realtimeEnabled: true,
   metricsInterval: 1,
+  hiddenServiceTags: [],
 };
 
 export function normalizePreferences(value: unknown): Preferences {
@@ -29,6 +34,12 @@ export function normalizePreferences(value: unknown): Preferences {
     metricsInterval: candidate.metricsInterval === 2 || candidate.metricsInterval === 5
       ? candidate.metricsInterval
       : DEFAULT_PREFERENCES.metricsInterval,
+    hiddenServiceTags: Array.isArray(candidate.hiddenServiceTags)
+      ? candidate.hiddenServiceTags.filter(
+          (tag): tag is ServiceTagFilterKey =>
+            typeof tag === "string" && SERVICE_TAG_FILTER_KEYS.includes(tag),
+        )
+      : [...DEFAULT_PREFERENCES.hiddenServiceTags],
   };
 }
 

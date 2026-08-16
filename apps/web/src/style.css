@@ -600,6 +600,36 @@ td small {
   white-space: nowrap;
 }
 .service-name { color: #30353c; font: 600 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.tag-badges { display: inline-flex; gap: 4px; margin-left: 6px; }
+.tag-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.tag-badge.standard { background: #eef1f4; color: #5b6470; }
+.tag-badge.deckox { background: #e5edf9; color: #35618f; }
+.tag-toggles { display: flex; gap: 6px; padding: 0; border: 0; margin: 0; }
+.tag-toggle {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 4px 9px;
+  border: 1px solid #d7dbe0;
+  border-radius: 12px;
+  color: #4c525a;
+  background: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+.tag-toggle input { margin: 0; }
+.tag-toggle.off { color: #b0b5bc; background: #f5f6f7; }
+.tag-toggle.standard:not(.off) { border-color: #c7cdd4; }
+.tag-toggle.deckox:not(.off) { border-color: #a9c3de; color: #35618f; }
 .state-badge { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
 .state-badge::before { width: 6px; height: 6px; border-radius: 50%; content: ""; }
 .state-badge.active { color: #277145; }

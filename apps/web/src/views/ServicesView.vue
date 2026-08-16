@@ -9,8 +9,13 @@ import {
 } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import { notify } from "../notifications";
+import { preferences, type ServiceTagFilterKey } from "../preferences";
 
 const { t, locale } = useI18n();
+
+type ServiceTag = "standard" | "deckox";
+
+const TAG_FILTER_KEYS: ServiceTagFilterKey[] = ["standard", "deckox", "other"];
 
 const services = ref<ServiceSummary[]>([]);
 const loading = ref(true);
@@ -27,12 +32,45 @@ const logError = ref<string | null>(null);
 const LOG_LINE_OPTIONS = [50, 100, 200, 500] as const;
 const LOG_PRIORITY_OPTIONS: ServiceLogPriority[] = ["all", "error", "warning", "info"];
 
+function serviceTags(service: ServiceSummary): ServiceTag[] {
+  const tags: ServiceTag[] = [];
+  if (service.deckox_managed) tags.push("deckox");
+  if (service.standard_system) tags.push("standard");
+  return tags;
+}
+
+function tagLabel(tag: ServiceTagFilterKey) {
+  if (tag === "deckox") return t("services.tagDeckox");
+  if (tag === "standard") return t("services.tagStandard");
+  return t("services.tagOther");
+}
+
+function filterKeys(tags: ServiceTag[]): ServiceTagFilterKey[] {
+  return tags.length ? tags : ["other"];
+}
+
+function isTagHidden(tag: ServiceTagFilterKey) {
+  return preferences.hiddenServiceTags.includes(tag);
+}
+
+function toggleTag(tag: ServiceTagFilterKey) {
+  preferences.hiddenServiceTags = isTagHidden(tag)
+    ? preferences.hiddenServiceTags.filter((hidden) => hidden !== tag)
+    : [...preferences.hiddenServiceTags, tag];
+}
+
 const filteredServices = computed(() => {
   const needle = query.value.trim().toLowerCase();
-  if (!needle) return services.value;
-  return services.value.filter((service) =>
-    `${service.id} ${service.description}`.toLowerCase().includes(needle),
-  );
+  return services.value.filter((service) => {
+    const tags = serviceTags(service);
+    const keys = filterKeys(tags);
+    if (keys.every((key) => isTagHidden(key))) return false;
+    if (!needle) return true;
+    const haystack = [service.id, service.description, ...keys.map(tagLabel)]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(needle);
+  });
 });
 
 const runningCount = computed(
@@ -185,6 +223,23 @@ onMounted(refresh);
             :placeholder="t('services.searchPlaceholder')"
           >
         </label>
+        <fieldset class="tag-toggles">
+          <legend class="sr-only">
+            {{ t("services.tagVisibility") }}
+          </legend>
+          <label
+            v-for="tag in TAG_FILTER_KEYS"
+            :key="tag"
+            :class="['tag-toggle', tag, { off: isTagHidden(tag) }]"
+          >
+            <input
+              type="checkbox"
+              :checked="!isTagHidden(tag)"
+              @change="toggleTag(tag)"
+            >
+            {{ tagLabel(tag) }}
+          </label>
+        </fieldset>
         <span class="table-count">{{ t("services.count", { count: filteredServices.length }) }}</span>
       </div>
 
@@ -214,6 +269,16 @@ onMounted(refresh);
             >
               <td>
                 <strong class="service-name">{{ service.id }}</strong>
+                <span
+                  v-if="serviceTags(service).length"
+                  class="tag-badges"
+                >
+                  <span
+                    v-for="tag in serviceTags(service)"
+                    :key="tag"
+                    :class="['tag-badge', tag]"
+                  >{{ tagLabel(tag) }}</span>
+                </span>
                 <small>{{ service.description || t("services.noDescription") }}</small>
               </td>
               <td>
