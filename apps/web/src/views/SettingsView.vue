@@ -8,6 +8,7 @@ import {
   safeReleaseUrl,
   writeClipboardText,
   type SystemCapabilities,
+  type TotpStatus,
   type UpdateStatus,
 } from "../api/client";
 import { apiErrorKey } from "../api/errors";
@@ -31,6 +32,16 @@ const rebooting = ref(false);
 const updateStatus = ref<UpdateStatus | null>(null);
 const updateChecking = ref(false);
 const updateErrorKey = ref<string | null>(null);
+const totpStatus = ref<TotpStatus | null>(null);
+const totpLoading = ref(true);
+const totpErrorKey = ref<string | null>(null);
+const totpSetupSecret = ref<string | null>(null);
+const totpConfirmCode = ref("");
+const totpConfirming = ref(false);
+const totpRecoveryCodes = ref<string[] | null>(null);
+const totpDisablePassword = ref("");
+const totpDisableCode = ref("");
+const totpDisabling = ref(false);
 const updateCommand = computed(() => buildUpdateCommand(updateStatus.value?.latest_version));
 const releaseUrl = computed(() => safeReleaseUrl(updateStatus.value?.release_url));
 const updateCheckedAt = computed(() => {
@@ -68,6 +79,81 @@ async function changePassword() {
     error.value = t(apiErrorKey(caught, "errors.password"));
   } finally {
     submitting.value = false;
+  }
+}
+
+async function loadTotpStatus() {
+  totpLoading.value = true;
+  totpErrorKey.value = null;
+  try {
+    totpStatus.value = await api.totpStatus();
+  } catch (caught) {
+    totpErrorKey.value = apiErrorKey(caught, "errors.totpStatus");
+  } finally {
+    totpLoading.value = false;
+  }
+}
+
+async function startTotpSetup() {
+  totpErrorKey.value = null;
+  try {
+    const setup = await api.totpSetup();
+    totpSetupSecret.value = setup.secret_base32;
+  } catch (caught) {
+    totpErrorKey.value = apiErrorKey(caught, "errors.totpSetup");
+  }
+}
+
+function cancelTotpSetup() {
+  totpSetupSecret.value = null;
+  totpConfirmCode.value = "";
+  totpErrorKey.value = null;
+}
+
+async function copyTotpSecret() {
+  if (!totpSetupSecret.value) return;
+  if (await writeClipboardText(totpSetupSecret.value)) {
+    notify("success", t("settings.totpSecretCopied"));
+  } else {
+    notify("error", t("settings.totpCopyFailed"));
+  }
+}
+
+async function confirmTotpSetup() {
+  totpErrorKey.value = null;
+  totpConfirming.value = true;
+  try {
+    const result = await api.totpConfirm(totpConfirmCode.value);
+    totpRecoveryCodes.value = result.recovery_codes;
+    totpConfirmCode.value = "";
+    totpSetupSecret.value = null;
+    await loadTotpStatus();
+  } catch (caught) {
+    totpErrorKey.value = apiErrorKey(caught, "errors.totpConfirm");
+  } finally {
+    totpConfirming.value = false;
+  }
+}
+
+function acknowledgeRecoveryCodes() {
+  totpRecoveryCodes.value = null;
+  notify("success", t("settings.totpEnabled"));
+}
+
+async function disableTotp() {
+  totpErrorKey.value = null;
+  if (!window.confirm(t("settings.confirmTotpDisable"))) return;
+
+  totpDisabling.value = true;
+  try {
+    totpStatus.value = await api.totpDisable(totpDisablePassword.value, totpDisableCode.value);
+    totpDisablePassword.value = "";
+    totpDisableCode.value = "";
+    notify("success", t("settings.totpDisabled"));
+  } catch (caught) {
+    totpErrorKey.value = apiErrorKey(caught, "errors.totpDisable");
+  } finally {
+    totpDisabling.value = false;
   }
 }
 
@@ -130,6 +216,7 @@ async function copyUpdateCommand() {
 
 onMounted(() => {
   void loadSystemCapabilities();
+  void loadTotpStatus();
 });
 </script>
 
@@ -392,6 +479,137 @@ onMounted(() => {
           {{ t("settings.relogin") }}
         </p>
       </form>
+    </section>
+
+    <section
+      class="settings-section"
+      aria-labelledby="totp-heading"
+    >
+      <div class="settings-description">
+        <h2 id="totp-heading">
+          {{ t("settings.totp") }}
+        </h2>
+        <p>{{ t("settings.totpDescription") }}</p>
+      </div>
+      <div class="settings-form">
+        <p
+          v-if="totpErrorKey"
+          class="notice error"
+          role="alert"
+        >
+          {{ t(totpErrorKey) }}
+        </p>
+        <p
+          v-if="totpLoading"
+          class="settings-help"
+        >
+          {{ t("settings.totpChecking") }}
+        </p>
+
+        <template v-else-if="totpRecoveryCodes">
+          <div class="notice warning">
+            <p>{{ t("settings.totpRecoveryCodesIntro") }}</p>
+            <pre class="recovery-codes"><code>{{ totpRecoveryCodes.join("\n") }}</code></pre>
+          </div>
+          <button
+            class="primary-button settings-submit"
+            type="button"
+            @click="acknowledgeRecoveryCodes"
+          >
+            {{ t("settings.totpRecoveryCodesAck") }}
+          </button>
+        </template>
+
+        <template v-else-if="totpSetupSecret">
+          <p>{{ t("settings.totpSetupIntro") }}</p>
+          <dl class="totp-secret">
+            <div>
+              <dt>{{ t("settings.totpSecret") }}</dt><dd class="mono">
+                {{ totpSetupSecret }}
+              </dd>
+            </div>
+          </dl>
+          <button
+            class="action-button"
+            type="button"
+            @click="copyTotpSecret"
+          >
+            {{ t("settings.totpCopySecret") }}
+          </button>
+          <form
+            class="totp-confirm-form"
+            @submit.prevent="confirmTotpSetup"
+          >
+            <label for="totp-confirm-code">{{ t("settings.totpConfirmCode") }}</label>
+            <input
+              id="totp-confirm-code"
+              v-model="totpConfirmCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              required
+            >
+            <button
+              class="primary-button settings-submit"
+              type="submit"
+              :disabled="totpConfirming || totpConfirmCode.length === 0"
+            >
+              {{ totpConfirming ? t("settings.totpConfirming") : t("settings.totpConfirmSubmit") }}
+            </button>
+            <button
+              class="action-button"
+              type="button"
+              @click="cancelTotpSetup"
+            >
+              {{ t("settings.cancel") }}
+            </button>
+          </form>
+        </template>
+
+        <template v-else-if="totpStatus?.enabled">
+          <p class="settings-help">
+            {{ t("settings.totpEnabledStatus", { count: totpStatus.recovery_codes_remaining }) }}
+          </p>
+          <form
+            class="settings-form"
+            @submit.prevent="disableTotp"
+          >
+            <label for="totp-disable-password">{{ t("settings.currentPassword") }}</label>
+            <input
+              id="totp-disable-password"
+              v-model="totpDisablePassword"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+            <label for="totp-disable-code">{{ t("login.totpCode") }}</label>
+            <input
+              id="totp-disable-code"
+              v-model="totpDisableCode"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              required
+            >
+            <button
+              class="primary-button danger-button settings-submit"
+              type="submit"
+              :disabled="totpDisabling"
+            >
+              {{ totpDisabling ? t("settings.totpDisabling") : t("settings.totpDisable") }}
+            </button>
+          </form>
+        </template>
+
+        <button
+          v-else
+          class="primary-button settings-submit"
+          type="button"
+          @click="startTotpSetup"
+        >
+          {{ t("settings.totpEnable") }}
+        </button>
+      </div>
     </section>
   </section>
 </template>

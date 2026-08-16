@@ -181,6 +181,10 @@ async fn main() {
         .route("/services/{service_id}/logs", get(proxy_service_logs))
         .route("/auth/logout", post(auth::logout))
         .route("/settings/password", post(auth::change_password))
+        .route("/settings/totp/status", get(auth::totp_status))
+        .route("/settings/totp/setup", post(auth::totp_setup))
+        .route("/settings/totp/confirm", post(auth::totp_confirm))
+        .route("/settings/totp/disable", post(auth::totp_disable))
         .route_layer(middleware::from_fn_with_state(
             auth.clone(),
             auth::require_auth,
@@ -188,6 +192,7 @@ async fn main() {
         .fallback(api_not_found);
     let public_api = Router::new()
         .route("/auth/login", post(auth::login))
+        .route("/auth/login/totp", post(auth::login_totp))
         .route("/auth/session", get(auth::status))
         .merge(protected_api);
     let static_files =

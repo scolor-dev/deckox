@@ -105,6 +105,21 @@ export interface CommandResult {
 
 export interface AuthStatus {
   authenticated: boolean;
+  totp_required: boolean;
+}
+
+export interface TotpStatus {
+  enabled: boolean;
+  recovery_codes_remaining: number;
+}
+
+export interface TotpSetup {
+  secret_base32: string;
+  otpauth_uri: string;
+}
+
+export interface TotpConfirmResult {
+  recovery_codes: string[];
 }
 
 export interface DiagnosticsResponse {
@@ -244,6 +259,16 @@ export const api = {
       },
       false,
     ),
+  loginTotp: (code: string) =>
+    request<AuthStatus>(
+      "/api/v1/auth/login/totp",
+      {
+        method: "POST",
+        body: JSON.stringify({ code }),
+        headers: { "Content-Type": "application/json" },
+      },
+      false,
+    ),
   logout: () => request<AuthStatus>("/api/v1/auth/logout", { method: "POST" }),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<AuthStatus>(
@@ -258,6 +283,20 @@ export const api = {
       },
       false,
     ),
+  totpStatus: () => request<TotpStatus>("/api/v1/settings/totp/status"),
+  totpSetup: () => request<TotpSetup>("/api/v1/settings/totp/setup", { method: "POST" }),
+  totpConfirm: (code: string) =>
+    request<TotpConfirmResult>("/api/v1/settings/totp/confirm", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+      headers: { "Content-Type": "application/json" },
+    }),
+  totpDisable: (currentPassword: string, code: string) =>
+    request<TotpStatus>("/api/v1/settings/totp/disable", {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword, code }),
+      headers: { "Content-Type": "application/json" },
+    }),
   serverStatus: () => request<ServerStatus>("/api/v1/status"),
   systemInfo: () => request<SystemInfo>("/api/v1/system"),
   systemMetrics: () => request<SystemMetrics>("/api/v1/system/metrics"),
