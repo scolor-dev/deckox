@@ -107,15 +107,18 @@ journalctl -u deckox-server -u deckox-agent -f</code></pre>
         <p>初回インストール時は管理者パスワードがターミナルへ一度だけ表示されます。更新時は既存のパスワードが維持されます。</p>
         <p>管理画面の「設定」では、GitHubの最新安定版を手動確認できます。新しい版がある場合はReleaseページと、対象タグを固定した更新コマンドを表示します。Deckox自身がroot権限で自動更新することはありません。</p>
         <p>ログイン後は管理画面の「診断」で、Server・Agentの接続、ホスト情報、Deckoxのsystemdユニット状態をまとめて確認できます。問題を共有するときは、画面から安全な固定項目だけを含むJSONレポートを保存できます。Agentが停止していてもServer側の部分診断は表示されます。</p>
+        <p>管理画面の「監査ログ」では、ログイン・パスワード変更・TOTP設定変更・サービス操作・ホスト再起動・SSHコンソールからのCLI操作を時系列で確認でき、イベント種別・結果での絞り込みとJSON保存に対応します。</p>
         <h3>管理者パスワードを変更する</h3>
         <p>通常は管理画面の「設定」から、現在のパスワードと12文字以上の新しいパスワードを入力します。現在のパスワード確認に5分間で5回失敗すると一時的に制限されます。変更後は全セッションが失効し、完了案内が表示されたログイン画面から新しいパスワードで再ログインします。</p>
-        <p>ログインできない場合は、次のコマンドで再設定します。</p>
-        <pre><code>printf '%s' '新しいパスワード' \
-  | sudo /usr/local/bin/deckox-server hash-password \
-  | sudo tee /var/lib/deckox/admin-password.hash &gt;/dev/null
-sudo chown deckox:deckox /var/lib/deckox/admin-password.hash
-sudo chmod 0600 /var/lib/deckox/admin-password.hash
+        <p>設定画面でTOTPによる二要素認証を有効にしている場合は、パスワード確認後にコード入力を求める2段階ログインになります。無効化・有効化の操作は「設定」画面のTOTPセクションから行います。</p>
+        <h3>ログインできない場合の復旧</h3>
+        <p>管理画面へ入れない場合は、SSH接続したコンソールから<code>reset-password</code>サブコマンドでパスワードだけを再設定できます。TOTPの設定は変更されません。</p>
+        <pre><code>printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password
 sudo systemctl restart deckox-server</code></pre>
+        <p>TOTPの認証アプリとリカバリーコードを両方失った場合は、<code>disable-totp</code>で二要素認証だけを無効化できます。</p>
+        <pre><code>sudo -u deckox deckox-server disable-totp
+sudo systemctl restart deckox-server</code></pre>
+        <p>どちらの操作も監査ログ(管理画面の「監査ログ」または<code>GET /api/v1/audit</code>)に記録されます。</p>
         <p>既定ではServerが<code>127.0.0.1:8080</code>で待ち受けます。別端末から一時的に確認する場合は、<code>ssh -L 8080:127.0.0.1:8080 user@server</code>でトンネルを作成します。</p>
         <h3>LAN内の端末から常時アクセスする</h3>
         <p>サーバーのLANアドレスを確認し、そのアドレスだけへsystemdの待受設定を上書きします。次の例では<code>192.168.1.21</code>を使用します。</p>

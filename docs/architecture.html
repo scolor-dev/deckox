@@ -53,7 +53,7 @@
           <article class="card">
             <span class="number">SERVER</span>
             <h3>Axum Server</h3>
-            <p>Vueの静的配信、管理者認証、公開HTTP API、Agent APIの中継、SSE配信、安全な固定スキーマの診断生成、最新安定版の確認を担当します。一般ユーザーの<code>deckox</code>で動作します。</p>
+            <p>Vueの静的配信、管理者認証・TOTP二要素認証、公開HTTP API、Agent APIの中継、SSE配信、安全な固定スキーマの診断生成、監査ログの記録・閲覧、最新安定版の確認を担当します。一般ユーザーの<code>deckox</code>で動作します。</p>
           </article>
           <article class="card">
             <span class="number">AGENT</span>
@@ -122,12 +122,13 @@
 ├── server.toml
 └── agent.toml
 /var/lib/deckox/
-└── admin-password.hash
+├── admin-password.hash
+└── audit.log
 /run/deckox/agent.sock
 /etc/systemd/system/
 ├── deckox-server.service
 └── deckox-agent.service</code></pre>
-        <p>Agentは<code>agent.toml</code>を読み込み、ソケットの場所を環境変数で上書きできます。Serverは現在、環境変数から設定を読み込み、<code>server.toml</code>は将来の設定場所として予約されています。</p>
+        <p>Agentは<code>agent.toml</code>を読み込み、ソケットの場所を環境変数で上書きできます。Serverは現在、環境変数から設定を読み込み、<code>server.toml</code>は将来の設定場所として予約されています。<code>admin-password.hash</code>はパスワードハッシュとTOTP設定を含むJSONです(旧形式の生ハッシュ文字列も読み込み時に自動判定します)。<code>audit.log</code>は監査ログのJSON Linesです。</p>
       </section>
 
       <section class="section" aria-labelledby="security-title">
@@ -138,16 +139,17 @@
             <tr><td>プロセス分離</td><td>Web Serverとroot Agentを別プロセス・別systemdユニットに分離</td></tr>
             <tr><td>Agent公開範囲</td><td>Unixソケットのみ。ネットワークポートは使用しない</td></tr>
             <tr><td>Server権限</td><td>専用<code>deckox</code>ユーザー、<code>NoNewPrivileges</code>、<code>ProtectSystem=strict</code></td></tr>
-            <tr><td>管理者認証</td><td>Argon2idハッシュ、HttpOnly・SameSite=Strict Cookie、12時間のメモリ内セッション、ログイン・パスワード再確認の試行制限</td></tr>
+            <tr><td>管理者認証</td><td>Argon2idハッシュ、任意のTOTP二要素認証(有効時はパスワード確認後にコード入力する2段階ログイン)とリカバリーコード、HttpOnly・SameSite=Strict Cookie、12時間のメモリ内セッション、ログイン・パスワード再確認・TOTP確認の試行制限</td></tr>
+            <tr><td>認証情報の復旧</td><td>管理画面へ入れない場合、SSH接続したコンソールから<code>reset-password</code>(パスワードのみ再設定)・<code>disable-totp</code>(TOTPのみ無効化)サブコマンドで復旧できる</td></tr>
             <tr><td>変更API</td><td>認証に加え、ブラウザの<code>Origin</code>と<code>Host</code>が同一であることを確認</td></tr>
             <tr><td>Agent操作</td><td>systemd変更とjournalログ閲覧は完全一致許可リスト、再起動は明示的な設定とWeb側のパスワード再確認に限定</td></tr>
             <tr><td>ログ閲覧</td><td>許可済みサービスのjournalだけを最大500行取得し、<code>all|error|warning|info</code>で絞り込む。任意引数とファイルダウンロードは提供しない</td></tr>
             <tr><td>診断レポート</td><td>安全な固定スキーマだけを返し、秘密情報・追跡用のboot IDを除外。Agent不通時はServer側だけを返す</td></tr>
             <tr><td>任意コマンド</td><td>Webコンソールや対話シェルを提供せず、Agentは許可済みの型付き操作だけを受け付ける</td></tr>
-            <tr><td>操作ログ</td><td>認証、パスワード変更、サービス・再起動を送信元IP・リクエストID付きでjournalへ記録</td></tr>
+            <tr><td>操作ログ</td><td>認証、パスワード変更、TOTP設定変更、サービス・再起動、SSHコンソールからのCLI操作を送信元IP・リクエストID付きでjournalへ記録するとともに、監査ログ専用ファイルにも記録し管理画面から閲覧・ダウンロードできる</td></tr>
           </tbody>
         </table>
-        <aside class="note warning"><strong>未実装:</strong> 複数ユーザー・ロール・MFA・TLS終端・監査ログの専用閲覧画面はまだ存在しません。</aside>
+        <aside class="note warning"><strong>未実装:</strong> 複数ユーザー・ロール・TLS終端はまだ存在しません。</aside>
       </section>
       <footer class="footer">Deckox Docs · Architecture</footer>
     </main>

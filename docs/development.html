@@ -89,11 +89,29 @@ npm run build</code></pre>
             <tr><td><code>DECKOX_WEB_DIR</code></td><td><code>/usr/local/share/deckox/web</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code></td><td><code>/var/lib/deckox/admin-password.hash</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH</code></td><td>なし</td><td>Server（開発・コンテナ向け）</td></tr>
+            <tr><td><code>DECKOX_AUDIT_LOG_FILE</code></td><td><code>/var/lib/deckox/audit.log</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_SECURE_COOKIE</code></td><td><code>false</code></td><td>Server。HTTPS終端時に<code>true</code></td></tr>
             <tr><td><code>RUST_LOG</code></td><td>各プロセスの<code>info</code></td><td>Server / Agent</td></tr>
           </tbody>
         </table>
-        <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH</code>でハッシュを直接指定した場合は永続的な保存先がないため、設定画面からのパスワード変更は無効になります。</aside>
+        <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH</code>でハッシュを直接指定した場合は永続的な保存先がないため、設定画面からのパスワード変更・TOTP設定は無効になります。</aside>
+        <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code>の内容はパスワードハッシュとTOTP設定を含むJSONです。旧バージョンが書いた生のArgon2idハッシュ文字列も読み込み時に自動判定し、書き込み時にJSON形式へ移行します。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="cli-title">
+        <h2 id="cli-title">CLIサブコマンド</h2>
+        <p><code>deckox-server</code>は先頭引数でサブコマンドを切り替えます。<code>hash-password</code>以外はいずれもアカウントファイルへ直接読み書きするため、実行後は<code>deckox-server</code>を再起動します。</p>
+        <table class="status-table">
+          <thead><tr><th>コマンド</th><th>動作</th></tr></thead>
+          <tbody>
+            <tr><td><code>hash-password</code></td><td>標準入力のパスワードをArgon2idハッシュへ変換して標準出力へ表示。<code>DECKOX_ADMIN_PASSWORD_HASH</code>の初期値作成に使用</td></tr>
+            <tr><td><code>reset-password</code></td><td>標準入力の新しいパスワードで<code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code>のパスワードだけを更新。TOTP設定は変更しない。監査ログへ<code>password_reset_cli</code>を記録</td></tr>
+            <tr><td><code>disable-totp</code></td><td>対話確認後、アカウントのTOTP設定とリカバリーコードを削除。監査ログへ<code>totp_disabled_cli</code>を記録</td></tr>
+          </tbody>
+        </table>
+        <p><code>reset-password</code>・<code>disable-totp</code>は永続化されたアカウントファイルが前提のため、<code>DECKOX_ADMIN_PASSWORD_HASH</code>だけが設定されている場合はエラーで終了します。</p>
+        <pre><code>printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password
+sudo -u deckox deckox-server disable-totp</code></pre>
       </section>
 
       <section class="section" aria-labelledby="diagnostics-title">
