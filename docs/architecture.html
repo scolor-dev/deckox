@@ -63,6 +63,15 @@
         </div>
       </section>
 
+      <section class="section" aria-labelledby="dependencies-title">
+        <h2 id="dependencies-title">主要な依存クレート・ライブラリ</h2>
+        <dl class="definition-list">
+          <dt>Server</dt><dd><code>axum</code>(HTTP API・SSE配信)、<code>tokio</code>(非同期ランタイム)、<code>tower-http</code>(静的配信・トレース)、<code>argon2</code>(パスワードハッシュ)、<code>totp-rs</code>(TOTP二要素認証)、<code>reqwest</code>(rustls-tls、更新確認時のGitHub API呼び出し)、<code>serde</code>/<code>serde_json</code>、<code>tracing</code></dd>
+          <dt>Agent</dt><dd><code>axum</code>(Unixソケット上のHTTP API)、<code>tokio</code>、<code>serde</code>/<code>serde_json</code>、<code>toml</code>(設定ファイル)、<code>tracing</code></dd>
+          <dt>Web</dt><dd><code>vue</code>、<code>vue-router</code>、<code>vue-i18n</code>。ビルドツールは<code>vite</code></dd>
+        </dl>
+      </section>
+
       <section class="section" aria-labelledby="update-title">
         <h2 id="update-title">更新確認の境界</h2>
         <p>更新確認は認証済みの<code>GET /api/v1/update</code>を手動で呼び出します。Serverだけが固定されたDeckoxのGitHub Latest Release APIへ接続し、SemVerで現在版と比較します。</p>
