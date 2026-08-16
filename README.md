@@ -3,7 +3,7 @@
 Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基盤です。
 
 現在は次の最小構成と、Agentによるシステム情報・リソース・ストレージ取得、
-許可リスト付きsystemdサービス管理とjournalログ閲覧、管理者パスワード変更、SSH公開鍵管理、
+許可リスト付きsystemdサービス管理とjournalログ閲覧、管理者パスワード変更、
 パスワード再確認付きのホスト再起動を提供します。SSEによるCPU・メモリ・Swap・
 ネットワーク送受信速度・ディスクI/O速度のリアルタイムメトリクス、任意取得のCPU温度、
 軽量SVGグラフ、日本語・英語の表示切替、再起動後の自動再接続、画面ごとのURLと
@@ -33,7 +33,7 @@ Linux
 Server側の診断結果は表示・保存され、Agent側の項目だけが取得不能として示されます。
 
 診断結果には、生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、
-セッション、Cookie、SSH鍵、SSH鍵管理対象のユーザー名、boot IDを含めません。
+セッション、Cookie、boot IDを含めません。
 
 設計・実装済み機能・導入方法のHTMLドキュメントは
 [`docs/index.html`](docs/index.html)から参照できます。
@@ -198,24 +198,6 @@ sudo chmod 0600 /var/lib/deckox/admin-password.hash
 sudo systemctl restart deckox-server
 ```
 
-SSH公開鍵管理を有効にするには、`/etc/deckox/agent.toml`へ管理対象の
-非rootローカルユーザーを指定します。
-
-```toml
-[ssh]
-managed_user = "sorac"
-```
-
-```bash
-sudo systemctl restart deckox-agent
-```
-
-設定画面ではOpenSSH形式の公開鍵を追加・削除できます。秘密鍵は受け付けず、
-既存の`authorized_keys`はDeckox管理ブロック外に保持します。SSH接続手段を
-失わないよう、外部の鍵を含めて最後の1本になる鍵は削除できません。Agentは
-`.ssh`をシンボリックリンクを辿らずに開き、同じディレクトリFDを基準として
-一時ファイルの作成、権限設定、同期、置換を行います。
-
 ホスト再起動は初期状態では無効です。利用する場合は
 `/etc/deckox/agent.toml`で明示的に許可し、Agentを再起動します。
 
@@ -319,7 +301,7 @@ Serverと通信します。
 Serverは単一管理者のArgon2idパスワード認証と、12時間のメモリ内セッション
 を提供します。CookieはHttpOnly・SameSite=Strictです。ログインとパスワード
 再確認には送信元IP単位の試行制限があります。認証、パスワード変更、
-サービス操作、SSH公開鍵操作、ホスト再起動は
+サービス操作、ホスト再起動は
 リクエストID付きでjournalへ記録します。
 Agentは任意のシェルコマンドを受け付けず、許可済みの型付き操作だけを
 実行します。サービスログ閲覧も完全一致許可リスト、500行の上限、全件・

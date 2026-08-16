@@ -59,9 +59,6 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/services/{id}/{action}</code></span></td><td><span class="status done">実装済み</span></td><td>起動・停止・再起動・有効化・無効化。Agentの許可・エラー状態を維持して返却</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}/logs</code></span></td><td><span class="status done">実装済み</span></td><td><code>lines</code>と<code>priority=all|error|warning|info</code>を検証し、完全一致許可リスト内のjournalログを中継。最大500行</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/password</code></span></td><td><span class="status done">実装済み</span></td><td>現在のパスワードを確認し、Argon2idハッシュを更新して全セッションを失効。5分間に5回の確認失敗で制限</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/settings/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>管理対象ユーザーとDeckox管理下のSSH公開鍵を取得</td></tr>
-            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>OpenSSH形式のSSH公開鍵を追加</td></tr>
-            <tr><td><span class="endpoint"><span class="method">DELETE</span><code>/api/v1/settings/ssh/keys/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>ID指定でSSH公開鍵を削除</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/*</code></span></td><td><span class="status done">実装済み</span></td><td>Vue静的ファイル。未知のパスは<code>index.html</code>へSPAフォールバック</td></tr>
           </tbody>
         </table>
@@ -75,7 +72,7 @@
           <tbody>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/health</code></span></td><td><span class="status done">実装済み</span></td><td>Agentプロセスのヘルス状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト名、OS、CPUアーキテクチャ、<code>/proc/uptime</code>の秒数</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/diagnostics</code></span></td><td><span class="status done">実装済み</span></td><td>Agentバージョン、安全なホスト情報、Deckoxの2ユニット状態、再起動許可・許可サービス数・SSH管理有効状態を固定スキーマで返却</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/diagnostics</code></span></td><td><span class="status done">実装済み</span></td><td>Agentバージョン、安全なホスト情報、Deckoxの2ユニット状態、再起動許可・許可サービス数を固定スキーマで返却</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>OS、バージョン、カーネル、ホスト名、稼働時間、boot ID、タイムゾーン</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>設定に基づくホスト再起動の許可状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>許可時のみ<code>systemctl --no-block reboot</code>を実行</td></tr>
@@ -89,8 +86,6 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/enable</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを有効化</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/disable</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを無効化</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services/{id}/logs</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスに限定してjournalを取得。最大500行、<code>all|error|warning|info</code>のpriority絞込に対応</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET / POST</span><code>/v1/ssh/keys</code></span></td><td><span class="status done">実装済み</span></td><td>設定済みユーザーのDeckox管理公開鍵を取得・追加</td></tr>
-            <tr><td><span class="endpoint"><span class="method">DELETE</span><code>/v1/ssh/keys/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>公開鍵を削除。最後のSSH接続鍵は拒否</td></tr>
           </tbody>
         </table>
         <aside class="note">Agent APIはTCPではなく、<code>/run/deckox/agent.sock</code>上で提供されます。</aside>
@@ -109,7 +104,7 @@
           <article class="card"><span class="status done">実装済み</span><h3>システム診断</h3><p>Server・Agentの状態、公開可能なホスト情報、Deckoxユニット状態、権限設定の要約を専用画面に表示し、同じ内容をJSONで保存します。Agent不通時もServer側の結果を表示します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/diagnostics</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>日本語・英語</h3><p>端末言語の自動判定と手動選択に対応し、APIエラーコードも選択言語の文言へ変換します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、SSH公開鍵、ホスト再起動、リアルタイム更新の有効化・1/2/5秒間隔、共通通知を提供します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、ホスト再起動、リアルタイム更新の有効化・1/2/5秒間隔、共通通知を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>手動更新確認</h3><p>設定画面で現在版と最新安定版を確認し、検証済みのタグに限ってReleaseリンクとコピー可能な更新コマンドを表示します。自動確認・自動インストールは行いません。</p></article>
         </div>
       </section>
@@ -127,14 +122,13 @@
             <tr><td><code>SystemCapabilities</code></td><td><span class="status done">使用中</span></td><td>Agent設定に基づくホスト再起動の許可状態</td></tr>
             <tr><td><code>UpdateStatus</code></td><td><span class="status done">使用中</span></td><td>現在版、最新版、確認日時と<code>up_to_date</code>・<code>available</code>・<code>unavailable</code>状態</td></tr>
             <tr><td><code>RealtimeMetricsEvent</code></td><td><span class="status done">使用中</span></td><td>SSEの連番、取得時刻、Agent接続状態、拡張メトリクス、エラーコード。取得不能な追加値は省略可能</td></tr>
-            <tr><td><code>DiagnosticsReport</code>ほか</td><td><span class="status done">使用中</span></td><td>生成時刻、Server・Agent状態、boot IDを除いたホスト情報、Deckoxユニット状態、再起動許可・許可サービス数・SSH管理有効状態</td></tr>
+            <tr><td><code>DiagnosticsReport</code>ほか</td><td><span class="status done">使用中</span></td><td>生成時刻、Server・Agent状態、boot IDを除いたホスト情報、Deckoxユニット状態、再起動許可・許可サービス数</td></tr>
             <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動、有効化、無効化</td></tr>
             <tr><td><code>CommandResult</code></td><td><span class="status done">使用中</span></td><td>操作完了時のコマンドID、実行状態、メッセージ</td></tr>
-            <tr><td><code>SshKeyList</code>ほか</td><td><span class="status done">使用中</span></td><td>SSH公開鍵の一覧・追加要求・鍵種別・SHA-256指紋</td></tr>
             <tr><td><code>AgentCommand</code></td><td><span class="status defined">型のみ定義済み</span></td><td>汎用コマンド型。現在のHTTPハンドラーでは未使用</td></tr>
           </tbody>
         </table>
-        <aside class="note"><strong>診断データの境界:</strong> 診断は固定した安全な項目だけを構築します。生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、セッション、Cookie、SSH鍵、SSH鍵管理対象のユーザー名、boot IDはAPI・画面・ダウンロードへ含めません。</aside>
+        <aside class="note"><strong>診断データの境界:</strong> 診断は固定した安全な項目だけを構築します。生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、セッション、Cookie、boot IDはAPI・画面・ダウンロードへ含めません。</aside>
         <aside class="note"><strong>サービス管理の境界:</strong> 専用HTTPエンドポイントと<code>ServiceAction</code>で実装されています。ログ閲覧も完全一致許可リスト、最大500行、<code>all|error|warning|info</code>だけを受け付け、ダウンロードは提供しません。汎用<code>AgentCommand</code>とWebコンソールは使っていません。</aside>
       </section>
 

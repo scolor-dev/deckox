@@ -58,7 +58,7 @@
           <article class="card">
             <span class="number">AGENT</span>
             <h3>Rust Agent</h3>
-            <p>Linuxホスト情報の取得、許可リスト内のsystemdサービス操作と制限付きjournalログ閲覧、指定ユーザーのSSH公開鍵管理、明示的に許可したホスト再起動を行います。rootで動き、Serverとは権限境界を分けています。</p>
+            <p>Linuxホスト情報の取得、許可リスト内のsystemdサービス操作と制限付きjournalログ閲覧、明示的に許可したホスト再起動を行います。rootで動き、Serverとは権限境界を分けています。</p>
           </article>
         </div>
       </section>
@@ -82,10 +82,10 @@
           <dt>Agent</dt><dd>接続状態、取得できた場合のバージョン、失敗時の固定エラーコード</dd>
           <dt>Host</dt><dd>ホスト名、OS、OSバージョン、カーネル、アーキテクチャ、稼働時間、タイムゾーン。boot IDは除外</dd>
           <dt>Deckox services</dt><dd><code>deckox-agent.service</code>と<code>deckox-server.service</code>のload・active・sub・unit file状態</dd>
-          <dt>Runtime config</dt><dd>再起動許可、許可サービスの件数、SSH公開鍵管理が有効かという要約だけを返し、設定値そのものは返さない</dd>
+          <dt>Runtime config</dt><dd>再起動許可、許可サービスの件数という要約だけを返し、設定値そのものは返さない</dd>
           <dt>Partial result</dt><dd>Agentへ接続できない場合はAgent由来のhost・Deckox services・runtime configを<code>null</code>とし、Server情報と接続エラーを含む診断は成功応答として返す</dd>
         </dl>
-        <aside class="note warning"><strong>常に除外:</strong> 生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、セッション、Cookie、SSH鍵、SSH鍵管理対象のユーザー名、boot IDは診断レポートへ入りません。</aside>
+        <aside class="note warning"><strong>常に除外:</strong> 生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、セッション、Cookie、boot IDは診断レポートへ入りません。</aside>
       </section>
 
       <section class="section" aria-labelledby="realtime-title">
@@ -140,12 +140,11 @@
             <tr><td>Server権限</td><td>専用<code>deckox</code>ユーザー、<code>NoNewPrivileges</code>、<code>ProtectSystem=strict</code></td></tr>
             <tr><td>管理者認証</td><td>Argon2idハッシュ、HttpOnly・SameSite=Strict Cookie、12時間のメモリ内セッション、ログイン・パスワード再確認の試行制限</td></tr>
             <tr><td>変更API</td><td>認証に加え、ブラウザの<code>Origin</code>と<code>Host</code>が同一であることを確認</td></tr>
-            <tr><td>Agent操作</td><td>systemd変更とjournalログ閲覧は完全一致許可リスト、再起動は明示的な設定とWeb側のパスワード再確認、SSH鍵管理は指定した非rootユーザーに限定</td></tr>
+            <tr><td>Agent操作</td><td>systemd変更とjournalログ閲覧は完全一致許可リスト、再起動は明示的な設定とWeb側のパスワード再確認に限定</td></tr>
             <tr><td>ログ閲覧</td><td>許可済みサービスのjournalだけを最大500行取得し、<code>all|error|warning|info</code>で絞り込む。任意引数とファイルダウンロードは提供しない</td></tr>
-            <tr><td>診断レポート</td><td>安全な固定スキーマだけを返し、秘密情報・SSH鍵管理対象のユーザー名・追跡用のboot IDを除外。Agent不通時はServer側だけを返す</td></tr>
+            <tr><td>診断レポート</td><td>安全な固定スキーマだけを返し、秘密情報・追跡用のboot IDを除外。Agent不通時はServer側だけを返す</td></tr>
             <tr><td>任意コマンド</td><td>Webコンソールや対話シェルを提供せず、Agentは許可済みの型付き操作だけを受け付ける</td></tr>
-            <tr><td>SSH鍵</td><td>公開鍵だけを受け付け、鍵種別・Base64データ・内部鍵種別を検証。ディレクトリFDと<code>O_NOFOLLOW</code>を用いてリンク差し替えを回避</td></tr>
-            <tr><td>操作ログ</td><td>認証、パスワード変更、サービス・SSH鍵・再起動を送信元IP・リクエストID付きでjournalへ記録</td></tr>
+            <tr><td>操作ログ</td><td>認証、パスワード変更、サービス・再起動を送信元IP・リクエストID付きでjournalへ記録</td></tr>
           </tbody>
         </table>
         <aside class="note warning"><strong>未実装:</strong> 複数ユーザー・ロール・MFA・TLS終端・監査ログの専用閲覧画面はまだ存在しません。</aside>
