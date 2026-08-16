@@ -12,10 +12,15 @@ import { notify } from "../notifications";
 
 const { t, locale } = useI18n();
 
+type ServiceTag = "standard" | "deckox";
+type TagFilter = "all" | ServiceTag | "other";
+
 const services = ref<ServiceSummary[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const query = ref("");
+const tagFilter = ref<TagFilter>("all");
+const TAG_FILTER_OPTIONS: TagFilter[] = ["all", "standard", "deckox", "other"];
 const pending = ref<string | null>(null);
 const logService = ref<ServiceSummary | null>(null);
 const logEntries = ref<ServiceLogEntry[]>([]);
@@ -27,12 +32,40 @@ const logError = ref<string | null>(null);
 const LOG_LINE_OPTIONS = [50, 100, 200, 500] as const;
 const LOG_PRIORITY_OPTIONS: ServiceLogPriority[] = ["all", "error", "warning", "info"];
 
+function serviceTags(service: ServiceSummary): ServiceTag[] {
+  const tags: ServiceTag[] = [];
+  if (service.deckox_managed) tags.push("deckox");
+  if (service.standard_system) tags.push("standard");
+  return tags;
+}
+
+function tagLabel(tag: ServiceTag) {
+  return t(tag === "deckox" ? "services.tagDeckox" : "services.tagStandard");
+}
+
+function tagFilterLabel(filter: TagFilter) {
+  if (filter === "all") return t("services.allTags");
+  if (filter === "other") return t("services.tagOther");
+  return tagLabel(filter);
+}
+
+function matchesTagFilter(tags: ServiceTag[]) {
+  if (tagFilter.value === "all") return true;
+  if (tagFilter.value === "other") return tags.length === 0;
+  return tags.includes(tagFilter.value);
+}
+
 const filteredServices = computed(() => {
   const needle = query.value.trim().toLowerCase();
-  if (!needle) return services.value;
-  return services.value.filter((service) =>
-    `${service.id} ${service.description}`.toLowerCase().includes(needle),
-  );
+  return services.value.filter((service) => {
+    const tags = serviceTags(service);
+    if (!matchesTagFilter(tags)) return false;
+    if (!needle) return true;
+    const haystack = [service.id, service.description, ...tags.map(tagLabel)]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(needle);
+  });
 });
 
 const runningCount = computed(
@@ -185,6 +218,18 @@ onMounted(refresh);
             :placeholder="t('services.searchPlaceholder')"
           >
         </label>
+        <label>
+          <span class="sr-only">{{ t("services.filterTag") }}</span>
+          <select v-model="tagFilter">
+            <option
+              v-for="filter in TAG_FILTER_OPTIONS"
+              :key="filter"
+              :value="filter"
+            >
+              {{ tagFilterLabel(filter) }}
+            </option>
+          </select>
+        </label>
         <span class="table-count">{{ t("services.count", { count: filteredServices.length }) }}</span>
       </div>
 
@@ -214,6 +259,16 @@ onMounted(refresh);
             >
               <td>
                 <strong class="service-name">{{ service.id }}</strong>
+                <span
+                  v-if="serviceTags(service).length"
+                  class="tag-badges"
+                >
+                  <span
+                    v-for="tag in serviceTags(service)"
+                    :key="tag"
+                    :class="['tag-badge', tag]"
+                  >{{ tagLabel(tag) }}</span>
+                </span>
                 <small>{{ service.description || t("services.noDescription") }}</small>
               </td>
               <td>

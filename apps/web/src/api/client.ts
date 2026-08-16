@@ -80,6 +80,8 @@ export interface ServiceSummary {
   sub_state: string;
   unit_file_state: string | null;
   control_allowed: boolean;
+  standard_system: boolean;
+  deckox_managed: boolean;
 }
 
 export type ServiceLogPriority = "all" | "error" | "warning" | "info";

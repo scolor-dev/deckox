@@ -55,7 +55,7 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>CPU・メモリ・Swap・負荷平均、ネットワーク送受信速度、ディスクI/O速度、任意のCPU温度を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">SSE</span><code>/api/v1/events/metrics?interval=1|2|5</code></span></td><td><span class="status done">実装済み</span></td><td>拡張リソースメトリクスを認証済みブラウザへ配信。購読者0件では追加統計を含む採取を休止</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのストレージAPIを中継</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継。各サービスに標準システム・Deckox管理のタグ判定を付与</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス詳細を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/services/{id}/{action}</code></span></td><td><span class="status done">実装済み</span></td><td>起動・停止・再起動・有効化・無効化。Agentの許可・エラー状態を維持して返却</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}/logs</code></span></td><td><span class="status done">実装済み</span></td><td><code>lines</code>と<code>priority=all|error|warning|info</code>を検証し、完全一致許可リスト内のjournalログを中継。最大500行</td></tr>
@@ -106,7 +106,7 @@
           <article class="card"><span class="status done">実装済み</span><h3>管理者ログイン</h3><p>セッション確認、ログイン、ログアウト、TOTP設定時の2段階目コード入力、APIの401応答時のログイン画面復帰、パスワードを忘れた場合のSSHコンソール手順案内を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>二要素認証(TOTP)</h3><p>設定画面でBase32シークレットとotpauth URIを表示して有効化し、確認コード入力後にリカバリーコード10個を一度だけ表示します。残りコード数の確認と、パスワード・コード確認付きの無効化を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>監査ログ</h3><p>認証・パスワード変更・TOTP設定・サービス操作・ホスト再起動・SSHコンソールからのCLI操作を時刻・種別・actor・送信元IP・結果で一覧表示し、イベント種別・結果で絞り込み、JSONとして保存できます。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動・有効化・無効化を提供します。許可対象のjournalログは最大500行まで表示し、全件・エラー・警告・情報で絞り込めます。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動・有効化・無効化を提供します。許可対象のjournalログは最大500行まで表示し、全件・エラー・警告・情報で絞り込めます。各サービスには「標準」(OS・パッケージ提供のユニット)・「Deckox」(自身が管理するユニット)のタグを表示し、タグでの絞り込みと検索語としての一致に対応します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ホスト再起動</h3><p>Agent側で明示的に許可した場合だけ、管理者パスワードを再確認して再起動し、新しいServerプロセスを検知してログインへ戻ります。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
