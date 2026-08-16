@@ -7,12 +7,23 @@ describe("preferences", () => {
       locale: "en",
       realtimeEnabled: false,
       metricsInterval: 5,
-    })).toEqual({ locale: "en", realtimeEnabled: false, metricsInterval: 5 });
+      hiddenServiceTags: ["standard", "bogus", 42],
+    })).toEqual({
+      locale: "en",
+      realtimeEnabled: false,
+      metricsInterval: 5,
+      hiddenServiceTags: ["standard"],
+    });
     expect(normalizePreferences({
       locale: "fr",
       realtimeEnabled: "yes",
       metricsInterval: 3,
-    })).toEqual({ locale: "auto", realtimeEnabled: true, metricsInterval: 1 });
+    })).toEqual({
+      locale: "auto",
+      realtimeEnabled: true,
+      metricsInterval: 1,
+      hiddenServiceTags: [],
+    });
   });
 
   it("uses Japanese only for Japanese device locales in automatic mode", () => {

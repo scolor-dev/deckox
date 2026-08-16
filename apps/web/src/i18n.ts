@@ -43,7 +43,7 @@ export const messages = {
       logTitle: "{id} のログ", logDescription: "systemd journalの直近の記録を表示します。", logLines: "行数", logLinesValue: "{count}行",
       logPriorityLabel: "重要度", logPriority: { all: "すべて", error: "エラー", warning: "警告以上", info: "情報以上" },
       logPriorityValue: { error: "エラー", warning: "警告", info: "情報" }, logLoading: "ログを読み込んでいます…", logEmpty: "該当するログはありません。",
-      filterTag: "タグで絞り込み", allTags: "すべてのタグ", tagStandard: "標準", tagDeckox: "Deckox", tagOther: "その他",
+      tagVisibility: "表示するタグ", tagStandard: "標準", tagDeckox: "Deckox", tagOther: "その他",
     },
     storage: {
       title: "ストレージ", summary: "{count}件のマウント", mount: "マウント先", filesystem: "ファイルシステム", capacity: "容量", usage: "使用状況",
@@ -150,7 +150,7 @@ export const messages = {
       logTitle: "Logs for {id}", logDescription: "Shows the most recent entries from the systemd journal.", logLines: "Lines", logLinesValue: "{count} lines",
       logPriorityLabel: "Priority", logPriority: { all: "All", error: "Errors", warning: "Warnings and above", info: "Info and above" },
       logPriorityValue: { error: "Error", warning: "Warning", info: "Info" }, logLoading: "Loading logs…", logEmpty: "No matching log entries.",
-      filterTag: "Filter by tag", allTags: "All tags", tagStandard: "Standard", tagDeckox: "Deckox", tagOther: "Other",
+      tagVisibility: "Visible tags", tagStandard: "Standard", tagDeckox: "Deckox", tagOther: "Other",
     },
     storage: {
       title: "Storage", summary: "{count} mounts", mount: "Mount point", filesystem: "File system", capacity: "Capacity", usage: "Usage",

@@ -9,18 +9,18 @@ import {
 } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import { notify } from "../notifications";
+import { preferences, type ServiceTagFilterKey } from "../preferences";
 
 const { t, locale } = useI18n();
 
 type ServiceTag = "standard" | "deckox";
-type TagFilter = "all" | ServiceTag | "other";
+
+const TAG_FILTER_KEYS: ServiceTagFilterKey[] = ["standard", "deckox", "other"];
 
 const services = ref<ServiceSummary[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const query = ref("");
-const tagFilter = ref<TagFilter>("all");
-const TAG_FILTER_OPTIONS: TagFilter[] = ["all", "standard", "deckox", "other"];
 const pending = ref<string | null>(null);
 const logService = ref<ServiceSummary | null>(null);
 const logEntries = ref<ServiceLogEntry[]>([]);
@@ -39,29 +39,34 @@ function serviceTags(service: ServiceSummary): ServiceTag[] {
   return tags;
 }
 
-function tagLabel(tag: ServiceTag) {
-  return t(tag === "deckox" ? "services.tagDeckox" : "services.tagStandard");
+function tagLabel(tag: ServiceTagFilterKey) {
+  if (tag === "deckox") return t("services.tagDeckox");
+  if (tag === "standard") return t("services.tagStandard");
+  return t("services.tagOther");
 }
 
-function tagFilterLabel(filter: TagFilter) {
-  if (filter === "all") return t("services.allTags");
-  if (filter === "other") return t("services.tagOther");
-  return tagLabel(filter);
+function filterKeys(tags: ServiceTag[]): ServiceTagFilterKey[] {
+  return tags.length ? tags : ["other"];
 }
 
-function matchesTagFilter(tags: ServiceTag[]) {
-  if (tagFilter.value === "all") return true;
-  if (tagFilter.value === "other") return tags.length === 0;
-  return tags.includes(tagFilter.value);
+function isTagHidden(tag: ServiceTagFilterKey) {
+  return preferences.hiddenServiceTags.includes(tag);
+}
+
+function toggleTag(tag: ServiceTagFilterKey) {
+  preferences.hiddenServiceTags = isTagHidden(tag)
+    ? preferences.hiddenServiceTags.filter((hidden) => hidden !== tag)
+    : [...preferences.hiddenServiceTags, tag];
 }
 
 const filteredServices = computed(() => {
   const needle = query.value.trim().toLowerCase();
   return services.value.filter((service) => {
     const tags = serviceTags(service);
-    if (!matchesTagFilter(tags)) return false;
+    const keys = filterKeys(tags);
+    if (keys.every((key) => isTagHidden(key))) return false;
     if (!needle) return true;
-    const haystack = [service.id, service.description, ...tags.map(tagLabel)]
+    const haystack = [service.id, service.description, ...keys.map(tagLabel)]
       .join(" ")
       .toLowerCase();
     return haystack.includes(needle);
@@ -218,18 +223,23 @@ onMounted(refresh);
             :placeholder="t('services.searchPlaceholder')"
           >
         </label>
-        <label>
-          <span class="sr-only">{{ t("services.filterTag") }}</span>
-          <select v-model="tagFilter">
-            <option
-              v-for="filter in TAG_FILTER_OPTIONS"
-              :key="filter"
-              :value="filter"
+        <fieldset class="tag-toggles">
+          <legend class="sr-only">
+            {{ t("services.tagVisibility") }}
+          </legend>
+          <label
+            v-for="tag in TAG_FILTER_KEYS"
+            :key="tag"
+            :class="['tag-toggle', tag, { off: isTagHidden(tag) }]"
+          >
+            <input
+              type="checkbox"
+              :checked="!isTagHidden(tag)"
+              @change="toggleTag(tag)"
             >
-              {{ tagFilterLabel(filter) }}
-            </option>
-          </select>
-        </label>
+            {{ tagLabel(tag) }}
+          </label>
+        </fieldset>
         <span class="table-count">{{ t("services.count", { count: filteredServices.length }) }}</span>
       </div>
 
