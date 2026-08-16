@@ -8,7 +8,9 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use deckox_protocol::{AgentStatus, DiagnosticsReport, ServiceLogPriority, UpdateStatus};
+use deckox_protocol::{
+    AgentStatus, AuditPage, DiagnosticsReport, ServiceLogPriority, UpdateStatus,
+};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower_http::{
@@ -20,14 +22,17 @@ use tracing_subscriber::EnvFilter;
 
 use crate::agent_client::AgentClient;
 use crate::{
+    audit::AuditLog,
     auth::{AuthManager, AuthenticatedUser, PasswordConfirmationResult},
     metrics_stream::MetricsHub,
     request_context::RequestId,
 };
 
 mod agent_client;
+mod audit;
 mod auth;
 mod diagnostics;
+mod fsutil;
 mod metrics_stream;
 mod request_context;
 mod update;
@@ -40,6 +45,7 @@ const DEFAULT_WEB_DIR: &str = "/usr/local/share/deckox/web";
 struct AppState {
     agent: AgentClient,
     auth: AuthManager,
+    audit: AuditLog,
     metrics: MetricsHub,
     updates: update::UpdateChecker,
     instance_id: String,
@@ -91,6 +97,13 @@ struct ServiceLogsQuery {
     priority: ServiceLogPriority,
 }
 
+#[derive(Debug, Deserialize)]
+struct AuditQuery {
+    #[serde(default = "audit::default_limit")]
+    limit: usize,
+    before_ms: Option<u64>,
+}
+
 const fn default_log_lines() -> u16 {
     100
 }
@@ -117,7 +130,8 @@ async fn main() {
         });
     let web_dir =
         PathBuf::from(env::var("DECKOX_WEB_DIR").unwrap_or_else(|_| DEFAULT_WEB_DIR.to_owned()));
-    let auth = AuthManager::load().unwrap_or_else(|error| {
+    let audit = AuditLog::from_env();
+    let auth = AuthManager::load(audit.clone()).unwrap_or_else(|error| {
         eprintln!("failed to load authentication configuration: {error}");
         std::process::exit(2);
     });
@@ -128,6 +142,7 @@ async fn main() {
     let state = AppState {
         agent: agent.clone(),
         auth: auth.clone(),
+        audit,
         metrics: MetricsHub::new(agent),
         updates,
         instance_id: format!("{:016x}", rand::random::<u64>()),
@@ -137,6 +152,8 @@ async fn main() {
         .route("/status", get(status))
         .route("/diagnostics", get(diagnostics))
         .route("/diagnostics/report", get(diagnostics_report))
+        .route("/audit", get(audit_events))
+        .route("/audit/report", get(audit_report))
         .route("/update", get(update_status))
         .route("/system", get(proxy_system))
         .route("/system/capabilities", get(proxy_system_capabilities))
@@ -280,6 +297,18 @@ async fn diagnostics_report(
     diagnostics::attachment(&report)
 }
 
+async fn audit_events(
+    State(state): State<AppState>,
+    Query(query): Query<AuditQuery>,
+) -> Json<AuditPage> {
+    Json(state.audit.page(query.limit, query.before_ms).await)
+}
+
+async fn audit_report(State(state): State<AppState>) -> Response {
+    let page = state.audit.export().await;
+    audit::attachment(&page)
+}
+
 async fn update_status(State(state): State<AppState>) -> Json<UpdateStatus> {
     Json(state.updates.check().await)
 }
@@ -326,6 +355,15 @@ async fn reboot_system(
                 reason = "invalid_password",
                 "system reboot confirmation failed"
             );
+            state
+                .audit
+                .record_admin(
+                    "system_reboot",
+                    user.source_ip,
+                    "failure",
+                    Some("invalid_password".to_owned()),
+                )
+                .await;
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse {
@@ -344,6 +382,10 @@ async fn reboot_system(
                 result = "rate_limited",
                 "system reboot confirmation rate limited"
             );
+            state
+                .audit
+                .record_admin("system_reboot", user.source_ip, "rate_limited", None)
+                .await;
             return (
                 StatusCode::TOO_MANY_REQUESTS,
                 Json(ErrorResponse {
@@ -366,6 +408,10 @@ async fn reboot_system(
             result = "accepted",
             "system reboot accepted"
         );
+        state
+            .audit
+            .record_admin("system_reboot", user.source_ip, "accepted", None)
+            .await;
     } else {
         warn!(
             event = "system_reboot",
@@ -376,6 +422,15 @@ async fn reboot_system(
             status = response.status().as_u16(),
             "system reboot failed"
         );
+        state
+            .audit
+            .record_admin(
+                "system_reboot",
+                user.source_ip,
+                "failure",
+                Some(format!("status={}", response.status().as_u16())),
+            )
+            .await;
     }
     response
 }
@@ -399,7 +454,16 @@ async fn proxy_service_details(
     Path(service_id): Path<String>,
     Extension(request_id): Extension<RequestId>,
 ) -> Response {
-    proxy_service_request(&state.agent, "GET", &service_id, None, &request_id, None).await
+    proxy_service_request(
+        &state.agent,
+        &state.audit,
+        "GET",
+        &service_id,
+        None,
+        &request_id,
+        None,
+    )
+    .await
 }
 
 async fn proxy_start_service(
@@ -410,6 +474,7 @@ async fn proxy_start_service(
 ) -> Response {
     proxy_service_request(
         &state.agent,
+        &state.audit,
         "POST",
         &service_id,
         Some("start"),
@@ -427,6 +492,7 @@ async fn proxy_stop_service(
 ) -> Response {
     proxy_service_request(
         &state.agent,
+        &state.audit,
         "POST",
         &service_id,
         Some("stop"),
@@ -444,6 +510,7 @@ async fn proxy_restart_service(
 ) -> Response {
     proxy_service_request(
         &state.agent,
+        &state.audit,
         "POST",
         &service_id,
         Some("restart"),
@@ -461,6 +528,7 @@ async fn proxy_enable_service(
 ) -> Response {
     proxy_service_request(
         &state.agent,
+        &state.audit,
         "POST",
         &service_id,
         Some("enable"),
@@ -478,6 +546,7 @@ async fn proxy_disable_service(
 ) -> Response {
     proxy_service_request(
         &state.agent,
+        &state.audit,
         "POST",
         &service_id,
         Some("disable"),
@@ -517,6 +586,7 @@ async fn proxy_service_logs(
 
 async fn proxy_service_request(
     client: &AgentClient,
+    audit: &AuditLog,
     method: &str,
     service_id: &str,
     action: Option<&str>,
@@ -544,6 +614,14 @@ async fn proxy_service_request(
                 result = "success",
                 "service action completed"
             );
+            audit
+                .record_admin(
+                    "service_action",
+                    user.source_ip,
+                    "success",
+                    Some(format!("service={service_id} action={action}")),
+                )
+                .await;
         } else {
             warn!(
                 event = "service_action",
@@ -556,6 +634,17 @@ async fn proxy_service_request(
                 status = response.status().as_u16(),
                 "service action failed"
             );
+            audit
+                .record_admin(
+                    "service_action",
+                    user.source_ip,
+                    "failure",
+                    Some(format!(
+                        "service={service_id} action={action} status={}",
+                        response.status().as_u16()
+                    )),
+                )
+                .await;
         }
     }
     response

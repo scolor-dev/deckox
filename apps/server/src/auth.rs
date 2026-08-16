@@ -19,13 +19,12 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
-use tokio::{
-    io::AsyncWriteExt,
-    sync::{Mutex, RwLock},
-};
+use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
 
-use crate::{ErrorResponse, request_context::RequestId};
+use crate::{
+    ErrorResponse, audit::AuditLog, fsutil::atomic_write_secure, request_context::RequestId,
+};
 
 const DEFAULT_PASSWORD_HASH_FILE: &str = "/var/lib/deckox/admin-password.hash";
 const SESSION_COOKIE: &str = "deckox_session";
@@ -35,19 +34,47 @@ const MAX_FAILURES: u32 = 5;
 const MAX_PASSWORD_BYTES: usize = 1024;
 const MIN_PASSWORD_BYTES: usize = 12;
 
+/// Key of the single administrator account in [`AccountFile`]. The file is
+/// already keyed by username so Deckox can grow multiple accounts later
+/// without another migration; today only this one key is ever populated.
+pub const ADMIN_ACCOUNT: &str = "admin";
+
+/// On-disk shape of the admin account file (JSON). Written atomically and
+/// read back on every [`AuthManager::load`] and every CLI recovery command.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AccountFile {
+    pub accounts: HashMap<String, Account>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Account {
+    pub password_hash: String,
+    #[serde(default)]
+    pub totp: Option<TotpSecret>,
+    #[serde(default)]
+    pub updated_at_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TotpSecret {
+    pub secret_base32: String,
+    pub recovery_code_hashes: Vec<String>,
+}
+
 #[derive(Clone)]
 pub struct AuthManager {
     inner: Arc<AuthInner>,
 }
 
 struct AuthInner {
-    password_hash: RwLock<String>,
-    password_hash_path: Option<PathBuf>,
+    account: RwLock<Account>,
+    account_path: Option<PathBuf>,
     secure_cookie: bool,
     sessions: Mutex<HashMap<String, Instant>>,
     failures: Mutex<HashMap<IpAddr, FailedLogins>>,
     password_change_failures: Mutex<HashMap<IpAddr, FailedLogins>>,
-    password_change: Mutex<()>,
+    account_write: Mutex<()>,
+    audit: AuditLog,
 }
 
 struct FailedLogins {
@@ -98,33 +125,47 @@ pub enum PasswordConfirmationResult {
 }
 
 impl AuthManager {
-    pub fn load() -> Result<Self, String> {
-        let (password_hash, password_hash_path) =
-            if let Ok(password_hash) = env::var("DECKOX_ADMIN_PASSWORD_HASH") {
-                (password_hash, None)
-            } else {
-                let hash_path = PathBuf::from(
-                    env::var("DECKOX_ADMIN_PASSWORD_HASH_FILE")
-                        .unwrap_or_else(|_| DEFAULT_PASSWORD_HASH_FILE.to_owned()),
-                );
-                let password_hash = fs::read_to_string(&hash_path)
-                    .map_err(|error| format!("failed to read {}: {error}", hash_path.display()))?;
-                (password_hash, Some(hash_path))
-            };
-        let password_hash = password_hash.trim().to_owned();
-        PasswordHash::new(&password_hash)
-            .map_err(|error| format!("invalid admin password hash: {error}"))?;
+    pub fn load(audit: AuditLog) -> Result<Self, String> {
+        let (account, account_path) = if let Ok(password_hash) =
+            env::var("DECKOX_ADMIN_PASSWORD_HASH")
+        {
+            let password_hash = password_hash.trim().to_owned();
+            PasswordHash::new(&password_hash)
+                .map_err(|error| format!("invalid admin password hash: {error}"))?;
+            (
+                Account {
+                    password_hash,
+                    totp: None,
+                    updated_at_ms: 0,
+                },
+                None,
+            )
+        } else {
+            let path = PathBuf::from(
+                env::var("DECKOX_ADMIN_PASSWORD_HASH_FILE")
+                    .unwrap_or_else(|_| DEFAULT_PASSWORD_HASH_FILE.to_owned()),
+            );
+            let account_file = load_account_file(&path)
+                .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+            let account = account_file
+                .accounts
+                .get(ADMIN_ACCOUNT)
+                .cloned()
+                .ok_or_else(|| format!("{} does not contain an admin account", path.display()))?;
+            (account, Some(path))
+        };
 
         let secure_cookie = env::var("DECKOX_SECURE_COOKIE").is_ok_and(|value| value == "true");
         Ok(Self {
             inner: Arc::new(AuthInner {
-                password_hash: RwLock::new(password_hash),
-                password_hash_path,
+                account: RwLock::new(account),
+                account_path,
                 secure_cookie,
                 sessions: Mutex::new(HashMap::new()),
                 failures: Mutex::new(HashMap::new()),
                 password_change_failures: Mutex::new(HashMap::new()),
-                password_change: Mutex::new(()),
+                account_write: Mutex::new(()),
+                audit,
             }),
         })
     }
@@ -138,7 +179,7 @@ impl AuthManager {
             return LoginResult::RateLimited;
         }
 
-        let password_hash = self.inner.password_hash.read().await.clone();
+        let password_hash = self.inner.account.read().await.password_hash.clone();
         let valid = verify_password(password_hash, password).await;
 
         if !valid {
@@ -167,8 +208,8 @@ impl AuthManager {
         current_password: String,
         new_password: String,
     ) -> ChangePasswordResult {
-        let _change_guard = self.inner.password_change.lock().await;
-        let Some(hash_path) = self.inner.password_hash_path.clone() else {
+        let _change_guard = self.inner.account_write.lock().await;
+        let Some(account_path) = self.inner.account_path.clone() else {
             return ChangePasswordResult::NotPersistent;
         };
         if new_password.len() < MIN_PASSWORD_BYTES || new_password.len() > MAX_PASSWORD_BYTES {
@@ -178,7 +219,7 @@ impl AuthManager {
             return ChangePasswordResult::RateLimited;
         }
 
-        let current_hash = self.inner.password_hash.read().await.clone();
+        let current_hash = self.inner.account.read().await.password_hash.clone();
         if !verify_password(current_hash, current_password).await {
             record_failure(&self.inner.password_change_failures, source_ip).await;
             return ChangePasswordResult::InvalidCurrentPassword;
@@ -200,11 +241,15 @@ impl AuthManager {
                     ));
                 }
             };
-        if let Err(error) = write_password_hash(&hash_path, &new_hash).await {
+
+        let mut account = self.inner.account.write().await;
+        account.password_hash = new_hash;
+        account.updated_at_ms = now_ms();
+        if let Err(error) = write_account(&account_path, &account).await {
             return ChangePasswordResult::Failed(error);
         }
+        drop(account);
 
-        *self.inner.password_hash.write().await = new_hash;
         self.inner.sessions.lock().await.clear();
         self.inner.failures.lock().await.clear();
         ChangePasswordResult::Changed
@@ -223,7 +268,7 @@ impl AuthManager {
             return PasswordConfirmationResult::RateLimited;
         }
 
-        let password_hash = self.inner.password_hash.read().await.clone();
+        let password_hash = self.inner.account.read().await.password_hash.clone();
         if !verify_password(password_hash, password).await {
             record_failure(&self.inner.password_change_failures, source_ip).await;
             return PasswordConfirmationResult::Invalid;
@@ -275,6 +320,59 @@ impl AuthManager {
         };
         format!("{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0{secure}")
     }
+
+    pub fn audit(&self) -> &AuditLog {
+        &self.inner.audit
+    }
+}
+
+/// Parses an account file, transparently upgrading the legacy format (a bare
+/// Argon2id hash string, with no JSON structure) that every Deckox install
+/// before this feature wrote. The upgraded form is only persisted the next
+/// time the account is written (password change, TOTP enable/disable, or a
+/// CLI recovery command) — reading never touches the file on disk.
+fn load_account_file(path: &Path) -> Result<AccountFile, String> {
+    let content = fs::read_to_string(path)
+        .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    let trimmed = content.trim();
+
+    if let Ok(parsed) = serde_json::from_str::<AccountFile>(trimmed) {
+        return Ok(parsed);
+    }
+
+    PasswordHash::new(trimmed).map_err(|error| format!("invalid admin password hash: {error}"))?;
+    let mut accounts = HashMap::new();
+    accounts.insert(
+        ADMIN_ACCOUNT.to_owned(),
+        Account {
+            password_hash: trimmed.to_owned(),
+            totp: None,
+            updated_at_ms: 0,
+        },
+    );
+    Ok(AccountFile { accounts })
+}
+
+/// Writes the admin account back to `path` in the current JSON format.
+/// Shared by the running server (password change, TOTP changes) and the
+/// `reset-password` / `disable-totp` CLI subcommands, which call it directly
+/// without going through [`AuthManager`].
+pub async fn write_account(path: &Path, account: &Account) -> Result<(), String> {
+    let mut accounts = HashMap::new();
+    accounts.insert(ADMIN_ACCOUNT.to_owned(), account.clone());
+    let file = AccountFile { accounts };
+    let serialized = serde_json::to_vec_pretty(&file)
+        .map_err(|error| format!("failed to encode account file: {error}"))?;
+    atomic_write_secure(path, &serialized).await
+}
+
+pub fn now_ms() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| {
+            u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+        })
 }
 
 async fn is_rate_limited(
@@ -315,51 +413,6 @@ async fn verify_password(password_hash: String, password: String) -> bool {
     })
     .await
     .unwrap_or(false)
-}
-
-async fn write_password_hash(path: &Path, password_hash: &str) -> Result<(), String> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| "password hash path has no parent directory".to_owned())?;
-    let file_name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| "password hash path has an invalid file name".to_owned())?;
-    let temporary_path = parent.join(format!(
-        ".{file_name}.{}",
-        hex::encode(rand::random::<[u8; 8]>())
-    ));
-
-    let mut options = tokio::fs::OpenOptions::new();
-    options.create_new(true).write(true);
-    #[cfg(unix)]
-    options.mode(0o600);
-
-    let result = async {
-        let mut file = options
-            .open(&temporary_path)
-            .await
-            .map_err(|error| format!("failed to create password hash file: {error}"))?;
-        file.write_all(password_hash.as_bytes())
-            .await
-            .map_err(|error| format!("failed to write password hash: {error}"))?;
-        file.write_all(b"\n")
-            .await
-            .map_err(|error| format!("failed to write password hash: {error}"))?;
-        file.sync_all()
-            .await
-            .map_err(|error| format!("failed to sync password hash: {error}"))?;
-        drop(file);
-        tokio::fs::rename(&temporary_path, path)
-            .await
-            .map_err(|error| format!("failed to replace password hash: {error}"))
-    }
-    .await;
-
-    if result.is_err() {
-        let _ = tokio::fs::remove_file(&temporary_path).await;
-    }
-    result
 }
 
 pub fn hash_password(password: &str) -> Result<String, String> {
@@ -407,6 +460,9 @@ pub async fn login(
                 result = "success",
                 "administrator logged in"
             );
+            auth.audit()
+                .record_admin("auth_login", peer.ip(), "success", None)
+                .await;
             let mut response = Json(AuthStatus {
                 authenticated: true,
             })
@@ -424,6 +480,9 @@ pub async fn login(
                 result = "failure",
                 "administrator login failed"
             );
+            auth.audit()
+                .record_admin("auth_login", peer.ip(), "failure", None)
+                .await;
             error_response(
                 StatusCode::UNAUTHORIZED,
                 "invalid_credentials",
@@ -438,6 +497,9 @@ pub async fn login(
                 result = "rate_limited",
                 "administrator login rate limited"
             );
+            auth.audit()
+                .record_admin("auth_login", peer.ip(), "rate_limited", None)
+                .await;
             error_response(
                 StatusCode::TOO_MANY_REQUESTS,
                 "rate_limited",
@@ -468,6 +530,16 @@ pub async fn logout(
         result = "success",
         "administrator logged out"
     );
+    auth.audit()
+        .record_admin("auth_logout", user.source_ip, "success", None)
+        .await;
+    signed_out_response(&auth)
+}
+
+/// Builds an `authenticated: false` response with the session cookie
+/// expired. Shared by [`logout`] and the successful branch of
+/// [`change_password`], which also ends the caller's session.
+fn signed_out_response(auth: &AuthManager) -> Response {
     let mut response = Json(AuthStatus {
         authenticated: false,
     })
@@ -501,14 +573,10 @@ pub async fn change_password(
                 result = "success",
                 "administrator password changed"
             );
-            let mut response = Json(AuthStatus {
-                authenticated: false,
-            })
-            .into_response();
-            if let Ok(value) = HeaderValue::from_str(&auth.expired_cookie()) {
-                response.headers_mut().insert(SET_COOKIE, value);
-            }
-            response
+            auth.audit()
+                .record_admin("password_change", user.source_ip, "success", None)
+                .await;
+            signed_out_response(&auth)
         }
         ChangePasswordResult::InvalidCurrentPassword => {
             warn!(
@@ -520,6 +588,14 @@ pub async fn change_password(
                 reason = "invalid_current_password",
                 "administrator password confirmation failed"
             );
+            auth.audit()
+                .record_admin(
+                    "password_change",
+                    user.source_ip,
+                    "failure",
+                    Some("invalid_current_password".to_owned()),
+                )
+                .await;
             error_response(
                 StatusCode::UNAUTHORIZED,
                 "invalid_current_password",
@@ -535,6 +611,9 @@ pub async fn change_password(
                 result = "rate_limited",
                 "administrator password confirmation rate limited"
             );
+            auth.audit()
+                .record_admin("password_change", user.source_ip, "rate_limited", None)
+                .await;
             error_response(
                 StatusCode::TOO_MANY_REQUESTS,
                 "rate_limited",
@@ -561,6 +640,9 @@ pub async fn change_password(
                 reason = %error,
                 "administrator password change failed"
             );
+            auth.audit()
+                .record_admin("password_change", user.source_ip, "failure", Some(error))
+                .await;
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "password_change_failed",
@@ -673,9 +755,32 @@ mod tests {
     use tokio::sync::{Mutex, RwLock};
 
     use super::{
-        AuthInner, AuthManager, MAX_FAILURES, PasswordConfirmationResult, hash_password,
-        is_rate_limited, record_failure, requires_same_origin, same_origin, session_token,
+        Account, AuditLog, AuthInner, AuthManager, MAX_FAILURES, PasswordConfirmationResult,
+        hash_password, is_rate_limited, load_account_file, record_failure, requires_same_origin,
+        same_origin, session_token,
     };
+
+    fn test_auth(password: &str) -> AuthManager {
+        AuthManager {
+            inner: Arc::new(AuthInner {
+                account: RwLock::new(Account {
+                    password_hash: hash_password(password).expect("password should hash"),
+                    totp: None,
+                    updated_at_ms: 0,
+                }),
+                account_path: None,
+                secure_cookie: false,
+                sessions: Mutex::new(HashMap::new()),
+                failures: Mutex::new(HashMap::new()),
+                password_change_failures: Mutex::new(HashMap::new()),
+                account_write: Mutex::new(()),
+                audit: AuditLog::new(std::env::temp_dir().join(format!(
+                    "deckox-auth-test-{}.log",
+                    hex::encode(rand::random::<[u8; 8]>())
+                ))),
+            }),
+        }
+    }
 
     #[test]
     fn hashes_password_with_argon2id() {
@@ -725,18 +830,7 @@ mod tests {
 
     #[tokio::test]
     async fn confirms_current_password_and_clears_failures() {
-        let password = "correct-test-password";
-        let auth = AuthManager {
-            inner: Arc::new(AuthInner {
-                password_hash: RwLock::new(hash_password(password).expect("password should hash")),
-                password_hash_path: None,
-                secure_cookie: false,
-                sessions: Mutex::new(HashMap::new()),
-                failures: Mutex::new(HashMap::new()),
-                password_change_failures: Mutex::new(HashMap::new()),
-                password_change: Mutex::new(()),
-            }),
-        };
+        let auth = test_auth("correct-test-password");
         let source_ip = IpAddr::from([192, 0, 2, 2]);
 
         assert!(matches!(
@@ -745,7 +839,7 @@ mod tests {
             PasswordConfirmationResult::Invalid
         ));
         assert!(matches!(
-            auth.confirm_current_password(source_ip, password.to_owned())
+            auth.confirm_current_password(source_ip, "correct-test-password".to_owned())
                 .await,
             PasswordConfirmationResult::Confirmed
         ));
@@ -753,5 +847,51 @@ mod tests {
             !is_rate_limited(&auth.inner.password_change_failures, source_ip).await,
             "successful confirmation should clear failures"
         );
+    }
+
+    #[test]
+    fn upgrades_legacy_bare_hash_file_on_read() {
+        let path = std::env::temp_dir().join(format!(
+            "deckox-account-legacy-{}.hash",
+            hex::encode(rand::random::<[u8; 8]>())
+        ));
+        let hash = hash_password("legacy-password").expect("password should hash");
+        std::fs::write(&path, format!("{hash}\n")).expect("legacy hash should write");
+
+        let account_file = load_account_file(&path).expect("legacy hash should parse");
+        let account = account_file
+            .accounts
+            .get(super::ADMIN_ACCOUNT)
+            .expect("admin account should exist");
+        assert_eq!(account.password_hash, hash);
+        assert!(account.totp.is_none());
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn reads_current_json_account_format() {
+        let path = std::env::temp_dir().join(format!(
+            "deckox-account-json-{}.json",
+            hex::encode(rand::random::<[u8; 8]>())
+        ));
+        let hash = hash_password("json-password").expect("password should hash");
+        std::fs::write(
+            &path,
+            format!(
+                r#"{{"accounts":{{"admin":{{"password_hash":"{hash}","totp":null,"updated_at_ms":123}}}}}}"#
+            ),
+        )
+        .expect("account file should write");
+
+        let account_file = load_account_file(&path).expect("account file should parse");
+        let account = account_file
+            .accounts
+            .get(super::ADMIN_ACCOUNT)
+            .expect("admin account should exist");
+        assert_eq!(account.password_hash, hash);
+        assert_eq!(account.updated_at_ms, 123);
+
+        let _ = std::fs::remove_file(&path);
     }
 }

@@ -260,3 +260,22 @@ pub enum CommandStatus {
     Completed,
     Failed,
 }
+
+/// A single recorded administrative action. `actor` is a username today
+/// (always `"admin"`) so the schema does not need to change if Deckox grows
+/// multiple accounts later.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditEvent {
+    pub timestamp_ms: u64,
+    pub event: String,
+    pub actor: String,
+    pub source_ip: String,
+    pub result: String,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditPage {
+    pub events: Vec<AuditEvent>,
+    pub has_more: bool,
+}
