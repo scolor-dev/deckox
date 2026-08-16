@@ -649,6 +649,14 @@ impl AuthManager {
     pub fn audit(&self) -> &AuditLog {
         &self.inner.audit
     }
+
+    /// Whether `DECKOX_SECURE_COOKIE` is set, meaning a TLS-terminating
+    /// proxy sits in front of this process. Also used to gate
+    /// `Strict-Transport-Security`, which must never be sent over plain
+    /// HTTP.
+    pub fn secure_cookie(&self) -> bool {
+        self.inner.secure_cookie
+    }
 }
 
 /// Builds a [`TOTP`] from a newly generated random secret, for the setup
