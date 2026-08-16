@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.4.1</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.4.2</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -45,7 +45,7 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/auth/login/totp</code></span></td><td><span class="status done">実装済み</span></td><td><code>deckox_preauth</code> Cookieを検証し、TOTPコードまたはリカバリーコードでセッションCookieを発行。リカバリーコードは使い捨て</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/auth/session</code></span></td><td><span class="status done">実装済み</span></td><td>現在の認証状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/auth/logout</code></span></td><td><span class="status done">実装済み</span></td><td>セッションを無効化</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>Serverの名前・バージョン・状態とAgent状態。Agent障害時は<code>degraded</code></td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>Serverの名前・バージョン・状態・待受ポートとAgent状態。Agent障害時は<code>degraded</code></td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/diagnostics</code></span></td><td><span class="status done">実装済み</span></td><td>生成時刻、Server、Agent、ホスト、Deckoxのsystemdユニット、機能設定の安全な固定項目をJSONで返却。Agent不通時も部分診断を返す</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/diagnostics/report</code></span></td><td><span class="status done">実装済み</span></td><td>同じ固定スキーマを<code>deckox-diagnostics.json</code>としてダウンロード</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/update</code></span></td><td><span class="status done">実装済み</span></td><td>現在版とGitHubの最新安定版を比較。取得失敗時も外部エラーを隠した<code>unavailable</code>を返す</td></tr>
@@ -80,7 +80,7 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/health</code></span></td><td><span class="status done">実装済み</span></td><td>Agentプロセスのヘルス状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト名、OS、CPUアーキテクチャ、<code>/proc/uptime</code>の秒数</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/diagnostics</code></span></td><td><span class="status done">実装済み</span></td><td>Agentバージョン、安全なホスト情報、Deckoxの2ユニット状態、再起動許可・許可サービス数を固定スキーマで返却</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>OS、バージョン、カーネル、ホスト名、稼働時間、boot ID、タイムゾーン</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>OS、バージョン、カーネル、ホスト名、稼働時間、boot ID、タイムゾーン、物理ネットワークインターフェースのLAN IPv4アドレス</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>設定に基づくホスト再起動の許可状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>許可時のみ<code>systemctl --no-block reboot</code>を実行</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>CPU使用率・コア数・任意の温度、メモリ・Swap、ロードアベレージ、ネットワーク送受信速度、ディスク読み書き速度。追加統計が取得不能でも他の値を返却</td></tr>
@@ -102,7 +102,7 @@
         <p class="eyebrow">Vue web</p>
         <h2 id="web-title">管理画面</h2>
         <div class="grid">
-          <article class="card"><span class="status done">実装済み</span><h3>リアルタイム概要</h3><p>OS・カーネル・稼働時間と、CPU・メモリ・Swap・ロードアベレージ、ネットワーク送受信速度、ディスクI/O速度の現在値・最大120点のSVG推移グラフ、最終更新時刻を表示します。CPU温度は取得可能な場合だけ表示し、Swap使用率80%以上を警告します。Agent復旧時はシステム情報を自動取得します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>リアルタイム概要</h3><p>OS・カーネル・稼働時間と、CPU・メモリ・Swap・ロードアベレージ、ネットワーク送受信速度、ディスクI/O速度の現在値・最大120点のSVG推移グラフ、最終更新時刻を表示します。CPU温度は取得可能な場合だけ表示し、Swap使用率80%以上を警告します。物理ネットワークインターフェースのLAN IPv4アドレスとServerの待受ポートから組み立てたアクセスURLをコピーボタン付きで表示します。Agent復旧時はシステム情報を自動取得します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>管理者ログイン</h3><p>セッション確認、ログイン、ログアウト、TOTP設定時の2段階目コード入力、APIの401応答時のログイン画面復帰、パスワードを忘れた場合のSSHコンソール手順案内を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>二要素認証(TOTP)</h3><p>設定画面でBase32シークレットとotpauth URIを表示して有効化し、確認コード入力後にリカバリーコード10個を一度だけ表示します。残りコード数の確認と、パスワード・コード確認付きの無効化を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>監査ログ</h3><p>認証・パスワード変更・TOTP設定・サービス操作・ホスト再起動・SSHコンソールからのCLI操作を時刻・種別・actor・送信元IP・結果で一覧表示し、イベント種別・結果で絞り込み、JSONとして保存できます。</p></article>

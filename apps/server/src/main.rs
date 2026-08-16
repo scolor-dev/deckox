@@ -36,6 +36,7 @@ mod diagnostics;
 mod fsutil;
 mod metrics_stream;
 mod request_context;
+mod security_headers;
 mod update;
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:8080";
@@ -50,6 +51,7 @@ struct AppState {
     metrics: MetricsHub,
     updates: update::UpdateChecker,
     instance_id: String,
+    listen_port: u16,
 }
 
 impl FromRef<AppState> for AuthManager {
@@ -69,6 +71,7 @@ struct ServerStatus {
     name: &'static str,
     version: &'static str,
     status: &'static str,
+    port: u16,
     agent: Option<AgentStatus>,
     agent_error: Option<String>,
 }
@@ -159,8 +162,36 @@ async fn main() {
         metrics: MetricsHub::new(agent),
         updates,
         instance_id: format!("{:016x}", rand::random::<u64>()),
+        listen_port: listen_addr.port(),
     };
 
+    let app = build_router(state, &auth, &web_dir);
+
+    let listener = TcpListener::bind(listen_addr)
+        .await
+        .unwrap_or_else(|error| {
+            eprintln!("failed to bind {listen_addr}: {error}");
+            std::process::exit(1);
+        });
+
+    info!(address = %listen_addr, web_dir = %web_dir.display(), "deckox server started");
+
+    if let Err(error) = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    {
+        error!(%error, "server stopped unexpectedly");
+        std::process::exit(1);
+    }
+}
+
+/// Assembles the full route tree: public auth endpoints, the
+/// authentication-gated API, the SPA fallback, and the layers (tracing,
+/// request IDs, security headers) applied to all of them uniformly.
+fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) -> Router {
     let protected_api = Router::new()
         .route("/status", get(status))
         .route("/diagnostics", get(diagnostics))
@@ -205,34 +236,18 @@ async fn main() {
         .route("/auth/session", get(auth::status))
         .merge(protected_api);
     let static_files =
-        ServeDir::new(&web_dir).not_found_service(ServeFile::new(web_dir.join("index.html")));
-    let app = Router::new()
+        ServeDir::new(web_dir).not_found_service(ServeFile::new(web_dir.join("index.html")));
+    Router::new()
         .route("/healthz", get(health))
         .nest("/api/v1", public_api)
         .fallback_service(static_files)
         .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn(request_context::assign_request_id))
-        .with_state(state);
-
-    let listener = TcpListener::bind(listen_addr)
-        .await
-        .unwrap_or_else(|error| {
-            eprintln!("failed to bind {listen_addr}: {error}");
-            std::process::exit(1);
-        });
-
-    info!(address = %listen_addr, web_dir = %web_dir.display(), "deckox server started");
-
-    if let Err(error) = axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown_signal())
-    .await
-    {
-        error!(%error, "server stopped unexpectedly");
-        std::process::exit(1);
-    }
+        .layer(middleware::from_fn_with_state(
+            auth.secure_cookie(),
+            security_headers::apply,
+        ))
+        .with_state(state)
 }
 
 fn load_update_checker() -> update::UpdateChecker {
@@ -271,6 +286,7 @@ async fn status(
             name: "deckox",
             version: env!("CARGO_PKG_VERSION"),
             status: "running",
+            port: state.listen_port,
             agent: Some(agent),
             agent_error: None,
         }),
@@ -278,6 +294,7 @@ async fn status(
             name: "deckox",
             version: env!("CARGO_PKG_VERSION"),
             status: "degraded",
+            port: state.listen_port,
             agent: None,
             agent_error: Some(error),
         }),

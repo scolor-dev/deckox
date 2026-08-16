@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.4.1</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.4.2</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -101,18 +101,20 @@ npm run build</code></pre>
 
       <section class="section" aria-labelledby="cli-title">
         <h2 id="cli-title">CLIサブコマンド</h2>
-        <p><code>deckox-server</code>は先頭引数でサブコマンドを切り替えます。<code>hash-password</code>以外はいずれもアカウントファイルへ直接読み書きするため、実行後は<code>deckox-server</code>を再起動します。</p>
+        <p><code>deckox-server</code>は先頭引数でサブコマンドを切り替えます。<code>reset-password</code>・<code>disable-totp</code>はアカウントファイルへ直接読み書きするため、実行後は<code>deckox-server</code>を再起動します。</p>
         <table class="status-table">
           <thead><tr><th>コマンド</th><th>動作</th></tr></thead>
           <tbody>
             <tr><td><code>hash-password</code></td><td>標準入力のパスワードをArgon2idハッシュへ変換して標準出力へ表示。<code>DECKOX_ADMIN_PASSWORD_HASH</code>の初期値作成に使用</td></tr>
             <tr><td><code>reset-password</code></td><td>標準入力の新しいパスワードで<code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code>のパスワードだけを更新。TOTP設定は変更しない。監査ログへ<code>password_reset_cli</code>を記録</td></tr>
             <tr><td><code>disable-totp</code></td><td>対話確認後、アカウントのTOTP設定とリカバリーコードを削除。監査ログへ<code>totp_disabled_cli</code>を記録</td></tr>
+            <tr><td><code>access-url</code></td><td>Agentに<code>/v1/system</code>を問い合わせ、LAN上のIPv4アドレスと<code>DECKOX_LISTEN_ADDR</code>のポートから<code>http://IP:port</code>形式のアクセスURLを表示。Agentに接続できない場合もポート番号だけは表示する</td></tr>
           </tbody>
         </table>
         <p><code>reset-password</code>・<code>disable-totp</code>は永続化されたアカウントファイルが前提のため、<code>DECKOX_ADMIN_PASSWORD_HASH</code>だけが設定されている場合はエラーで終了します。</p>
         <pre><code>printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password
-sudo -u deckox deckox-server disable-totp</code></pre>
+sudo -u deckox deckox-server disable-totp
+sudo -u deckox deckox-server access-url</code></pre>
       </section>
 
       <section class="section" aria-labelledby="diagnostics-title">

@@ -6,8 +6,9 @@ Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基
 許可リスト付きsystemdサービス管理とjournalログ閲覧、管理者パスワード変更、
 任意のTOTP二要素認証、パスワード再確認付きのホスト再起動を提供します。
 SSHコンソールからの`reset-password`・`disable-totp`サブコマンドによる
-認証情報の復旧、ログイン・設定変更・サービス操作などを記録し管理画面から
-閲覧・保存できる監査ログも実装済みです。SSEによるCPU・メモリ・Swap・
+認証情報の復旧、`access-url`サブコマンドによるLAN内アクセスURLの確認、
+ログイン・設定変更・サービス操作などを記録し管理画面から閲覧・保存できる
+監査ログも実装済みです。SSEによるCPU・メモリ・Swap・
 ネットワーク送受信速度・ディスクI/O速度のリアルタイムメトリクス、任意取得のCPU温度、
 軽量SVGグラフ、日本語・英語の表示切替、再起動後の自動再接続、画面ごとのURLと
 ブラウザ別表示設定、最終更新時刻、Agent復旧時の状態再取得、JSONで保存できる
@@ -120,12 +121,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.4.1`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.4.2`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.4.1
-git push origin v0.4.1
+git tag v0.4.2
+git push origin v0.4.2
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -150,7 +151,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.4.1 sh
+  | sudo DECKOX_VERSION=v0.4.2 sh
 ```
 
 ダウンロードや変更を行わず、対象アーキテクチャ・取得先・現在の導入状態を確認できます。
@@ -244,6 +245,14 @@ Serverは既定で`127.0.0.1:8080`だけに待ち受けます。別端末から�
 ssh -L 8080:127.0.0.1:8080 user@server
 ```
 
+サーバーのLANアドレスが分からない場合は、SSH接続したコンソールから
+`access-url`サブコマンドで確認できます(管理画面の「概要」からも同じ
+情報をコピーできます)。
+
+```bash
+deckox-server access-url
+```
+
 LAN内の端末から常時アクセスする場合は、サーバーのLANアドレスだけへ
 待受先を上書きします。次の例ではサーバーのアドレスを`192.168.1.21`と
 しています。
@@ -323,3 +332,7 @@ Agentは任意のシェルコマンドを受け付けず、許可済みの型付
 実行します。サービスログ閲覧も完全一致許可リスト、500行の上限、全件・
 エラー・警告・情報のpriority選択肢に制限されます。任意コマンドや対話シェルを
 受け付けるWebコンソールは提供しません。
+
+## ライセンス
+
+[MIT License](LICENSE)

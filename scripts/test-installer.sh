@@ -119,7 +119,7 @@ mkdir -p "$version_root/usr/local/share/deckox"
 printf '1.2.3\n' > "$version_root/usr/local/share/deckox/VERSION"
 PATH="$test_path" TEST_STATE="$state_dir" DECKOX_ROOT="$version_root" DECKOX_VERSION=v2.0.0 \
   sh "$installer" --version > "$test_dir/version.out"
-assert_contains "$test_dir/version.out" "Deckox installer 0.4.1"
+assert_contains "$test_dir/version.out" "Deckox installer 0.4.2"
 assert_contains "$test_dir/version.out" "Requested package: v2.0.0"
 assert_contains "$test_dir/version.out" "Installed package: 1.2.3"
 

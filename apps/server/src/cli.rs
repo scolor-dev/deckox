@@ -10,17 +10,22 @@
 //! function that returns `Result<(), String>`.
 
 use std::{
+    env,
     io::{Read, Write},
+    net::SocketAddr,
     path::PathBuf,
 };
 
-use crate::{audit::AuditLog, auth};
+use deckox_protocol::SystemInfo;
+
+use crate::{agent_client::AgentClient, audit::AuditLog, auth, request_context::RequestId};
 
 pub async fn dispatch(argument: Option<&str>) -> bool {
     let result = match argument {
         Some("hash-password") => hash_password(),
         Some("reset-password") => reset_password().await,
         Some("disable-totp") => disable_totp().await,
+        Some("access-url") => access_url().await,
         _ => return false,
     };
     if let Err(error) = result {
@@ -80,6 +85,43 @@ async fn disable_totp() -> Result<(), String> {
         "Two-factor authentication disabled. Restart deckox-server for the change to take effect:"
     );
     println!("  sudo systemctl restart deckox-server");
+    Ok(())
+}
+
+/// `access-url` — prints the URL(s) this instance can be reached at from
+/// elsewhere on the LAN, combining the configured listen port with the
+/// LAN-facing IPv4 addresses Agent reports for the host's physical network
+/// interfaces. Best-effort: if Agent can't be reached or reports no
+/// address, still prints the port so there is something to go on.
+async fn access_url() -> Result<(), String> {
+    let listen_addr = env::var("DECKOX_LISTEN_ADDR")
+        .unwrap_or_else(|_| crate::DEFAULT_LISTEN_ADDR.to_owned())
+        .parse::<SocketAddr>()
+        .map_err(|error| format!("invalid DECKOX_LISTEN_ADDR: {error}"))?;
+    let socket_path = PathBuf::from(
+        env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| crate::DEFAULT_AGENT_SOCKET.to_owned()),
+    );
+    let agent = AgentClient::new(socket_path);
+    let request_id = RequestId(format!("cli-{}", hex::encode(rand::random::<[u8; 8]>())));
+
+    match agent
+        .get_json::<SystemInfo>("/v1/system", &request_id)
+        .await
+    {
+        Ok(system) if !system.lan_addresses.is_empty() => {
+            for address in system.lan_addresses {
+                println!("http://{address}:{}", listen_addr.port());
+            }
+        }
+        Ok(_) => {
+            println!("No LAN-facing IPv4 address was found.");
+            println!("Listening on port {}.", listen_addr.port());
+        }
+        Err(error) => {
+            eprintln!("Could not reach deckox-agent to detect the LAN address: {error}");
+            println!("Listening on port {}.", listen_addr.port());
+        }
+    }
     Ok(())
 }
 

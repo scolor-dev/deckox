@@ -26,6 +26,7 @@ pub async fn read_system_info() -> Result<SystemInfo, AgentError> {
     let uptime_seconds = parse_uptime(&read_trimmed("/proc/uptime").await?)?;
     let boot_id = read_optional_trimmed("/proc/sys/kernel/random/boot_id").await;
     let timezone = read_timezone().await;
+    let lan_addresses = lan_addresses().await;
 
     Ok(SystemInfo {
         hostname,
@@ -39,6 +40,7 @@ pub async fn read_system_info() -> Result<SystemInfo, AgentError> {
         uptime_seconds,
         boot_id,
         timezone,
+        lan_addresses,
     })
 }
 
@@ -137,6 +139,47 @@ async fn read_timezone() -> Option<String> {
         .strip_prefix("/usr/share/zoneinfo")
         .ok()
         .map(|value| value.to_string_lossy().trim_start_matches('/').to_owned())
+}
+
+/// IPv4 addresses with global scope on the same physical interfaces
+/// [`eligible_network_interfaces`] reports for metrics — the addresses a
+/// browser on the LAN could actually reach this host through. Best-effort:
+/// returns an empty list rather than failing the whole `SystemInfo`
+/// response if `ip` is unavailable or its output can't be parsed.
+async fn lan_addresses() -> Vec<String> {
+    let Some(eligible) = eligible_network_interfaces().await else {
+        return Vec::new();
+    };
+    let Ok(Ok(output)) = tokio::time::timeout(
+        Duration::from_secs(3),
+        Command::new("ip")
+            .args(["-4", "-o", "addr", "show", "scope", "global"])
+            .output(),
+    )
+    .await
+    else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    parse_lan_addresses(&String::from_utf8_lossy(&output.stdout), &eligible)
+}
+
+fn parse_lan_addresses(input: &str, eligible: &HashSet<String>) -> Vec<String> {
+    input
+        .lines()
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            let interface = *fields.get(1)?;
+            if !eligible.contains(interface) {
+                return None;
+            }
+            let inet_index = fields.iter().position(|&field| field == "inet")?;
+            let cidr = fields.get(inet_index + 1)?;
+            cidr.split('/').next().map(str::to_owned)
+        })
+        .collect()
 }
 
 fn parse_key_values(input: &str) -> HashMap<String, String> {
@@ -469,7 +512,7 @@ mod tests {
     use super::{
         CpuSample, DiskSample, NetworkSample, bytes_per_second, calculate_cpu_usage,
         calculate_disk_metrics, calculate_network_metrics, parse_cpu_sample, parse_cpu_temperature,
-        parse_disk_sample, parse_key_values, parse_load_average, parse_memory,
+        parse_disk_sample, parse_key_values, parse_lan_addresses, parse_load_average, parse_memory,
         parse_network_sample, parse_uptime,
     };
 
@@ -545,6 +588,17 @@ mod tests {
     fn ignores_malformed_network_counters() {
         let eligible = HashSet::from(["eth0".to_owned()]);
         assert!(parse_network_sample("eth0: invalid\n", &eligible).is_none());
+    }
+
+    #[test]
+    fn parses_lan_addresses_from_eligible_interfaces_only() {
+        let eligible = HashSet::from(["eth0".to_owned()]);
+        let addresses = parse_lan_addresses(
+            "2: eth0    inet 192.168.1.21/24 brd 192.168.1.255 scope global dynamic noprefixroute eth0\n\
+             3: docker0    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0\n",
+            &eligible,
+        );
+        assert_eq!(addresses, vec!["192.168.1.21".to_owned()]);
     }
 
     #[test]
