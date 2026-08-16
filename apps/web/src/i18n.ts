@@ -31,6 +31,8 @@ export const messages = {
       network: "ネットワーク", networkChart: "ネットワーク受信・送信速度の推移", received: "受信", transmitted: "送信", diskIo: "ディスクI/O", diskIoChart: "ディスク読み書き速度の推移",
       read: "読込", write: "書込", hostTotal: "ホスト全体", temperature: "CPU温度", temperatureChart: "CPU温度の推移", notAvailable: "取得できません", sensorValue: "センサー取得値", perSecond: "{value}/秒",
       systemInfo: "システム情報", hostname: "ホスト名", kernel: "カーネル", timezone: "タイムゾーン",
+      accessUrl: "アクセスURL", copyAccessUrl: "コピー", accessUrlCopied: "アクセスURLをコピーしました。",
+      accessUrlCopyFailed: "コピーできませんでした。手動で選択してコピーしてください。",
     },
     services: {
       title: "サービス", summary: "全{total}件のうち{running}件が稼働中", search: "サービスを検索", searchPlaceholder: "サービス名・説明・タグを検索",
@@ -138,6 +140,8 @@ export const messages = {
       network: "Network", networkChart: "Network receive and transmit rate history", received: "Received", transmitted: "Transmitted", diskIo: "Disk I/O", diskIoChart: "Disk read and write rate history",
       read: "Read", write: "Write", hostTotal: "Host total", temperature: "CPU temperature", temperatureChart: "CPU temperature history", notAvailable: "Unavailable", sensorValue: "Sensor reading", perSecond: "{value}/s",
       systemInfo: "System information", hostname: "Hostname", kernel: "Kernel", timezone: "Time zone",
+      accessUrl: "Access URL", copyAccessUrl: "Copy", accessUrlCopied: "Copied the access URL.",
+      accessUrlCopyFailed: "Couldn't copy. Please select and copy it manually.",
     },
     services: {
       title: "Services", summary: "{running} of {total} services running", search: "Search services", searchPlaceholder: "Search by name, description, or tag",

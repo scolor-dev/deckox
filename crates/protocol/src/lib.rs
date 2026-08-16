@@ -24,6 +24,10 @@ pub struct SystemInfo {
     pub uptime_seconds: u64,
     pub boot_id: Option<String>,
     pub timezone: Option<String>,
+    /// IPv4 addresses with global scope on physical network interfaces
+    /// (loopback and virtual interfaces excluded), so the admin UI can show
+    /// how to reach this host from elsewhere on the LAN.
+    pub lan_addresses: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

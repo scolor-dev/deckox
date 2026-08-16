@@ -10,6 +10,7 @@ export interface ServerStatus {
   name: string;
   version: string;
   status: string;
+  port: number;
   agent: AgentStatus | null;
   agent_error: string | null;
 }
@@ -23,6 +24,7 @@ export interface SystemInfo {
   uptime_seconds: number;
   boot_id: string | null;
   timezone: string | null;
+  lan_addresses: string[];
 }
 
 export interface SystemMetrics {

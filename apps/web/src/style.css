@@ -548,6 +548,19 @@ select:focus-visible { outline: 2px solid #2466a8; outline-offset: 2px; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.access-url-list { display: flex; flex-direction: column; gap: 6px; overflow: visible; white-space: normal; }
+.access-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+.access-url-row span {
+  overflow: hidden;
+  font: 600 11px ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .table-toolbar {
   display: flex;

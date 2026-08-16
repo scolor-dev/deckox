@@ -51,6 +51,7 @@ struct AppState {
     metrics: MetricsHub,
     updates: update::UpdateChecker,
     instance_id: String,
+    listen_port: u16,
 }
 
 impl FromRef<AppState> for AuthManager {
@@ -70,6 +71,7 @@ struct ServerStatus {
     name: &'static str,
     version: &'static str,
     status: &'static str,
+    port: u16,
     agent: Option<AgentStatus>,
     agent_error: Option<String>,
 }
@@ -160,6 +162,7 @@ async fn main() {
         metrics: MetricsHub::new(agent),
         updates,
         instance_id: format!("{:016x}", rand::random::<u64>()),
+        listen_port: listen_addr.port(),
     };
 
     let app = build_router(state, &auth, &web_dir);
@@ -283,6 +286,7 @@ async fn status(
             name: "deckox",
             version: env!("CARGO_PKG_VERSION"),
             status: "running",
+            port: state.listen_port,
             agent: Some(agent),
             agent_error: None,
         }),
@@ -290,6 +294,7 @@ async fn status(
             name: "deckox",
             version: env!("CARGO_PKG_VERSION"),
             status: "degraded",
+            port: state.listen_port,
             agent: None,
             agent_error: Some(error),
         }),

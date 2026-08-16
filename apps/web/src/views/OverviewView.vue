@@ -7,6 +7,7 @@ import {
   formatBytes,
   formatUptime,
   usagePercentage,
+  writeClipboardText,
   type ServerStatus,
   type SystemInfo,
   type SystemMetrics,
@@ -68,6 +69,20 @@ const diskMaximum = computed(() => Math.max(
   ...diskReadHistory.value,
   ...diskWrittenHistory.value,
 ));
+const accessUrls = computed(() => {
+  const port = status.value?.port;
+  if (!port) return [];
+  const portText = String(port);
+  return (system.value?.lan_addresses ?? []).map((address) => `http://${address}:${portText}`);
+});
+
+async function copyAccessUrl(url: string) {
+  if (await writeClipboardText(url)) {
+    notify("success", t("overview.accessUrlCopied"));
+  } else {
+    notify("error", t("overview.accessUrlCopyFailed"));
+  }
+}
 
 function appendHistory(target: typeof cpuHistory, value: number) {
   target.value = appendMetricHistory(target.value, value, HISTORY_LIMIT);
@@ -344,6 +359,31 @@ onMounted(refresh);
         <div><dt>{{ t("overview.architecture") }}</dt><dd>{{ system?.architecture ?? t("common.none") }}</dd></div>
         <div><dt>{{ t("overview.timezone") }}</dt><dd>{{ system?.timezone ?? t("common.none") }}</dd></div>
         <div><dt>Deckox</dt><dd>{{ t("common.version") }} {{ status?.version ?? t("common.none") }}</dd></div>
+        <div>
+          <dt>{{ t("overview.accessUrl") }}</dt>
+          <dd v-if="accessUrls.length === 0">
+            {{ t("common.none") }}
+          </dd>
+          <dd
+            v-else
+            class="access-url-list"
+          >
+            <div
+              v-for="url in accessUrls"
+              :key="url"
+              class="access-url-row"
+            >
+              <span>{{ url }}</span>
+              <button
+                class="action-button"
+                type="button"
+                @click="copyAccessUrl(url)"
+              >
+                {{ t("overview.copyAccessUrl") }}
+              </button>
+            </div>
+          </dd>
+        </div>
       </dl>
     </section>
   </div>
