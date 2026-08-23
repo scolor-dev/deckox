@@ -8,7 +8,7 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY apps/web ./
 RUN npm run build
 
-FROM rust:1.85-bookworm AS rust-builder
+FROM rust:1.98-bookworm AS rust-builder
 WORKDIR /usr/src/deckox
 COPY Cargo.toml Cargo.lock ./
 COPY apps/agent/Cargo.toml apps/agent/Cargo.toml
