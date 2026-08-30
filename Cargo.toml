@@ -13,7 +13,7 @@ rust-version = "1.85"
 license = "MIT"
 
 [workspace.dependencies]
-argon2 = "0.5"
+argon2 = "0.6"
 async-stream = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
