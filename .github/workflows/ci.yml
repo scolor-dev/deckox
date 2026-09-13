@@ -54,7 +54,7 @@ jobs:
       - name: Check installer scripts
         run: >-
           sh -n packaging/scripts/install.sh scripts/package-release.sh
-          scripts/release.sh scripts/test-installer.sh
+          scripts/release.sh scripts/bump-version.sh scripts/test-installer.sh
 
       - name: Test installer safety flows
         run: scripts/test-installer.sh
