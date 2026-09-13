@@ -496,7 +496,7 @@ async fn resolve_update_request(
     state: &AppState,
     request_id: &RequestId,
     user: &AuthenticatedUser,
-) -> Result<AgentUpdateRequest, Response> {
+) -> Result<AgentUpdateRequest, Box<Response>> {
     let status = state.updates.check().await;
     let Some(target_version) = status
         .update_available
@@ -512,11 +512,11 @@ async fn resolve_update_request(
             "system update requested with no update available",
         )
         .await;
-        return Err(error_response(
+        return Err(Box::new(error_response(
             StatusCode::CONFLICT,
             "no_update_available",
             "no newer Deckox version is available",
-        ));
+        )));
     };
 
     let Ok(install_script) = state.updates.fetch_install_script(&target_version).await else {
@@ -529,11 +529,11 @@ async fn resolve_update_request(
             "failed to fetch the installer for the target version",
         )
         .await;
-        return Err(error_response(
+        return Err(Box::new(error_response(
             StatusCode::BAD_GATEWAY,
             "installer_unavailable",
             "could not fetch the installer for the target version",
-        ));
+        )));
     };
 
     Ok(AgentUpdateRequest {
@@ -597,7 +597,7 @@ async fn trigger_update(
 
     let request = match resolve_update_request(state, request_id, user).await {
         Ok(request) => request,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let target_version = request.target_version.clone();
 
