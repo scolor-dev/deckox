@@ -117,6 +117,7 @@ mod tests {
             },
             runtime_config: RuntimeConfigSummary {
                 reboot_allowed: false,
+                update_allowed: false,
                 allowed_services_count: 2,
             },
         }

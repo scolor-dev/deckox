@@ -212,6 +212,7 @@ onMounted(refresh);
           class="details diagnostics-config"
         >
           <div><dt>{{ t("diagnostics.reboot") }}</dt><dd>{{ enabledLabel(diagnostics.runtime_config.reboot_allowed) }}</dd></div>
+          <div><dt>{{ t("diagnostics.update") }}</dt><dd>{{ enabledLabel(diagnostics.runtime_config.update_allowed) }}</dd></div>
           <div><dt>{{ t("diagnostics.allowedServices") }}</dt><dd>{{ t("diagnostics.allowedServicesValue", { count: diagnostics.runtime_config.allowed_services_count }) }}</dd></div>
         </dl>
         <p

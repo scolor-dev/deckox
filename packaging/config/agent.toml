@@ -4,8 +4,15 @@ socket = "/run/deckox/agent.sock"
 
 # Reboot stays disabled until explicitly enabled. The Web UI also requires the
 # administrator password again before calling the fixed reboot operation.
+#
+# Self-update from the Web UI is likewise disabled until explicitly enabled.
+# The Web UI requires the administrator password again before requesting it;
+# the Server then fetches the installer for the release it already reported
+# as available and hands it to the Agent, which runs it as an independent
+# systemd unit.
 [system]
 allow_reboot = false
+allow_update = false
 
 # Service state can always be read. Start, stop, and restart are permitted only
 # for service IDs listed here. Deckox's own services are always rejected.

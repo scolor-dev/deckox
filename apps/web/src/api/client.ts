@@ -57,6 +57,7 @@ export interface SystemMetrics {
 
 export interface SystemCapabilities {
   reboot_allowed: boolean;
+  update_allowed: boolean;
 }
 
 export interface ServerHealth {
@@ -162,6 +163,7 @@ export interface DiagnosticsResponse {
   } | null;
   runtime_config: {
     reboot_allowed: boolean;
+    update_allowed: boolean;
     allowed_services_count: number;
   } | null;
 }
@@ -322,6 +324,12 @@ export const api = {
   systemCapabilities: () => request<SystemCapabilities>("/api/v1/system/capabilities"),
   rebootSystem: (currentPassword: string) =>
     request<CommandResult>("/api/v1/system/reboot", {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword }),
+      headers: { "Content-Type": "application/json" },
+    }),
+  triggerUpdate: (currentPassword: string) =>
+    request<CommandResult>("/api/v1/system/update", {
       method: "POST",
       body: JSON.stringify({ current_password: currentPassword }),
       headers: { "Content-Type": "application/json" },

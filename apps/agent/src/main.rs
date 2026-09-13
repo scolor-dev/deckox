@@ -1,7 +1,7 @@
 use std::{
     env, fs,
     os::unix::fs::{FileTypeExt, PermissionsExt},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use axum::{
@@ -11,9 +11,9 @@ use axum::{
     routing::{get, post},
 };
 use deckox_protocol::{
-    AgentDiagnostics, AgentStatus, CommandResult, HealthResponse, RuntimeConfigSummary,
-    ServiceAction, ServiceDetails, ServiceLogPriority, ServiceLogs, ServiceSummary, StorageMount,
-    SystemCapabilities, SystemInfo, SystemMetrics,
+    AgentDiagnostics, AgentStatus, AgentUpdateRequest, CommandResult, HealthResponse,
+    RuntimeConfigSummary, ServiceAction, ServiceDetails, ServiceLogPriority, ServiceLogs,
+    ServiceSummary, StorageMount, SystemCapabilities, SystemInfo, SystemMetrics,
 };
 use serde::Deserialize;
 use tokio::net::UnixListener;
@@ -22,7 +22,7 @@ use tracing_subscriber::EnvFilter;
 
 use crate::{
     config::AgentConfig, error::AgentError, power::PowerManager, services::ServiceManager,
-    storage::read_storage, system::read_system_info,
+    storage::read_storage, system::read_system_info, update::UpdateManager,
 };
 
 mod config;
@@ -33,11 +33,13 @@ mod request_context;
 mod services;
 mod storage;
 mod system;
+mod update;
 
 #[derive(Clone)]
 struct AppState {
     power: PowerManager,
     services: ServiceManager,
+    update: UpdateManager,
     runtime_config: RuntimeConfigSummary,
 }
 
@@ -68,9 +70,14 @@ async fn main() {
     let socket_path = config.socket_path();
     let runtime_config = RuntimeConfigSummary {
         reboot_allowed: config.system.allow_reboot,
+        update_allowed: config.system.allow_update,
         allowed_services_count: config.services.allowed.len(),
     };
     let power = PowerManager::new(config.system.allow_reboot);
+    let runtime_dir = socket_path
+        .parent()
+        .map_or_else(|| PathBuf::from("/run/deckox"), Path::to_path_buf);
+    let update = UpdateManager::new(config.system.allow_update, &runtime_dir);
     let services = ServiceManager::new(config.services.allowed).unwrap_or_else(|error| {
         eprintln!("invalid service control configuration: {error:?}");
         std::process::exit(2);
@@ -101,6 +108,7 @@ async fn main() {
         .route("/v1/system", get(system_info))
         .route("/v1/system/capabilities", get(system_capabilities))
         .route("/v1/system/reboot", post(reboot_system))
+        .route("/v1/system/update", post(update_system))
         .route("/v1/system/metrics", get(system_metrics))
         .route("/v1/storage", get(storage))
         .route("/v1/services", get(list_services))
@@ -114,6 +122,7 @@ async fn main() {
         .with_state(AppState {
             power,
             services,
+            update,
             runtime_config,
         })
         .layer(middleware::from_fn(request_context::assign_request_id));
@@ -198,7 +207,7 @@ async fn system_info() -> Result<Json<SystemInfo>, AgentError> {
 }
 
 async fn system_capabilities(State(state): State<AppState>) -> Json<SystemCapabilities> {
-    Json(state.power.capabilities())
+    Json(state.power.capabilities(state.update.allowed()))
 }
 
 async fn reboot_system(
@@ -220,6 +229,36 @@ async fn reboot_system(
             error = ?error,
             result = "rejected",
             "system reboot rejected"
+        ),
+    }
+    result.map(Json)
+}
+
+async fn update_system(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<request_context::RequestId>,
+    Json(payload): Json<AgentUpdateRequest>,
+) -> Result<Json<CommandResult>, AgentError> {
+    let result = state
+        .update
+        .trigger(&payload.target_version, &payload.install_script)
+        .await;
+    match &result {
+        Ok(command) => info!(
+            event = "system_update",
+            request_id = %request_id.0,
+            command_id = %command.command_id,
+            target_version = %payload.target_version,
+            result = "accepted",
+            "system update accepted"
+        ),
+        Err(error) => warn!(
+            event = "system_update",
+            request_id = %request_id.0,
+            target_version = %payload.target_version,
+            error = ?error,
+            result = "rejected",
+            "system update rejected"
         ),
     }
     result.map(Json)

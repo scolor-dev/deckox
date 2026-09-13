@@ -33,6 +33,7 @@ pub struct SystemInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemCapabilities {
     pub reboot_allowed: bool,
+    pub update_allowed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,6 +95,7 @@ pub struct DiagnosticUnitState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeConfigSummary {
     pub reboot_allowed: bool,
+    pub update_allowed: bool,
     pub allowed_services_count: usize,
 }
 
@@ -113,6 +115,58 @@ pub enum UpdateCheckStatus {
     UpToDate,
     Available,
     Unavailable,
+}
+
+/// Sent from Server to Agent to run a self-update.
+///
+/// The Server (not the root-privileged Agent) is the one that talks to
+/// GitHub, so it resolves `target_version` and fetches `install_script` from
+/// the pinned release tag before handing both to the Agent for execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentUpdateRequest {
+    pub target_version: String,
+    pub install_script: String,
+}
+
+/// `true` for well-formed `vMAJOR.MINOR.PATCH` release tags such as `v0.4.2`.
+///
+/// Both Server and Agent validate a release tag with this before it is
+/// embedded in a fetch URL or passed to the self-update installer, so
+/// unexpected input never reaches either.
+#[must_use]
+pub fn is_valid_release_tag(value: &str) -> bool {
+    let Some(rest) = value.strip_prefix('v') else {
+        return false;
+    };
+    let mut parts = rest.split('.');
+    let (Some(major), Some(minor), Some(patch), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
+    [major, minor, patch]
+        .iter()
+        .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+#[cfg(test)]
+mod tag_tests {
+    use super::is_valid_release_tag;
+
+    #[test]
+    fn accepts_well_formed_tags() {
+        assert!(is_valid_release_tag("v1.2.3"));
+        assert!(is_valid_release_tag("v0.4.2"));
+    }
+
+    #[test]
+    fn rejects_malformed_tags() {
+        assert!(!is_valid_release_tag("1.2.3"));
+        assert!(!is_valid_release_tag("v1.2"));
+        assert!(!is_valid_release_tag("v1.2.3-beta"));
+        assert!(!is_valid_release_tag("v1.2.3/../etc"));
+        assert!(!is_valid_release_tag(""));
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
