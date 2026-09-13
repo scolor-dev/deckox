@@ -20,9 +20,7 @@ const GITHUB_API_VERSION: &str = "2022-11-28";
 const CACHE_TTL: Duration = Duration::from_secs(15 * 60);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
-const MAX_RESPONSE_BYTES_U64: u64 = 64 * 1024;
 const MAX_SCRIPT_BYTES: usize = 256 * 1024;
-const MAX_SCRIPT_BYTES_U64: u64 = 256 * 1024;
 
 type FetchFuture = Pin<Box<dyn Future<Output = Result<LatestRelease, FetchError>> + Send>>;
 type Fetcher = dyn Fn() -> FetchFuture + Send + Sync;
@@ -58,6 +56,14 @@ enum FetchError {
     Request,
     ResponseTooLarge,
     InvalidResponse,
+}
+
+/// Shared by [`fetch_latest_release`] and
+/// [`UpdateChecker::fetch_install_script`], which each map it to their own
+/// error type.
+enum BoundedBodyError {
+    Request,
+    TooLarge,
 }
 
 impl UpdateChecker {
@@ -109,28 +115,13 @@ impl UpdateChecker {
         if !response.status().is_success() {
             return Err(InstallScriptError::Request);
         }
-        if response
-            .content_length()
-            .is_some_and(|length| length > MAX_SCRIPT_BYTES_U64)
-        {
-            return Err(InstallScriptError::TooLarge);
-        }
 
-        let mut body = Vec::new();
-        while let Some(chunk) = response
-            .chunk()
+        let body = read_bounded_body(&mut response, MAX_SCRIPT_BYTES)
             .await
-            .map_err(|_| InstallScriptError::Request)?
-        {
-            let next_length = body
-                .len()
-                .checked_add(chunk.len())
-                .ok_or(InstallScriptError::TooLarge)?;
-            if next_length > MAX_SCRIPT_BYTES {
-                return Err(InstallScriptError::TooLarge);
-            }
-            body.extend_from_slice(&chunk);
-        }
+            .map_err(|error| match error {
+                BoundedBodyError::Request => InstallScriptError::Request,
+                BoundedBodyError::TooLarge => InstallScriptError::TooLarge,
+            })?;
 
         let script = String::from_utf8(body).map_err(|_| InstallScriptError::InvalidResponse)?;
         if !script.starts_with("#!/bin/sh") {
@@ -188,28 +179,54 @@ async fn fetch_latest_release(client: &Client) -> Result<LatestRelease, FetchErr
     if !response.status().is_success() {
         return Err(FetchError::Request);
     }
-    if response
-        .content_length()
-        .is_some_and(|length| length > MAX_RESPONSE_BYTES_U64)
-    {
-        return Err(FetchError::ResponseTooLarge);
-    }
 
-    let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(|_| FetchError::Request)? {
-        append_response_chunk(&mut body, &chunk)?;
-    }
+    let body = read_bounded_body(&mut response, MAX_RESPONSE_BYTES)
+        .await
+        .map_err(|error| match error {
+            BoundedBodyError::Request => FetchError::Request,
+            BoundedBodyError::TooLarge => FetchError::ResponseTooLarge,
+        })?;
 
     serde_json::from_slice(&body).map_err(|_| FetchError::InvalidResponse)
 }
 
-fn append_response_chunk(body: &mut Vec<u8>, chunk: &[u8]) -> Result<(), FetchError> {
+/// Reads `response`'s body in chunks up to `max_bytes`, checking both the
+/// declared `Content-Length` and the running total as chunks arrive (a
+/// missing or dishonest `Content-Length` must not bypass the cap).
+async fn read_bounded_body(
+    response: &mut reqwest::Response,
+    max_bytes: usize,
+) -> Result<Vec<u8>, BoundedBodyError> {
+    let max_bytes_u64 = u64::try_from(max_bytes).unwrap_or(u64::MAX);
+    if response
+        .content_length()
+        .is_some_and(|length| length > max_bytes_u64)
+    {
+        return Err(BoundedBodyError::TooLarge);
+    }
+
+    let mut body = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| BoundedBodyError::Request)?
+    {
+        accumulate_chunk(&mut body, &chunk, max_bytes)?;
+    }
+    Ok(body)
+}
+
+fn accumulate_chunk(
+    body: &mut Vec<u8>,
+    chunk: &[u8],
+    max_bytes: usize,
+) -> Result<(), BoundedBodyError> {
     let next_length = body
         .len()
         .checked_add(chunk.len())
-        .ok_or(FetchError::ResponseTooLarge)?;
-    if next_length > MAX_RESPONSE_BYTES {
-        return Err(FetchError::ResponseTooLarge);
+        .ok_or(BoundedBodyError::TooLarge)?;
+    if next_length > max_bytes {
+        return Err(BoundedBodyError::TooLarge);
     }
     body.extend_from_slice(chunk);
     Ok(())
@@ -282,7 +299,7 @@ mod tests {
     use deckox_protocol::UpdateCheckStatus;
 
     use super::{
-        FetchError, LatestRelease, MAX_RESPONSE_BYTES, UpdateChecker, append_response_chunk,
+        FetchError, LatestRelease, MAX_RESPONSE_BYTES, UpdateChecker, accumulate_chunk,
         evaluate_update,
     };
 
@@ -320,7 +337,7 @@ mod tests {
     fn rejects_response_body_over_limit() {
         let mut body = vec![0; MAX_RESPONSE_BYTES];
 
-        assert!(append_response_chunk(&mut body, &[1]).is_err());
+        assert!(accumulate_chunk(&mut body, &[1], MAX_RESPONSE_BYTES).is_err());
         assert_eq!(body.len(), MAX_RESPONSE_BYTES);
     }
 

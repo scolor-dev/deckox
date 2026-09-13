@@ -207,31 +207,50 @@ async fn system_info() -> Result<Json<SystemInfo>, AgentError> {
 }
 
 async fn system_capabilities(State(state): State<AppState>) -> Json<SystemCapabilities> {
-    Json(state.power.capabilities(state.update.allowed()))
+    Json(SystemCapabilities {
+        reboot_allowed: state.power.reboot_allowed(),
+        update_allowed: state.update.allowed(),
+    })
+}
+
+/// Logs the outcome of an Agent-side command and passes the result through
+/// unchanged. `event` names the operation for log filtering; `detail` carries
+/// whatever per-call context matters (empty when there is none) as a single
+/// field, since tracing's macros need a fixed field set at each call site
+/// and the three operations that use this (reboot, self-update, service
+/// actions) each carry different extra context.
+fn log_command_result(
+    event: &'static str,
+    request_id: &request_context::RequestId,
+    detail: &str,
+    result: Result<CommandResult, AgentError>,
+) -> Result<Json<CommandResult>, AgentError> {
+    match &result {
+        Ok(command) => info!(
+            event,
+            request_id = %request_id.0,
+            detail,
+            command_id = %command.command_id,
+            result = "accepted",
+            "command accepted"
+        ),
+        Err(error) => warn!(
+            event,
+            request_id = %request_id.0,
+            detail,
+            error = ?error,
+            result = "rejected",
+            "command rejected"
+        ),
+    }
+    result.map(Json)
 }
 
 async fn reboot_system(
     State(state): State<AppState>,
     Extension(request_id): Extension<request_context::RequestId>,
 ) -> Result<Json<CommandResult>, AgentError> {
-    let result = state.power.reboot().await;
-    match &result {
-        Ok(command) => info!(
-            event = "system_reboot",
-            request_id = %request_id.0,
-            command_id = %command.command_id,
-            result = "accepted",
-            "system reboot accepted"
-        ),
-        Err(error) => warn!(
-            event = "system_reboot",
-            request_id = %request_id.0,
-            error = ?error,
-            result = "rejected",
-            "system reboot rejected"
-        ),
-    }
-    result.map(Json)
+    log_command_result("system_reboot", &request_id, "", state.power.reboot().await)
 }
 
 async fn update_system(
@@ -243,25 +262,12 @@ async fn update_system(
         .update
         .trigger(&payload.target_version, &payload.install_script)
         .await;
-    match &result {
-        Ok(command) => info!(
-            event = "system_update",
-            request_id = %request_id.0,
-            command_id = %command.command_id,
-            target_version = %payload.target_version,
-            result = "accepted",
-            "system update accepted"
-        ),
-        Err(error) => warn!(
-            event = "system_update",
-            request_id = %request_id.0,
-            target_version = %payload.target_version,
-            error = ?error,
-            result = "rejected",
-            "system update rejected"
-        ),
-    }
-    result.map(Json)
+    log_command_result(
+        "system_update",
+        &request_id,
+        &format!("target_version={}", payload.target_version),
+        result,
+    )
 }
 
 async fn system_metrics() -> Result<Json<SystemMetrics>, AgentError> {
@@ -351,27 +357,12 @@ async fn control_service(
         ServiceAction::Disable => "disable",
     };
     let result = state.services.control(&service_id, action).await;
-
-    match &result {
-        Ok(command_result) => info!(
-            event = "service_action",
-            request_id = %request_id.0,
-            service = %service_id,
-            action = action_name,
-            status = ?command_result.status,
-            "service action completed"
-        ),
-        Err(error) => warn!(
-            event = "service_action",
-            request_id = %request_id.0,
-            service = %service_id,
-            action = action_name,
-            error = ?error,
-            "service action rejected"
-        ),
-    }
-
-    result.map(Json)
+    log_command_result(
+        "service_action",
+        &request_id,
+        &format!("service={service_id} action={action_name}"),
+        result,
+    )
 }
 
 async fn shutdown_signal() {
