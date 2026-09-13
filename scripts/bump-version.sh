@@ -82,6 +82,7 @@ cargo test --workspace
 sh scripts/test-installer.sh
 (
   cd apps/web
+  npm ci
   npm run lint
   npm run typecheck
   npm run test
