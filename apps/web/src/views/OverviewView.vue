@@ -9,6 +9,7 @@ import {
   usagePercentage,
   writeClipboardText,
   type ServerStatus,
+  type StorageMount,
   type SystemInfo,
   type SystemMetrics,
 } from "../api/client";
@@ -25,6 +26,7 @@ const { t, locale } = useI18n();
 const status = ref<ServerStatus | null>(null);
 const system = ref<SystemInfo | null>(null);
 const metrics = ref<SystemMetrics | null>(null);
+const storageMounts = ref<StorageMount[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const intervalSeconds = toRef(preferences, "metricsInterval");
@@ -59,6 +61,11 @@ const swapPercent = computed(() => {
   return memory ? usagePercentage(memory.swap_used_bytes, memory.swap_total_bytes) : null;
 });
 const temperature = computed(() => metrics.value?.cpu.temperature_celsius ?? null);
+const busiestMount = computed(() => storageMounts.value.length === 0
+  ? null
+  : storageMounts.value.reduce((busiest, mount) => (
+    mount.usage_percent > busiest.usage_percent ? mount : busiest
+  )));
 const networkMaximum = computed(() => Math.max(
   1,
   ...networkReceivedHistory.value,
@@ -131,6 +138,7 @@ async function refresh() {
     ]);
     system.value = systemInfo;
     applyMetrics(systemMetrics);
+    storageMounts.value = await api.storage().catch(() => storageMounts.value);
   } catch (cause) {
     error.value = t(apiErrorKey(cause, "errors.overview"));
   } finally {
@@ -321,6 +329,21 @@ onMounted(refresh);
         <div class="metric-legend">
           <span>{{ t("overview.read") }}</span><span class="secondary">{{ t("overview.write") }}</span>
         </div>
+      </article>
+      <article :class="['metric-card', 'compact-metric-card', { warning: (busiestMount?.usage_percent ?? 0) >= 90 }]">
+        <div class="metric-head">
+          <span>{{ t("overview.disk") }}</span><small>{{ t("storage.summary", { count: storageMounts.length }) }}</small>
+        </div>
+        <strong>{{ busiestMount ? `${busiestMount.usage_percent.toFixed(0)}%` : t("common.none") }}</strong>
+        <small
+          v-if="busiestMount"
+          class="metric-foot"
+          :title="busiestMount.mount_point"
+        >{{ busiestMount.mount_point }} · {{ t("storage.used", { value: formatBytes(busiestMount.used_bytes, locale) }) }}</small>
+        <small
+          v-if="busiestMount && busiestMount.usage_percent >= 90"
+          class="metric-warning"
+        >{{ t("overview.highUsage") }}</small>
       </article>
       <article class="metric-card compact-metric-card">
         <div class="metric-head">
