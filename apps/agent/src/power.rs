@@ -3,7 +3,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use deckox_protocol::{CommandResult, CommandStatus, SystemCapabilities};
+use deckox_protocol::{CommandResult, CommandStatus};
 use tokio::process::Command;
 
 use crate::error::AgentError;
@@ -20,11 +20,8 @@ impl PowerManager {
         Self { allow_reboot }
     }
 
-    pub const fn capabilities(&self, update_allowed: bool) -> SystemCapabilities {
-        SystemCapabilities {
-            reboot_allowed: self.allow_reboot,
-            update_allowed,
-        }
+    pub const fn reboot_allowed(&self) -> bool {
+        self.allow_reboot
     }
 
     pub async fn reboot(&self) -> Result<CommandResult, AgentError> {
@@ -81,14 +78,8 @@ mod tests {
 
     #[test]
     fn reports_reboot_capability() {
-        assert!(PowerManager::new(true).capabilities(false).reboot_allowed);
-        assert!(!PowerManager::new(false).capabilities(false).reboot_allowed);
-    }
-
-    #[test]
-    fn passes_through_update_capability() {
-        assert!(PowerManager::new(false).capabilities(true).update_allowed);
-        assert!(!PowerManager::new(false).capabilities(false).update_allowed);
+        assert!(PowerManager::new(true).reboot_allowed());
+        assert!(!PowerManager::new(false).reboot_allowed());
     }
 
     #[tokio::test]

@@ -1,0 +1,41 @@
+name: Sync main to develop
+
+# The standard release flow (scripts/release.sh) merges main back into
+# develop itself as its last step, so this workflow skips release commits
+# and only handles main commits that land outside that flow — most notably
+# Dependabot security update PRs, which GitHub always targets at the
+# default branch (main here) and cannot be redirected to develop.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    if: "!startsWith(github.event.head_commit.message, 'chore: release Deckox v')"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out develop
+        uses: actions/checkout@v7
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Merge main into develop if needed
+        run: |
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "develop already contains this commit; nothing to do"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git merge --no-ff origin/main --no-edit \
+            -m "chore: mainの変更をdevelopへ同期"
+          git push origin develop

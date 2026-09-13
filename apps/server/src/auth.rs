@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
     Json,
     extract::{ConnectInfo, Request, State},
@@ -897,10 +897,8 @@ pub fn hash_password(password: &str) -> Result<String, String> {
     if password.is_empty() || password.len() > MAX_PASSWORD_BYTES {
         return Err("password must contain between 1 and 1024 bytes".to_owned());
     }
-    let salt = SaltString::encode_b64(&rand::random::<[u8; 16]>())
-        .map_err(|error| format!("failed to create password salt: {error}"))?;
     Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .map(|hash| hash.to_string())
         .map_err(|error| format!("failed to hash password: {error}"))
 }

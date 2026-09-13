@@ -335,6 +335,15 @@ onMounted(refresh);
           <span>{{ t("overview.disk") }}</span><small>{{ t("storage.summary", { count: storageMounts.length }) }}</small>
         </div>
         <strong>{{ busiestMount ? `${busiestMount.usage_percent.toFixed(0)}%` : t("common.none") }}</strong>
+        <div
+          v-if="busiestMount"
+          class="progress disk-usage-progress"
+        >
+          <span
+            :class="{ critical: busiestMount.usage_percent >= 90 }"
+            :style="{ width: `${busiestMount.usage_percent}%` }"
+          />
+        </div>
         <small
           v-if="busiestMount"
           class="metric-foot"

@@ -1,14 +1,76 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { api, formatBytes, type StorageMount } from "../api/client";
+import { api, formatBytes, usagePercentage, type StorageMount } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 
 const { t, locale } = useI18n();
 
+// Fixed categorical order (never reassigned per filter), validated for
+// colorblind-safe adjacent contrast as a stacked-bar set. The 7th slot is
+// reserved for an "other" overflow bucket past six named mounts; free space
+// uses a neutral gray outside this set rather than an eighth hue.
+const ALLOCATION_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"];
+const ALLOCATION_OTHER_COLOR = "#4a3aa7";
+const ALLOCATION_MAX_SEGMENTS = ALLOCATION_COLORS.length;
+
+interface AllocationSegment {
+  key: string;
+  label: string;
+  usedBytes: number;
+  percent: number;
+  color: string;
+}
+
 const mounts = ref<StorageMount[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
+
+const totalCapacity = computed(() => mounts.value.reduce((sum, mount) => sum + mount.total_bytes, 0));
+const totalUsed = computed(() => mounts.value.reduce((sum, mount) => sum + mount.used_bytes, 0));
+const overallPercent = computed(() => usagePercentage(totalUsed.value, totalCapacity.value) ?? 0);
+
+const allocationSegments = computed<AllocationSegment[]>(() => {
+  const capacity = totalCapacity.value;
+  if (capacity <= 0) return [];
+
+  // Which mounts get an individual segment is a function of usage (top by
+  // used_bytes); which color a shown mount gets is not — it is keyed by
+  // mount_point, a stable identity, so a mount keeps its color across
+  // refreshes even when usage jitter reorders the top-N ranking.
+  const byUsageDesc = [...mounts.value].sort((a, b) => b.used_bytes - a.used_bytes);
+  const shown = byUsageDesc
+    .slice(0, ALLOCATION_MAX_SEGMENTS)
+    .sort((a, b) => a.mount_point.localeCompare(b.mount_point));
+  const overflow = byUsageDesc.slice(ALLOCATION_MAX_SEGMENTS);
+
+  const segments = shown.map((mount, index) => ({
+    key: `${mount.filesystem}:${mount.mount_point}`,
+    label: mount.mount_point,
+    usedBytes: mount.used_bytes,
+    percent: (mount.used_bytes / capacity) * 100,
+    color: ALLOCATION_COLORS[index],
+  }));
+
+  if (overflow.length > 0) {
+    const overflowUsed = overflow.reduce((sum, mount) => sum + mount.used_bytes, 0);
+    segments.push({
+      key: "other",
+      label: t("storage.other"),
+      usedBytes: overflowUsed,
+      percent: (overflowUsed / capacity) * 100,
+      color: ALLOCATION_OTHER_COLOR,
+    });
+  }
+
+  return segments;
+});
+
+const freeBytes = computed(() => Math.max(0, totalCapacity.value - totalUsed.value));
+const freePercent = computed(() => {
+  const capacity = totalCapacity.value;
+  return capacity > 0 ? (freeBytes.value / capacity) * 100 : 0;
+});
 
 async function refresh() {
   loading.value = true;
@@ -50,6 +112,62 @@ onMounted(refresh);
     >
       {{ error }}
     </div>
+
+    <section
+      v-if="mounts.length > 0"
+      class="storage-summary"
+      aria-labelledby="storage-summary-heading"
+    >
+      <div class="storage-summary-head">
+        <div>
+          <span id="storage-summary-heading">{{ t("storage.overallUsage") }}</span>
+          <strong>{{ overallPercent.toFixed(0) }}%</strong>
+        </div>
+        <span class="storage-summary-detail">{{ t("storage.overallUsageDetail", { used: formatBytes(totalUsed, locale), total: formatBytes(totalCapacity, locale) }) }}</span>
+      </div>
+      <div class="progress storage-summary-bar">
+        <span
+          :class="{ critical: overallPercent >= 90 }"
+          :style="{ width: `${overallPercent}%` }"
+        />
+      </div>
+      <div
+        class="storage-allocation-bar"
+        role="img"
+        :aria-label="t('storage.allocation')"
+      >
+        <span
+          v-for="segment in allocationSegments"
+          :key="segment.key"
+          :style="{ width: `${segment.percent}%`, background: segment.color }"
+          :title="`${segment.label}: ${formatBytes(segment.usedBytes, locale)} (${segment.percent.toFixed(1)}%)`"
+        />
+      </div>
+      <ul class="storage-allocation-legend">
+        <li
+          v-for="segment in allocationSegments"
+          :key="segment.key"
+        >
+          <span
+            class="swatch"
+            :style="{ background: segment.color }"
+          />
+          <span
+            class="storage-allocation-label"
+            :title="segment.label"
+          >{{ segment.label }}</span>
+          <span class="storage-allocation-value">{{ segment.percent.toFixed(0) }}%</span>
+        </li>
+        <li
+          v-if="freeBytes > 0"
+          class="free"
+        >
+          <span class="swatch" />
+          <span class="storage-allocation-label">{{ t("storage.free") }}</span>
+          <span class="storage-allocation-value">{{ freePercent.toFixed(0) }}%</span>
+        </li>
+      </ul>
+    </section>
 
     <section class="table-panel storage-panel">
       <div class="table-scroll">

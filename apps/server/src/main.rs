@@ -368,16 +368,19 @@ async fn reboot_system(
     reboot_host(&state, &request_id, &user, payload.current_password).await
 }
 
-/// Confirms the caller's password, proxies the reboot request to the Agent,
-/// and records the outcome. Kept separate from the thin [`reboot_system`]
-/// handler above, mirroring how [`proxy_service_request`] backs the service
-/// action handlers.
-async fn reboot_host(
+/// Confirms the caller's current password for a dangerous, password-gated
+/// operation (reboot, self-update, ...), auditing the outcome under `event`.
+/// Returns `Ok(())` when confirmed; on failure it has already logged and
+/// audited, and returns the finished error [`Response`] to return directly.
+/// Boxed because clippy flags a bare `Response` as too large for a `Result`
+/// error variant.
+async fn confirm_password_or_respond(
     state: &AppState,
     request_id: &RequestId,
     user: &AuthenticatedUser,
     current_password: String,
-) -> Response {
+    event: &'static str,
+) -> Result<(), Box<Response>> {
     match state
         .auth
         .confirm_current_password(user.source_ip, current_password)
@@ -389,17 +392,17 @@ async fn reboot_host(
                 .log_admin(
                     request_id,
                     user.source_ip,
-                    "system_reboot",
+                    event,
                     "failure",
                     Some("invalid_password".to_owned()),
-                    "system reboot confirmation failed",
+                    "password confirmation failed",
                 )
                 .await;
-            return error_response(
+            Err(Box::new(error_response(
                 StatusCode::UNAUTHORIZED,
                 "invalid_current_password",
                 "current password is incorrect",
-            );
+            )))
         }
         PasswordConfirmationResult::RateLimited => {
             state
@@ -407,19 +410,36 @@ async fn reboot_host(
                 .log_admin(
                     request_id,
                     user.source_ip,
-                    "system_reboot",
+                    event,
                     "rate_limited",
                     None,
-                    "system reboot confirmation rate limited",
+                    "password confirmation rate limited",
                 )
                 .await;
-            return error_response(
+            Err(Box::new(error_response(
                 StatusCode::TOO_MANY_REQUESTS,
                 "rate_limited",
                 "too many password confirmation attempts",
-            );
+            )))
         }
-        PasswordConfirmationResult::Confirmed => {}
+        PasswordConfirmationResult::Confirmed => Ok(()),
+    }
+}
+
+/// Proxies the reboot request to the Agent and records the outcome. Kept
+/// separate from the thin [`reboot_system`] handler above, mirroring how
+/// [`proxy_service_request`] backs the service action handlers.
+async fn reboot_host(
+    state: &AppState,
+    request_id: &RequestId,
+    user: &AuthenticatedUser,
+    current_password: String,
+) -> Response {
+    if let Err(response) =
+        confirm_password_or_respond(state, request_id, user, current_password, "system_reboot")
+            .await
+    {
+        return *response;
     }
 
     let response = proxy_agent(&state.agent, "POST", "/v1/system/reboot", request_id).await;
@@ -555,44 +575,11 @@ async fn trigger_update(
     user: &AuthenticatedUser,
     current_password: String,
 ) -> Response {
-    match state
-        .auth
-        .confirm_current_password(user.source_ip, current_password)
-        .await
+    if let Err(response) =
+        confirm_password_or_respond(state, request_id, user, current_password, "system_update")
+            .await
     {
-        PasswordConfirmationResult::Invalid => {
-            log_update_event(
-                state,
-                request_id,
-                user,
-                "failure",
-                Some("invalid_password".to_owned()),
-                "system update confirmation failed",
-            )
-            .await;
-            return error_response(
-                StatusCode::UNAUTHORIZED,
-                "invalid_current_password",
-                "current password is incorrect",
-            );
-        }
-        PasswordConfirmationResult::RateLimited => {
-            log_update_event(
-                state,
-                request_id,
-                user,
-                "rate_limited",
-                None,
-                "system update confirmation rate limited",
-            )
-            .await;
-            return error_response(
-                StatusCode::TOO_MANY_REQUESTS,
-                "rate_limited",
-                "too many password confirmation attempts",
-            );
-        }
-        PasswordConfirmationResult::Confirmed => {}
+        return *response;
     }
 
     let request = match resolve_update_request(state, request_id, user).await {
@@ -601,21 +588,12 @@ async fn trigger_update(
     };
     let target_version = request.target_version.clone();
 
-    let response = match state
-        .agent
-        .request_with_json_body("POST", "/v1/system/update", request_id, &request)
-        .await
-    {
-        Ok(agent_response) => (agent_response.status, Json(agent_response.body)).into_response(),
-        Err(message) => (
-            StatusCode::BAD_GATEWAY,
-            Json(ErrorResponse {
-                code: "agent_unavailable",
-                message,
-            }),
-        )
-            .into_response(),
-    };
+    let response = agent_result_to_response(
+        state
+            .agent
+            .request_with_json_body("POST", "/v1/system/update", request_id, &request)
+            .await,
+    );
 
     if response.status().is_success() {
         log_update_event(
@@ -863,7 +841,16 @@ async fn proxy_agent(
     path: &str,
     request_id: &RequestId,
 ) -> Response {
-    match client.request(method, path, request_id).await {
+    agent_result_to_response(client.request(method, path, request_id).await)
+}
+
+/// Converts an [`AgentClient`] call's result into the `Response` sent to the
+/// browser: the Agent's own status/body verbatim on success, or a uniform
+/// `agent_unavailable` error otherwise. Shared by [`proxy_agent`] and
+/// [`trigger_update`], which calls the Agent with a JSON body instead of the
+/// bodyless GET/POST that `proxy_agent` covers.
+fn agent_result_to_response(result: Result<agent_client::AgentResponse, String>) -> Response {
+    match result {
         Ok(response) => (response.status, Json(response.body)).into_response(),
         Err(message) => (
             StatusCode::BAD_GATEWAY,
