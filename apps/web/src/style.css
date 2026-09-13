@@ -519,6 +519,7 @@ select:focus-visible { outline: 2px solid #2466a8; outline-offset: 2px; }
   transition: width .2s ease;
 }
 .progress span.critical { background: #c84949; }
+.disk-usage-progress { margin-bottom: 8px; }
 
 .detail-panel, .table-panel {
   margin-top: 18px;
@@ -772,6 +773,43 @@ td small {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.storage-summary {
+  margin-top: 18px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid #dfe2e6;
+  border-radius: 6px;
+  background: #fff;
+}
+.storage-summary-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.storage-summary-head > div { display: flex; align-items: baseline; gap: 8px; }
+.storage-summary-head span { color: #686f78; font-size: 11px; }
+.storage-summary-head strong { color: #292e35; font-size: 19px; font-weight: 600; }
+.storage-summary-detail { color: #8a9099; font-size: 11px; }
+.storage-summary-bar { margin: 10px 0 14px; }
+.storage-allocation-bar {
+  display: flex;
+  overflow: hidden;
+  height: 10px;
+  border-radius: 4px;
+  background: #e7eaed;
+}
+.storage-allocation-bar span { display: block; height: 100%; }
+.storage-allocation-bar span:not(:last-child) { margin-right: 2px; }
+.storage-allocation-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.storage-allocation-legend li { display: inline-flex; min-width: 0; align-items: center; gap: 6px; font-size: 11px; }
+.storage-allocation-legend .swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.storage-allocation-legend li.free .swatch { background: #c7cbd0; }
+.storage-allocation-label { overflow: hidden; color: #3f454d; text-overflow: ellipsis; white-space: nowrap; }
+.storage-allocation-value { flex-shrink: 0; color: #8a9099; }
 
 .storage-panel { margin-top: 0; }
 .storage-table { table-layout: fixed; min-width: 760px; }
