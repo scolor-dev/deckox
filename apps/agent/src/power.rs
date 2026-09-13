@@ -20,9 +20,10 @@ impl PowerManager {
         Self { allow_reboot }
     }
 
-    pub const fn capabilities(&self) -> SystemCapabilities {
+    pub const fn capabilities(&self, update_allowed: bool) -> SystemCapabilities {
         SystemCapabilities {
             reboot_allowed: self.allow_reboot,
+            update_allowed,
         }
     }
 
@@ -80,8 +81,14 @@ mod tests {
 
     #[test]
     fn reports_reboot_capability() {
-        assert!(PowerManager::new(true).capabilities().reboot_allowed);
-        assert!(!PowerManager::new(false).capabilities().reboot_allowed);
+        assert!(PowerManager::new(true).capabilities(false).reboot_allowed);
+        assert!(!PowerManager::new(false).capabilities(false).reboot_allowed);
+    }
+
+    #[test]
+    fn passes_through_update_capability() {
+        assert!(PowerManager::new(false).capabilities(true).update_allowed);
+        assert!(!PowerManager::new(false).capabilities(false).update_allowed);
     }
 
     #[tokio::test]

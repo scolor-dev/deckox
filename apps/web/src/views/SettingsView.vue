@@ -32,6 +32,8 @@ const rebooting = ref(false);
 const updateStatus = ref<UpdateStatus | null>(null);
 const updateChecking = ref(false);
 const updateErrorKey = ref<string | null>(null);
+const updatePassword = ref("");
+const updating = ref(false);
 const totpStatus = ref<TotpStatus | null>(null);
 const totpLoading = ref(true);
 const totpErrorKey = ref<string | null>(null);
@@ -188,6 +190,28 @@ async function rebootSystem() {
   }
 }
 
+async function triggerUpdate() {
+  updateErrorKey.value = null;
+  if (!updatePassword.value) {
+    updateErrorKey.value = "settings.updatePasswordRequired";
+    return;
+  }
+  if (!window.confirm(t("settings.confirmUpdate"))) return;
+
+  updating.value = true;
+  try {
+    const health = await api.health().catch(() => null);
+    await api.triggerUpdate(updatePassword.value);
+    updatePassword.value = "";
+    if (health) sessionStorage.setItem("deckox:restart-instance", health.instance_id);
+    await router.push({ name: "restarting" });
+  } catch (caught) {
+    updateErrorKey.value = apiErrorKey(caught, "errors.updateTrigger");
+  } finally {
+    updating.value = false;
+  }
+}
+
 async function checkForUpdate() {
   updateChecking.value = true;
   updateErrorKey.value = null;
@@ -336,8 +360,30 @@ onMounted(() => {
             target="_blank"
             rel="noopener noreferrer"
           >{{ t("settings.openRelease") }}</a>
+          <form
+            v-if="updateStatus.update_available && systemCapabilities?.update_allowed"
+            class="settings-form update-trigger"
+            @submit.prevent="triggerUpdate"
+          >
+            <label for="update-password">{{ t("settings.updatePassword") }}</label>
+            <input
+              id="update-password"
+              v-model="updatePassword"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+            <small>{{ t("settings.updateHelp") }}</small>
+            <button
+              class="primary-button danger-button settings-submit"
+              type="submit"
+              :disabled="updating"
+            >
+              {{ updating ? t("settings.updating") : t("settings.updateNow") }}
+            </button>
+          </form>
           <div
-            v-if="updateStatus.update_available && updateCommand"
+            v-else-if="updateStatus.update_available && updateCommand"
             class="update-command"
           >
             <code>{{ updateCommand }}</code>

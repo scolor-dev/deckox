@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-use deckox_protocol::{UpdateCheckStatus, UpdateStatus};
+use deckox_protocol::{UpdateCheckStatus, UpdateStatus, is_valid_release_tag};
 use reqwest::{Client, header};
 use semver::Version;
 use serde::Deserialize;
@@ -14,11 +14,15 @@ use tracing::warn;
 
 const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/scolor-dev/deckox/releases/latest";
 const RELEASE_PAGE_PREFIX: &str = "https://github.com/scolor-dev/deckox/releases/tag/";
+const INSTALL_SCRIPT_URL_PREFIX: &str = "https://raw.githubusercontent.com/scolor-dev/deckox/";
+const INSTALL_SCRIPT_URL_SUFFIX: &str = "/packaging/scripts/install.sh";
 const GITHUB_API_VERSION: &str = "2022-11-28";
 const CACHE_TTL: Duration = Duration::from_secs(15 * 60);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 const MAX_RESPONSE_BYTES_U64: u64 = 64 * 1024;
+const MAX_SCRIPT_BYTES: usize = 256 * 1024;
+const MAX_SCRIPT_BYTES_U64: u64 = 256 * 1024;
 
 type FetchFuture = Pin<Box<dyn Future<Output = Result<LatestRelease, FetchError>> + Send>>;
 type Fetcher = dyn Fn() -> FetchFuture + Send + Sync;
@@ -29,6 +33,15 @@ pub struct UpdateChecker {
     fetcher: Arc<Fetcher>,
     cache: Arc<Mutex<Option<CachedStatus>>>,
     cache_ttl: Duration,
+    client: Client,
+}
+
+#[derive(Debug)]
+pub enum InstallScriptError {
+    InvalidVersion,
+    Request,
+    TooLarge,
+    InvalidResponse,
 }
 
 struct CachedStatus {
@@ -56,9 +69,12 @@ impl UpdateChecker {
             .user_agent(user_agent)
             .build()
             .map_err(|_| "failed to initialize update checker")?;
-        let fetcher: Arc<Fetcher> = Arc::new(move || {
+        let fetcher: Arc<Fetcher> = Arc::new({
             let client = client.clone();
-            Box::pin(async move { fetch_latest_release(&client).await })
+            move || {
+                let client = client.clone();
+                Box::pin(async move { fetch_latest_release(&client).await })
+            }
         });
 
         Ok(Self {
@@ -66,7 +82,61 @@ impl UpdateChecker {
             fetcher,
             cache: Arc::new(Mutex::new(None)),
             cache_ttl: CACHE_TTL,
+            client,
         })
+    }
+
+    /// Fetches `packaging/scripts/install.sh` from the given release tag
+    /// (not `main`, so the installer always matches the version it installs)
+    /// for the Agent to run as a self-update. `target_version` must already
+    /// be a validated release tag before this is called.
+    pub async fn fetch_install_script(
+        &self,
+        target_version: &str,
+    ) -> Result<String, InstallScriptError> {
+        if !is_valid_release_tag(target_version) {
+            return Err(InstallScriptError::InvalidVersion);
+        }
+
+        let url = format!("{INSTALL_SCRIPT_URL_PREFIX}{target_version}{INSTALL_SCRIPT_URL_SUFFIX}");
+        let mut response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|_| InstallScriptError::Request)?;
+
+        if !response.status().is_success() {
+            return Err(InstallScriptError::Request);
+        }
+        if response
+            .content_length()
+            .is_some_and(|length| length > MAX_SCRIPT_BYTES_U64)
+        {
+            return Err(InstallScriptError::TooLarge);
+        }
+
+        let mut body = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|_| InstallScriptError::Request)?
+        {
+            let next_length = body
+                .len()
+                .checked_add(chunk.len())
+                .ok_or(InstallScriptError::TooLarge)?;
+            if next_length > MAX_SCRIPT_BYTES {
+                return Err(InstallScriptError::TooLarge);
+            }
+            body.extend_from_slice(&chunk);
+        }
+
+        let script = String::from_utf8(body).map_err(|_| InstallScriptError::InvalidResponse)?;
+        if !script.starts_with("#!/bin/sh") {
+            return Err(InstallScriptError::InvalidResponse);
+        }
+        Ok(script)
     }
 
     pub async fn check(&self) -> UpdateStatus {
@@ -101,6 +171,7 @@ impl UpdateChecker {
             fetcher: Arc::new(fetcher),
             cache: Arc::new(Mutex::new(None)),
             cache_ttl,
+            client: Client::new(),
         }
     }
 }

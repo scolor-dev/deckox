@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-bookworm-slim AS web-builder
+FROM node:26-bookworm-slim AS web-builder
 WORKDIR /usr/src/deckox/apps/web
 COPY apps/web/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
@@ -8,7 +8,7 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY apps/web ./
 RUN npm run build
 
-FROM rust:1.85-bookworm AS rust-builder
+FROM rust:1.97-bookworm AS rust-builder
 WORKDIR /usr/src/deckox
 COPY Cargo.toml Cargo.lock ./
 COPY apps/agent/Cargo.toml apps/agent/Cargo.toml

@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.4.2</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.5.0</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -56,9 +56,9 @@
       <section class="section" aria-labelledby="release-title">
         <h2 id="release-title">Releaseの作成</h2>
         <p><code>v*</code>タグのpushでRelease Workflowが起動します。</p>
-        <pre><code>git tag v0.4.2
+        <pre><code>git tag v0.5.0
 git push origin main
-git push origin v0.4.2</code></pre>
+git push origin v0.5.0</code></pre>
         <aside class="note"><strong>実行条件:</strong> インストールコマンドを利用するには、対象タグのGitHub Releaseと4つの配布ファイルが公開済みである必要があります。</aside>
       </section>
 
@@ -75,7 +75,7 @@ sudo sh install.sh</code></pre>
         <p>特定バージョンを選ぶ場合:</p>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.4.2 sh</code></pre>
+  | sudo DECKOX_VERSION=v0.5.0 sh</code></pre>
         <p>ダウンロードや変更を行わずに予定を確認する場合:</p>
         <pre><code>sh install.sh --dry-run
 sh install.sh --version</code></pre>
@@ -105,7 +105,7 @@ sh install.sh --version</code></pre>
         <pre><code>systemctl status deckox-server deckox-agent
 journalctl -u deckox-server -u deckox-agent -f</code></pre>
         <p>初回インストール時は管理者パスワードがターミナルへ一度だけ表示されます。更新時は既存のパスワードが維持されます。</p>
-        <p>管理画面の「設定」では、GitHubの最新安定版を手動確認できます。新しい版がある場合はReleaseページと、対象タグを固定した更新コマンドを表示します。Deckox自身がroot権限で自動更新することはありません。</p>
+        <p>管理画面の「設定」では、GitHubの最新安定版を手動確認できます。新しい版がある場合はReleaseページと、対象タグを固定した更新コマンドを表示します。<code>allow_update</code>を許可していない既定状態では、Deckox自身がroot権限で自動更新することはありません。</p>
         <p>ログイン後は管理画面の「診断」で、Server・Agentの接続、ホスト情報、Deckoxのsystemdユニット状態をまとめて確認できます。問題を共有するときは、画面から安全な固定項目だけを含むJSONレポートを保存できます。Agentが停止していてもServer側の部分診断は表示されます。</p>
         <p>管理画面の「監査ログ」では、ログイン・パスワード変更・TOTP設定変更・サービス操作・ホスト再起動・SSHコンソールからのCLI操作を時系列で確認でき、イベント種別・結果での絞り込みとJSON保存に対応します。</p>
         <h3>管理者パスワードを変更する</h3>
@@ -137,6 +137,12 @@ Environment=DECKOX_LISTEN_ADDR=192.168.1.21:8080</code></pre>
         <pre><code>[system]
 allow_reboot = true</code></pre>
         <p>設定画面から実行するときは管理者パスワードの再確認が必要です。要求後は管理画面が新しいServerプロセスを検知し、復帰するとログイン画面へ戻ります。設定変更後はAgentを再起動します。</p>
+        <pre><code>sudo systemctl restart deckox-agent</code></pre>
+        <h3>管理画面からの更新の適用を許可する</h3>
+        <p>管理画面から更新を実行する機能も初期状態で無効です。利用する場合だけ、<code>/etc/deckox/agent.toml</code>へ次を設定します。</p>
+        <pre><code>[system]
+allow_update = true</code></pre>
+        <p>有効化すると、更新確認で新しい版が見つかっている間だけ設定画面に「今すぐ更新」が表示されます。実行時は管理者パスワードの再確認が必要です。確認後、Serverが確認済みバージョンの<code>install.sh</code>をGitHubから取得してAgentへ渡し、Agentは通常のインストーラーと同じバックアップ・起動確認・失敗時ロールバックの手順を、Agent自身の再起動に巻き込まれない独立したsystemdユニットとして実行します。設定変更後はAgentを再起動します。</p>
         <pre><code>sudo systemctl restart deckox-agent</code></pre>
         <h3>systemdサービス操作を許可する</h3>
         <p><code>/etc/deckox/agent.toml</code>へ、起動・停止・再起動・有効化・無効化とjournalログ閲覧を許可するsystemdサービスを完全一致で指定します。初期値は空で、変更操作とログ閲覧はすべて拒否されます。</p>

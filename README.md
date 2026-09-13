@@ -10,10 +10,12 @@ SSHコンソールからの`reset-password`・`disable-totp`サブコマンド�
 ログイン・設定変更・サービス操作などを記録し管理画面から閲覧・保存できる
 監査ログも実装済みです。SSEによるCPU・メモリ・Swap・
 ネットワーク送受信速度・ディスクI/O速度のリアルタイムメトリクス、任意取得のCPU温度、
-軽量SVGグラフ、日本語・英語の表示切替、再起動後の自動再接続、画面ごとのURLと
-ブラウザ別表示設定、最終更新時刻、Agent復旧時の状態再取得、JSONで保存できる
-安全なシステム診断、設定画面からの手動更新確認も実装済みです。任意コマンドを
-実行するWebコンソールや、管理画面からの自動更新は提供しません。
+概要画面でのディスク使用率、軽量SVGグラフ、日本語・英語の表示切替、
+再起動後の自動再接続、画面ごとのURLとブラウザ別表示設定、最終更新時刻、
+Agent復旧時の状態再取得、JSONで保存できる安全なシステム診断、設定画面からの
+更新確認も実装済みです。任意コマンドを実行するWebコンソールは提供しません。
+更新の適用は既定で無効で、`agent.toml`で明示的に許可した場合だけ設定画面から
+実行できます（詳細は[更新の適用](#更新の適用)を参照）。
 
 ```text
 Vue管理画面
@@ -121,12 +123,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.4.2`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.5.0`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.4.2
-git push origin v0.4.2
+git tag v0.5.0
+git push origin v0.5.0
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -151,7 +153,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.4.2 sh
+  | sudo DECKOX_VERSION=v0.5.0 sh
 ```
 
 ダウンロードや変更を行わず、対象アーキテクチャ・取得先・現在の導入状態を確認できます。
@@ -227,6 +229,33 @@ sudo systemctl restart deckox-agent
 設定画面から再起動するときは管理者パスワードを再入力します。要求後は専用画面が
 Webサーバーの新しいプロセス識別子を確認し、復帰後にログイン画面へ戻ります。
 パスワード確認の試行制限はパスワード変更と共通です。
+
+## 更新の適用
+
+設定画面からの更新確認はGitHub Releaseに新しいバージョンがあるかを確認する
+だけで、初期状態では確認結果に応じた更新コマンドを表示するのみです。
+管理画面から更新を実行する場合は、ホスト再起動と同様に初期状態では無効です。
+利用する場合は`/etc/deckox/agent.toml`で明示的に許可し、Agentを再起動します。
+
+```toml
+[system]
+allow_update = true
+```
+
+```bash
+sudo systemctl restart deckox-agent
+```
+
+有効化すると、設定画面で更新が利用可能と表示されている間だけ「今すぐ更新」
+ボタンが表示されます。実行時は管理者パスワードを再入力します。確認後、
+Serverが確認済みのバージョンに対応する`install.sh`をGitHubから取得してAgentへ
+渡し、Agentがそれを独立したsystemdユニットとして実行します。この
+インストーラーは通常のアップグレード手順（`/var/lib/deckox/backups/`への
+バックアップ、新しいServer・Agentの起動確認、失敗時のロールバック）をそのまま
+利用します。更新中はServer・Agentが再起動するため管理画面から一時的に
+切断されますが、再起動後に自動で再接続します。この操作も監査ログに記録されます。
+`allow_update = false`のままでも、更新確認の結果からコピーできる手動更新
+コマンドは従来どおり利用できます。
 
 systemdサービスは、一覧と状態を確認したうえで、Agent設定の完全一致許可リストに
 登録した対象だけを起動・停止・再起動・有効化・無効化できます。同じ許可対象について

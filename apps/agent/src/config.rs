@@ -20,6 +20,8 @@ pub struct AgentConfig {
 pub struct SystemConfig {
     #[serde(default)]
     pub allow_reboot: bool,
+    #[serde(default)]
+    pub allow_update: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -82,6 +84,7 @@ allowed = ["nginx.service", "postgresql.service"]
 
         assert_eq!(config.services.allowed.len(), 2);
         assert!(config.system.allow_reboot);
+        assert!(!config.system.allow_update);
         assert_eq!(
             config
                 .socket

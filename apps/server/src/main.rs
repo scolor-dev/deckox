@@ -9,7 +9,7 @@ use axum::{
     routing::{get, post},
 };
 use deckox_protocol::{
-    AgentStatus, AuditPage, DiagnosticsReport, ServiceLogPriority, UpdateStatus,
+    AgentStatus, AgentUpdateRequest, AuditPage, DiagnosticsReport, ServiceLogPriority, UpdateStatus,
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
@@ -103,6 +103,11 @@ struct ServerHealth {
 
 #[derive(Deserialize)]
 struct RebootRequest {
+    current_password: String,
+}
+
+#[derive(Deserialize)]
+struct UpdateTriggerRequest {
     current_password: String,
 }
 
@@ -202,6 +207,7 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
         .route("/system", get(proxy_system))
         .route("/system/capabilities", get(proxy_system_capabilities))
         .route("/system/reboot", post(reboot_system))
+        .route("/system/update", post(update_system))
         .route("/system/metrics", get(proxy_metrics))
         .route("/events/metrics", get(metrics_stream::metrics_events))
         .route("/storage", get(proxy_storage))
@@ -441,6 +447,196 @@ async fn reboot_host(
                 "system reboot failed",
             )
             .await;
+    }
+    response
+}
+
+async fn update_system(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(payload): Json<UpdateTriggerRequest>,
+) -> Response {
+    trigger_update(&state, &request_id, &user, payload.current_password).await
+}
+
+/// Confirms the caller's password, resolves and fetches the pinned installer
+/// for the latest known release, proxies the self-update request to the
+/// Agent, and records the outcome. Mirrors [`reboot_host`]; the version and
+/// script are resolved here (not accepted from the client) because only the
+/// Server is allowed to reach GitHub, and re-resolving keeps a stale browser
+/// tab from requesting an update to a version different from what was
+/// actually checked.
+async fn log_update_event(
+    state: &AppState,
+    request_id: &RequestId,
+    user: &AuthenticatedUser,
+    result: &'static str,
+    detail: Option<String>,
+    message: &'static str,
+) {
+    state
+        .audit
+        .log_admin(
+            request_id,
+            user.source_ip,
+            "system_update",
+            result,
+            detail,
+            message,
+        )
+        .await;
+}
+
+/// Resolves the already-checked target version and fetches its installer,
+/// returning the finished error [`Response`] (already audited) when either
+/// step fails. Split out of [`trigger_update`] to keep it under the
+/// project's line-count lint.
+async fn resolve_update_request(
+    state: &AppState,
+    request_id: &RequestId,
+    user: &AuthenticatedUser,
+) -> Result<AgentUpdateRequest, Box<Response>> {
+    let status = state.updates.check().await;
+    let Some(target_version) = status
+        .update_available
+        .then_some(status.latest_version)
+        .flatten()
+    else {
+        log_update_event(
+            state,
+            request_id,
+            user,
+            "failure",
+            Some("no_update_available".to_owned()),
+            "system update requested with no update available",
+        )
+        .await;
+        return Err(Box::new(error_response(
+            StatusCode::CONFLICT,
+            "no_update_available",
+            "no newer Deckox version is available",
+        )));
+    };
+
+    let Ok(install_script) = state.updates.fetch_install_script(&target_version).await else {
+        log_update_event(
+            state,
+            request_id,
+            user,
+            "failure",
+            Some("installer_fetch_failed".to_owned()),
+            "failed to fetch the installer for the target version",
+        )
+        .await;
+        return Err(Box::new(error_response(
+            StatusCode::BAD_GATEWAY,
+            "installer_unavailable",
+            "could not fetch the installer for the target version",
+        )));
+    };
+
+    Ok(AgentUpdateRequest {
+        target_version,
+        install_script,
+    })
+}
+
+/// Confirms the caller's password, resolves and fetches the pinned installer
+/// for the latest known release, proxies the self-update request to the
+/// Agent, and records the outcome. Mirrors [`reboot_host`]; the version and
+/// script are resolved here (not accepted from the client) because only the
+/// Server is allowed to reach GitHub, and re-resolving keeps a stale browser
+/// tab from requesting an update to a version different from what was
+/// actually checked.
+async fn trigger_update(
+    state: &AppState,
+    request_id: &RequestId,
+    user: &AuthenticatedUser,
+    current_password: String,
+) -> Response {
+    match state
+        .auth
+        .confirm_current_password(user.source_ip, current_password)
+        .await
+    {
+        PasswordConfirmationResult::Invalid => {
+            log_update_event(
+                state,
+                request_id,
+                user,
+                "failure",
+                Some("invalid_password".to_owned()),
+                "system update confirmation failed",
+            )
+            .await;
+            return error_response(
+                StatusCode::UNAUTHORIZED,
+                "invalid_current_password",
+                "current password is incorrect",
+            );
+        }
+        PasswordConfirmationResult::RateLimited => {
+            log_update_event(
+                state,
+                request_id,
+                user,
+                "rate_limited",
+                None,
+                "system update confirmation rate limited",
+            )
+            .await;
+            return error_response(
+                StatusCode::TOO_MANY_REQUESTS,
+                "rate_limited",
+                "too many password confirmation attempts",
+            );
+        }
+        PasswordConfirmationResult::Confirmed => {}
+    }
+
+    let request = match resolve_update_request(state, request_id, user).await {
+        Ok(request) => request,
+        Err(response) => return *response,
+    };
+    let target_version = request.target_version.clone();
+
+    let response = match state
+        .agent
+        .request_with_json_body("POST", "/v1/system/update", request_id, &request)
+        .await
+    {
+        Ok(agent_response) => (agent_response.status, Json(agent_response.body)).into_response(),
+        Err(message) => (
+            StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse {
+                code: "agent_unavailable",
+                message,
+            }),
+        )
+            .into_response(),
+    };
+
+    if response.status().is_success() {
+        log_update_event(
+            state,
+            request_id,
+            user,
+            "accepted",
+            Some(format!("target_version={target_version}")),
+            "system update accepted",
+        )
+        .await;
+    } else {
+        log_update_event(
+            state,
+            request_id,
+            user,
+            "failure",
+            Some(format!("status={}", response.status().as_u16())),
+            "system update failed",
+        )
+        .await;
     }
     response
 }
