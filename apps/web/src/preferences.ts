@@ -2,15 +2,18 @@ import { reactive, watch } from "vue";
 
 export type LocalePreference = "auto" | "ja" | "en";
 export type MetricsInterval = 1 | 2 | 5;
-export type ServiceTagFilterKey = "standard" | "deckox" | "other";
-
-const SERVICE_TAG_FILTER_KEYS: ServiceTagFilterKey[] = ["standard", "deckox", "other"];
+// "standard" and "deckox"/"other" are fixed categories; any other string is
+// a recognized product name (e.g. "Docker"), which is open-ended, so this
+// stays a plain string rather than a literal union.
+export type ServiceTagFilterKey = string;
+export type StorageTagFilterKey = string;
 
 export interface Preferences {
   locale: LocalePreference;
   realtimeEnabled: boolean;
   metricsInterval: MetricsInterval;
   hiddenServiceTags: ServiceTagFilterKey[];
+  hiddenStorageTags: StorageTagFilterKey[];
 }
 
 const STORAGE_KEY = "deckox:preferences";
@@ -19,6 +22,7 @@ const DEFAULT_PREFERENCES: Preferences = {
   realtimeEnabled: true,
   metricsInterval: 1,
   hiddenServiceTags: [],
+  hiddenStorageTags: [],
 };
 
 export function normalizePreferences(value: unknown): Preferences {
@@ -35,12 +39,16 @@ export function normalizePreferences(value: unknown): Preferences {
       ? candidate.metricsInterval
       : DEFAULT_PREFERENCES.metricsInterval,
     hiddenServiceTags: Array.isArray(candidate.hiddenServiceTags)
-      ? candidate.hiddenServiceTags.filter(
-          (tag): tag is ServiceTagFilterKey =>
-            typeof tag === "string" && SERVICE_TAG_FILTER_KEYS.includes(tag),
-        )
+      ? candidate.hiddenServiceTags.filter(isTagString)
       : [...DEFAULT_PREFERENCES.hiddenServiceTags],
+    hiddenStorageTags: Array.isArray(candidate.hiddenStorageTags)
+      ? candidate.hiddenStorageTags.filter(isTagString)
+      : [...DEFAULT_PREFERENCES.hiddenStorageTags],
   };
+}
+
+function isTagString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 64;
 }
 
 export function resolveLocale(

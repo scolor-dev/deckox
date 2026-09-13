@@ -20,6 +20,24 @@ const PROTECTED_SERVICES: [&str; 2] = ["deckox-agent.service", "deckox-server.se
 /// `FragmentPath` lives here ships with the distro or an installed package
 /// rather than being written locally, so it is tagged `standard_system`.
 const VENDOR_UNIT_DIRS: [&str; 2] = ["/usr/lib/systemd/system/", "/lib/systemd/system/"];
+/// Base unit names (the part before an optional `@instance` and the
+/// `.service` suffix) recognized as well-known self-hosted software,
+/// independent of `standard_system` — this identifies *what* a service is,
+/// not *where* its unit file came from. Deliberately limited to widely
+/// self-hosted infrastructure rather than every possible package.
+const KNOWN_PRODUCTS: [(&str, &str); 11] = [
+    ("docker", "Docker"),
+    ("nginx", "nginx"),
+    ("apache2", "Apache"),
+    ("httpd", "Apache"),
+    ("postgresql", "PostgreSQL"),
+    ("mysql", "MySQL"),
+    ("mysqld", "MySQL"),
+    ("mariadb", "MariaDB"),
+    ("redis-server", "Redis"),
+    ("redis", "Redis"),
+    ("mongod", "MongoDB"),
+];
 const ALLOWED_LOG_LINES: [u16; 4] = [50, 100, 200, 500];
 const MAX_JOURNAL_OUTPUT_BYTES: usize = 2 * 1024 * 1024;
 const MAX_LOG_RESPONSE_BYTES: usize = 512 * 1024;
@@ -115,6 +133,7 @@ impl ServiceManager {
                 .get("FragmentPath")
                 .is_some_and(|path| is_standard_system(path)),
             deckox_managed: PROTECTED_SERVICES.contains(&service_id),
+            product: known_product(service_id).map(str::to_owned),
         })
     }
 
@@ -415,11 +434,13 @@ fn parse_service_list(
                 .get(&id)
                 .is_some_and(|path| is_standard_system(path));
             let deckox_managed = PROTECTED_SERVICES.contains(&id.as_str());
+            let product = known_product(&id).map(str::to_owned);
             Some(ServiceSummary {
                 control_allowed: allowed.contains(&id),
                 unit_file_state: unit_file_states.get(&id).cloned(),
                 standard_system,
                 deckox_managed,
+                product,
                 id,
                 description,
                 load_state,
@@ -438,6 +459,17 @@ fn is_standard_system(fragment_path: &str) -> bool {
     VENDOR_UNIT_DIRS
         .iter()
         .any(|prefix| fragment_path.starts_with(prefix))
+}
+
+/// Matches a service's base unit name (before an optional `@instance` and
+/// the `.service` suffix, e.g. `postgresql` for both `postgresql.service`
+/// and `postgresql@14-main.service`) against [`KNOWN_PRODUCTS`].
+fn known_product(service_id: &str) -> Option<&'static str> {
+    let base = service_id.strip_suffix(".service")?.split('@').next()?;
+    KNOWN_PRODUCTS
+        .iter()
+        .find(|(name, _)| *name == base)
+        .map(|(_, label)| *label)
 }
 
 /// Batches a `FragmentPath` lookup for every given unit ID into a single
@@ -490,7 +522,7 @@ mod tests {
     use deckox_protocol::ServiceLogPriority;
 
     use super::{
-        MAX_LOG_MESSAGE_BYTES, PROTECTED_SERVICES, ServiceManager, journal_priority,
+        MAX_LOG_MESSAGE_BYTES, PROTECTED_SERVICES, ServiceManager, journal_priority, known_product,
         parse_fragment_paths, parse_journal_entries, parse_properties, parse_service_list,
         truncate_message, validate_log_lines,
     };
@@ -546,6 +578,17 @@ mod tests {
             "a locally installed unit is not vendor-provided"
         );
         assert!(services[1].deckox_managed);
+    }
+
+    #[test]
+    fn recognizes_known_products_including_template_instances() {
+        assert_eq!(known_product("docker.service"), Some("Docker"));
+        assert_eq!(
+            known_product("postgresql@14-main.service"),
+            Some("PostgreSQL")
+        );
+        assert_eq!(known_product("nginx-extra.service"), None);
+        assert_eq!(known_product("deckox-agent.service"), None);
     }
 
     #[test]

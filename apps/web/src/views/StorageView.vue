@@ -3,8 +3,11 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { api, formatBytes, usagePercentage, type StorageMount } from "../api/client";
 import { apiErrorKey } from "../api/errors";
+import { preferences, type StorageTagFilterKey } from "../preferences";
 
 const { t, locale } = useI18n();
+
+const TAG_FILTER_KEYS: StorageTagFilterKey[] = ["standard", "other"];
 
 // Fixed categorical order (never reassigned per filter), validated for
 // colorblind-safe adjacent contrast as a stacked-bar set. The 7th slot is
@@ -71,6 +74,33 @@ const freePercent = computed(() => {
   const capacity = totalCapacity.value;
   return capacity > 0 ? (freeBytes.value / capacity) * 100 : 0;
 });
+
+function mountTags(mount: StorageMount): StorageTagFilterKey[] {
+  return mount.standard ? ["standard"] : [];
+}
+
+function tagLabel(tag: StorageTagFilterKey) {
+  return tag === "standard" ? t("storage.tagStandard") : t("storage.tagOther");
+}
+
+function filterKeys(tags: StorageTagFilterKey[]): StorageTagFilterKey[] {
+  return tags.length ? tags : ["other"];
+}
+
+function isTagHidden(tag: StorageTagFilterKey) {
+  return preferences.hiddenStorageTags.includes(tag);
+}
+
+function toggleTag(tag: StorageTagFilterKey) {
+  preferences.hiddenStorageTags = isTagHidden(tag)
+    ? preferences.hiddenStorageTags.filter((hidden) => hidden !== tag)
+    : [...preferences.hiddenStorageTags, tag];
+}
+
+const filteredMounts = computed(() => mounts.value.filter((mount) => {
+  const keys = filterKeys(mountTags(mount));
+  return !keys.every((key) => isTagHidden(key));
+}));
 
 async function refresh() {
   loading.value = true;
@@ -170,6 +200,30 @@ onMounted(refresh);
     </section>
 
     <section class="table-panel storage-panel">
+      <div
+        v-if="mounts.length > 0"
+        class="table-toolbar"
+      >
+        <fieldset class="tag-toggles">
+          <legend class="sr-only">
+            {{ t("storage.tagVisibility") }}
+          </legend>
+          <label
+            v-for="tag in TAG_FILTER_KEYS"
+            :key="tag"
+            :class="['tag-toggle', tag, { off: isTagHidden(tag) }]"
+          >
+            <input
+              type="checkbox"
+              :checked="!isTagHidden(tag)"
+              @change="toggleTag(tag)"
+            >
+            {{ tagLabel(tag) }}
+          </label>
+        </fieldset>
+        <span class="table-count">{{ t("storage.summary", { count: filteredMounts.length }) }}</span>
+      </div>
+
       <div class="table-scroll">
         <table class="storage-table">
           <thead>
@@ -192,15 +246,35 @@ onMounted(refresh);
                 {{ t("storage.empty") }}
               </td>
             </tr>
+            <tr v-else-if="filteredMounts.length === 0">
+              <td
+                colspan="4"
+                class="empty"
+              >
+                {{ t("storage.empty") }}
+              </td>
+            </tr>
             <tr
-              v-for="mount in mounts"
+              v-for="mount in filteredMounts"
               :key="`${mount.filesystem}:${mount.mount_point}`"
             >
               <td class="path-cell">
-                <strong
-                  class="storage-path"
-                  :title="mount.mount_point"
-                >{{ mount.mount_point }}</strong>
+                <div class="storage-path-row">
+                  <strong
+                    class="storage-path"
+                    :title="mount.mount_point"
+                  >{{ mount.mount_point }}</strong>
+                  <span
+                    v-if="mountTags(mount).length"
+                    class="tag-badges"
+                  >
+                    <span
+                      v-for="tag in mountTags(mount)"
+                      :key="tag"
+                      :class="['tag-badge', tag]"
+                    >{{ tagLabel(tag) }}</span>
+                  </span>
+                </div>
               </td>
               <td class="filesystem-cell">
                 <span :title="mount.filesystem">{{ mount.filesystem }}</span>
