@@ -130,6 +130,13 @@ sudo -u deckox deckox-server access-url</code></pre>
         <p>GitHubへの要求はHTTPS、5秒、リダイレクトなし、最大64 KiBです。取得不能・不正JSON・不正タグはいずれもHTTP 200の<code>unavailable</code>へ正規化し、外部の本文やURLはブラウザへ渡しません。</p>
       </section>
 
+      <section class="section" aria-labelledby="update-trigger-title">
+        <h2 id="update-trigger-title">更新実行API</h2>
+        <p><code>POST /api/v1/system/update</code>は管理者パスワードの再確認が必要で、Agent設定<code>system.allow_update</code>が<code>true</code>でなければ拒否されます。Serverは受理前に更新確認結果を再評価し、<code>update_available</code>でなければ拒否します。クライアントはターゲットバージョンを指定できず、Serverが確認済みのタグだけを使用します。</p>
+        <p>Serverは<code>https://raw.githubusercontent.com/&lt;repo&gt;/&lt;tag&gt;/packaging/scripts/install.sh</code>(タグは<code>vMAJOR.MINOR.PATCH</code>形式のみ許可)を最大256 KiBまで取得し、内容を検証してからAgentのUnixソケットAPIへ渡します。Agentは同じタグ形式とスクリプト長を再検証したうえで固定パス(<code>/run/deckox/update.sh</code>、パーミッション<code>0600</code>)へ書き込み、<code>systemd-run --collect --no-block --unit=deckox-update</code>で独立したtransientユニットとして実行します。<code>deckox-agent.service</code>自身のcgroup内で実行すると、インストーラーが行う<code>systemctl restart deckox-agent</code>で処理の途中に強制終了されるため、この分離が必須です。</p>
+        <p>Agentは自らGitHubやその他の外部ネットワークへ接続しません。実行内容は既存の<code>install.sh</code>と同じバックアップ・起動確認・失敗時ロールバックの手順です。</p>
+      </section>
+
       <section class="section" aria-labelledby="allowlist-title">
         <h2 id="allowlist-title">systemd操作の許可リスト</h2>
         <p>サービス状態の読み取りは常に可能ですが、起動・停止・再起動・有効化・無効化とjournalログ閲覧は、Agent設定へ完全一致で登録したサービスだけが対象です。</p>
@@ -137,6 +144,7 @@ sudo -u deckox deckox-server access-url</code></pre>
 
 [system]
 allow_reboot = false
+allow_update = false
 
 [services]
 allowed = [
@@ -145,7 +153,7 @@ allowed = [
 ]</code></pre>
         <p><code>deckox-agent.service</code>と<code>deckox-server.service</code>は登録しても起動時に拒否されます。</p>
         <p>journalログは最大500行までで、priorityは<code>all</code>・<code>error</code>・<code>warning</code>・<code>info</code>だけを指定できます。任意の<code>journalctl</code>引数、ログのダウンロード、Webコンソールは提供しません。</p>
-        <p><code>system.allow_reboot</code>は初期値<code>false</code>です。<code>true</code>にした場合だけ、パスワード再確認後のホスト再起動を受け付けます。</p>
+        <p><code>system.allow_reboot</code>は初期値<code>false</code>です。<code>true</code>にした場合だけ、パスワード再確認後のホスト再起動を受け付けます。<code>system.allow_update</code>も初期値<code>false</code>で、<code>true</code>にした場合だけ管理画面からの更新実行を受け付けます。</p>
         <p>サービス一覧の各項目には、判定によるタグが付与されます。ユニットファイルの<code>FragmentPath</code>が<code>/usr/lib/systemd/system/</code>または<code>/lib/systemd/system/</code>配下にある場合は「標準」(OS・パッケージ提供)、IDが<code>deckox-agent.service</code>・<code>deckox-server.service</code>と一致する場合は「Deckox」タグになります。どちらにも該当しないサービス(<code>/etc/systemd/system/</code>などローカルに配置されたユニット)はタグなしです。</p>
       </section>
 

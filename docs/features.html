@@ -50,8 +50,9 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/diagnostics/report</code></span></td><td><span class="status done">実装済み</span></td><td>同じ固定スキーマを<code>deckox-diagnostics.json</code>としてダウンロード</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/update</code></span></td><td><span class="status done">実装済み</span></td><td>現在版とGitHubの最新安定版を比較。取得失敗時も外部エラーを隠した<code>unavailable</code>を返す</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>Agentのシステム情報APIを中継</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト再起動がAgent設定で許可されているか取得</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト再起動・管理画面からの更新がそれぞれAgent設定で許可されているか取得</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みのホスト再起動をAgentへ要求</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/system/update</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、更新確認済みのバージョン向け<code>install.sh</code>を取得して、許可済みならAgentへ実行を要求</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>CPU・メモリ・Swap・負荷平均、ネットワーク送受信速度、ディスクI/O速度、任意のCPU温度を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">SSE</span><code>/api/v1/events/metrics?interval=1|2|5</code></span></td><td><span class="status done">実装済み</span></td><td>拡張リソースメトリクスを認証済みブラウザへ配信。購読者0件では追加統計を含む採取を休止</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのストレージAPIを中継</td></tr>
@@ -79,10 +80,11 @@
           <tbody>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/health</code></span></td><td><span class="status done">実装済み</span></td><td>Agentプロセスのヘルス状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>ホスト名、OS、CPUアーキテクチャ、<code>/proc/uptime</code>の秒数</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/diagnostics</code></span></td><td><span class="status done">実装済み</span></td><td>Agentバージョン、安全なホスト情報、Deckoxの2ユニット状態、再起動許可・許可サービス数を固定スキーマで返却</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/diagnostics</code></span></td><td><span class="status done">実装済み</span></td><td>Agentバージョン、安全なホスト情報、Deckoxの2ユニット状態、再起動・更新の許可状態と許可サービス数を固定スキーマで返却</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system</code></span></td><td><span class="status done">実装済み</span></td><td>OS、バージョン、カーネル、ホスト名、稼働時間、boot ID、タイムゾーン、物理ネットワークインターフェースのLAN IPv4アドレス</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>設定に基づくホスト再起動の許可状態</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/capabilities</code></span></td><td><span class="status done">実装済み</span></td><td>設定に基づくホスト再起動・更新実行の許可状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>許可時のみ<code>systemctl --no-block reboot</code>を実行</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/system/update</code></span></td><td><span class="status done">実装済み</span></td><td>許可時のみ、Serverが取得したタグ固定の<code>install.sh</code>を検証して<code>/run/deckox/update.sh</code>へ書き込み、<code>systemd-run</code>で独立ユニットとして実行</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>CPU使用率・コア数・任意の温度、メモリ・Swap、ロードアベレージ、ネットワーク送受信速度、ディスク読み書き速度。追加統計が取得不能でも他の値を返却</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>ファイルシステム、形式、マウントポイント、容量・使用量</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>ロード済みsystemdサービス一覧と有効化状態</td></tr>
@@ -102,7 +104,7 @@
         <p class="eyebrow">Vue web</p>
         <h2 id="web-title">管理画面</h2>
         <div class="grid">
-          <article class="card"><span class="status done">実装済み</span><h3>リアルタイム概要</h3><p>OS・カーネル・稼働時間と、CPU・メモリ・Swap・ロードアベレージ、ネットワーク送受信速度、ディスクI/O速度の現在値・最大120点のSVG推移グラフ、最終更新時刻を表示します。CPU温度は取得可能な場合だけ表示し、Swap使用率80%以上を警告します。物理ネットワークインターフェースのLAN IPv4アドレスとServerの待受ポートから組み立てたアクセスURLをコピーボタン付きで表示します。Agent復旧時はシステム情報を自動取得します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>リアルタイム概要</h3><p>OS・カーネル・稼働時間と、CPU・メモリ・Swap・ロードアベレージ、ネットワーク送受信速度、ディスクI/O速度の現在値・最大120点のSVG推移グラフ、最終更新時刻を表示します。CPU温度は取得可能な場合だけ表示し、Swap使用率80%以上を警告します。マウントのうち最も使用率が高いものをディスク使用率として表示し、90%以上で警告します。物理ネットワークインターフェースのLAN IPv4アドレスとServerの待受ポートから組み立てたアクセスURLをコピーボタン付きで表示します。Agent復旧時はシステム情報を自動取得します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>管理者ログイン</h3><p>セッション確認、ログイン、ログアウト、TOTP設定時の2段階目コード入力、APIの401応答時のログイン画面復帰、パスワードを忘れた場合のSSHコンソール手順案内を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>二要素認証(TOTP)</h3><p>設定画面でBase32シークレットとotpauth URIを表示して有効化し、確認コード入力後にリカバリーコード10個を一度だけ表示します。残りコード数の確認と、パスワード・コード確認付きの無効化を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>監査ログ</h3><p>認証・パスワード変更・TOTP設定・サービス操作・ホスト再起動・SSHコンソールからのCLI操作を時刻・種別・actor・送信元IP・結果で一覧表示し、イベント種別・結果で絞り込み、JSONとして保存できます。</p></article>
@@ -114,7 +116,7 @@
           <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/diagnostics</code>、<code>/audit</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>日本語・英語</h3><p>端末言語の自動判定と手動選択に対応し、APIエラーコードも選択言語の文言へ変換します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、ホスト再起動、リアルタイム更新の有効化・1/2/5秒間隔、共通通知を提供します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>手動更新確認</h3><p>設定画面で現在版と最新安定版を確認し、検証済みのタグに限ってReleaseリンクとコピー可能な更新コマンドを表示します。自動確認・自動インストールは行いません。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>更新確認と更新実行</h3><p>設定画面で現在版と最新安定版を確認し、検証済みのタグに限ってReleaseリンクとコピー可能な更新コマンドを表示します。Agent設定で許可した場合だけ、確認済みの更新がある間「今すぐ更新」ボタンが表示され、管理者パスワードの再確認後にServerが取得したインストーラーをAgentが独立したsystemdユニットとして実行します。許可していない環境では引き続き手動確認・手動実行のみです。</p></article>
         </div>
       </section>
 

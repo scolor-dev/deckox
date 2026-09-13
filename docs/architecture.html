@@ -58,7 +58,7 @@
           <article class="card">
             <span class="number">AGENT</span>
             <h3>Rust Agent</h3>
-            <p>Linuxホスト情報の取得、許可リスト内のsystemdサービス操作と制限付きjournalログ閲覧、明示的に許可したホスト再起動を行います。rootで動き、Serverとは権限境界を分けています。</p>
+            <p>Linuxホスト情報の取得、許可リスト内のsystemdサービス操作と制限付きjournalログ閲覧、明示的に許可したホスト再起動・更新実行を行います。rootで動き、Serverとは権限境界を分けています。外部ネットワークへは一切接続しません。</p>
           </article>
         </div>
       </section>
@@ -73,13 +73,15 @@
       </section>
 
       <section class="section" aria-labelledby="update-title">
-        <h2 id="update-title">更新確認の境界</h2>
-        <p>更新確認は認証済みの<code>GET /api/v1/update</code>を手動で呼び出します。Serverだけが固定されたDeckoxのGitHub Latest Release APIへ接続し、SemVerで現在版と比較します。</p>
+        <h2 id="update-title">更新確認・更新実行の境界</h2>
+        <p>更新確認は認証済みの<code>GET /api/v1/update</code>を手動で呼び出します。Serverだけが固定されたDeckoxのGitHub Latest Release APIへ接続し、SemVerで現在版と比較します。更新実行(<code>POST /api/v1/system/update</code>)もこの境界を維持したまま行われ、GitHubへ接続するのは常にServerだけです。Agentはネットワークへ接続せず、Serverから渡された内容をそのまま実行するだけです。</p>
         <dl class="definition-list">
-          <dt>Network limit</dt><dd>5秒で打ち切り、リダイレクトを拒否し、応答を64 KiBまでに制限</dd>
-          <dt>Cache</dt><dd>成功・失敗の結果を15分保持し、同時確認を1リクエストへまとめる</dd>
+          <dt>Network limit</dt><dd>更新確認は5秒・64 KiB、インストーラー取得は5秒・256 KiBで打ち切り、いずれもリダイレクトを拒否</dd>
+          <dt>Cache</dt><dd>更新確認の成功・失敗の結果を15分保持し、同時確認を1リクエストへまとめる</dd>
           <dt>Safe output</dt><dd>外部エラー本文を返さず、Release URLは固定プレフィックスと検証済みタグから生成</dd>
-          <dt>Execution</dt><dd>画面はコマンドを案内するだけで、自動ダウンロードやroot操作を実行しない</dd>
+          <dt>Execution gate</dt><dd>既定では無効。Agent設定<code>system.allow_update = true</code>と、実行時の管理者パスワード再確認の両方が必要</dd>
+          <dt>Version pinning</dt><dd>クライアントはバージョンを指定できない。Serverが確認済みのタグだけを使い、インストーラーもタグ固定のGitHubパスから取得</dd>
+          <dt>Process isolation</dt><dd>AgentはインストーラーをAgent自身のsystemdユニットではなく、<code>systemd-run</code>による独立したtransientユニットとして実行し、インストーラーが行う<code>deckox-agent</code>再起動に巻き込まれないようにする</dd>
         </dl>
       </section>
 
@@ -91,7 +93,7 @@
           <dt>Agent</dt><dd>接続状態、取得できた場合のバージョン、失敗時の固定エラーコード</dd>
           <dt>Host</dt><dd>ホスト名、OS、OSバージョン、カーネル、アーキテクチャ、稼働時間、タイムゾーン。boot IDは除外</dd>
           <dt>Deckox services</dt><dd><code>deckox-agent.service</code>と<code>deckox-server.service</code>のload・active・sub・unit file状態</dd>
-          <dt>Runtime config</dt><dd>再起動許可、許可サービスの件数という要約だけを返し、設定値そのものは返さない</dd>
+          <dt>Runtime config</dt><dd>再起動許可・更新実行許可、許可サービスの件数という要約だけを返し、設定値そのものは返さない</dd>
           <dt>Partial result</dt><dd>Agentへ接続できない場合はAgent由来のhost・Deckox services・runtime configを<code>null</code>とし、Server情報と接続エラーを含む診断は成功応答として返す</dd>
         </dl>
         <aside class="note warning"><strong>常に除外:</strong> 生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、セッション、Cookie、boot IDは診断レポートへ入りません。</aside>
@@ -151,11 +153,11 @@
             <tr><td>管理者認証</td><td>Argon2idハッシュ、任意のTOTP二要素認証(有効時はパスワード確認後にコード入力する2段階ログイン)とリカバリーコード、HttpOnly・SameSite=Strict Cookie、12時間のメモリ内セッション、ログイン・パスワード再確認・TOTP確認の試行制限</td></tr>
             <tr><td>認証情報の復旧</td><td>管理画面へ入れない場合、SSH接続したコンソールから<code>reset-password</code>(パスワードのみ再設定)・<code>disable-totp</code>(TOTPのみ無効化)サブコマンドで復旧できる</td></tr>
             <tr><td>変更API</td><td>認証に加え、ブラウザの<code>Origin</code>と<code>Host</code>が同一であることを確認</td></tr>
-            <tr><td>Agent操作</td><td>systemd変更とjournalログ閲覧は完全一致許可リスト、再起動は明示的な設定とWeb側のパスワード再確認に限定</td></tr>
+            <tr><td>Agent操作</td><td>systemd変更とjournalログ閲覧は完全一致許可リスト、再起動・更新実行は明示的な設定とWeb側のパスワード再確認に限定。更新実行はさらにServerが確認済みのタグ以外を受け付けず、独立したsystemdユニットとして実行する</td></tr>
             <tr><td>ログ閲覧</td><td>許可済みサービスのjournalだけを最大500行取得し、<code>all|error|warning|info</code>で絞り込む。任意引数とファイルダウンロードは提供しない</td></tr>
             <tr><td>診断レポート</td><td>安全な固定スキーマだけを返し、秘密情報・追跡用のboot IDを除外。Agent不通時はServer側だけを返す</td></tr>
             <tr><td>任意コマンド</td><td>Webコンソールや対話シェルを提供せず、Agentは許可済みの型付き操作だけを受け付ける</td></tr>
-            <tr><td>操作ログ</td><td>認証、パスワード変更、TOTP設定変更、サービス・再起動、SSHコンソールからのCLI操作を送信元IP・リクエストID付きでjournalへ記録するとともに、監査ログ専用ファイルにも記録し管理画面から閲覧・ダウンロードできる。専用ファイルは最大5000件を保持し、超過分は古い順に切り詰める</td></tr>
+            <tr><td>操作ログ</td><td>認証、パスワード変更、TOTP設定変更、サービス・再起動・更新実行、SSHコンソールからのCLI操作を送信元IP・リクエストID付きでjournalへ記録するとともに、監査ログ専用ファイルにも記録し管理画面から閲覧・ダウンロードできる。専用ファイルは最大5000件を保持し、超過分は古い順に切り詰める</td></tr>
           </tbody>
         </table>
         <aside class="note warning"><strong>未実装:</strong> 複数ユーザー・ロール・TLS終端はまだ存在しません。</aside>
