@@ -638,7 +638,7 @@ td small {
 }
 .tag-badge.standard { background: #eef1f4; color: #5b6470; }
 .tag-badge.deckox { background: #e5edf9; color: #35618f; }
-.tag-badge.product { background: #e4f3ec; color: #1f7a52; }
+.tag-badge.product { background: #eee7fa; color: #5b3aa0; }
 .tag-toggles { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; border: 0; margin: 0; }
 .tag-toggle {
   display: inline-flex;
@@ -657,7 +657,7 @@ td small {
 .tag-toggle.off { color: #b0b5bc; background: #f5f6f7; }
 .tag-toggle.standard:not(.off) { border-color: #c7cdd4; }
 .tag-toggle.deckox:not(.off) { border-color: #a9c3de; color: #35618f; }
-.tag-toggle.product:not(.off) { border-color: #a3d3bc; color: #1f7a52; }
+.tag-toggle.product:not(.off) { border-color: #cabdea; color: #5b3aa0; }
 .state-badge { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
 .state-badge::before { width: 6px; height: 6px; border-radius: 50%; content: ""; }
 .state-badge.active { color: #277145; }

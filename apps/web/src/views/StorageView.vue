@@ -221,7 +221,7 @@ onMounted(refresh);
             {{ tagLabel(tag) }}
           </label>
         </fieldset>
-        <span class="table-count">{{ t("storage.summary", { count: filteredMounts.length }) }}</span>
+        <span class="table-count">{{ t("storage.count", { count: filteredMounts.length }) }}</span>
       </div>
 
       <div class="table-scroll">
