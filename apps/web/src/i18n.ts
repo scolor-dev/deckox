@@ -59,6 +59,7 @@ export const messages = {
       server: "Webサーバー", agent: "Agent", host: "Linuxホスト", services: "Deckoxサービス", config: "設定概要", status: "状態", connected: "接続済み", disconnected: "接続できません",
       version: "バージョン", hostname: "ホスト名", os: "OS", kernel: "カーネル", architecture: "アーキテクチャ", uptime: "稼働時間", timezone: "タイムゾーン", noHost: "Agentに接続できないためホスト情報を取得できません。",
       upgradablePackages: "更新可能なパッケージ", upgradablePackagesUnavailable: "取得できません",
+      backups: "更新前バックアップ", backupCreatedAt: "取得日時", backupPreviousVersion: "更新前バージョン", backupSize: "サイズ", noBackups: "バックアップはまだありません。",
       service: "サービス", activeState: "稼働状態", startup: "自動起動", noServices: "サービス状態を取得できません。", enabled: "有効", disabled: "無効",
       reboot: "ホスト再起動", update: "管理画面からの更新", allowedServices: "操作許可サービス", allowedServicesValue: "{count}件", noConfig: "Agentに接続できないため設定概要を取得できません。",
       partial: "Agentに接続できません。Webサーバーから取得できる情報だけを表示しています。", reportSaved: "診断レポートを保存しました。",
@@ -102,7 +103,7 @@ export const messages = {
     errors: {
       login: "ログインできませんでした。しばらくしてから再度お試しください。", overview: "システム情報を取得できませんでした。", services: "サービス一覧を取得できませんでした。",
       serviceAction: "サービス操作に失敗しました。", serviceLogs: "サービスログを取得できませんでした。", storage: "ストレージ情報を取得できませんでした。", password: "パスワードを変更できませんでした。",
-      diagnostics: "診断情報を取得できませんでした。", diagnosticsReport: "診断レポートを保存できませんでした。",
+      diagnostics: "診断情報を取得できませんでした。", diagnosticsReport: "診断レポートを保存できませんでした。", backups: "バックアップ一覧を取得できませんでした。",
       audit: "監査ログを取得できませんでした。", auditReport: "監査ログを保存できませんでした。",
       updateCheck: "更新情報を確認できませんでした。", updateTrigger: "更新を開始できませんでした。",
       systemCapabilities: "システム操作の設定を取得できませんでした。", reboot: "コンピューターを再起動できませんでした。",
@@ -174,6 +175,7 @@ export const messages = {
       server: "Web server", agent: "Agent", host: "Linux host", services: "Deckox services", config: "Configuration summary", status: "Status", connected: "Connected", disconnected: "Unavailable",
       version: "Version", hostname: "Hostname", os: "OS", kernel: "Kernel", architecture: "Architecture", uptime: "Uptime", timezone: "Time zone", noHost: "Host information is unavailable because Agent is disconnected.",
       upgradablePackages: "Upgradable packages", upgradablePackagesUnavailable: "Unavailable",
+      backups: "Pre-update backups", backupCreatedAt: "Created", backupPreviousVersion: "Previous version", backupSize: "Size", noBackups: "No backups yet.",
       service: "Service", activeState: "State", startup: "Startup", noServices: "Service status is unavailable.", enabled: "Enabled", disabled: "Disabled",
       reboot: "Host restart", update: "Update from admin panel", allowedServices: "Allowed services", allowedServicesValue: "{count}", noConfig: "Configuration summary is unavailable because Agent is disconnected.",
       partial: "Agent is disconnected. Only information available from the web server is shown.", reportSaved: "Diagnostic report saved.",
@@ -217,7 +219,7 @@ export const messages = {
     errors: {
       login: "Could not sign in. Try again shortly.", overview: "Could not load system information.", services: "Could not load services.",
       serviceAction: "The service operation failed.", serviceLogs: "Could not load service logs.", storage: "Could not load storage information.", password: "Could not change the password.",
-      diagnostics: "Could not load diagnostic information.", diagnosticsReport: "Could not save the diagnostic report.",
+      diagnostics: "Could not load diagnostic information.", diagnosticsReport: "Could not save the diagnostic report.", backups: "Could not load the backup list.",
       audit: "Could not load the audit log.", auditReport: "Could not save the audit log.",
       updateCheck: "Could not check for updates.", updateTrigger: "Could not start the update.",
       systemCapabilities: "Could not load system operation settings.", reboot: "Could not restart the computer.",

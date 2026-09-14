@@ -11,9 +11,9 @@ use axum::{
     routing::{get, post},
 };
 use deckox_protocol::{
-    AgentDiagnostics, AgentStatus, AgentUpdateRequest, CommandResult, HealthResponse,
-    RuntimeConfigSummary, ServiceAction, ServiceDetails, ServiceLogPriority, ServiceLogs,
-    ServiceSummary, StorageMount, SystemCapabilities, SystemInfo, SystemMetrics,
+    AgentDiagnostics, AgentStatus, AgentUpdateRequest, BackupSummary, CommandResult,
+    HealthResponse, RuntimeConfigSummary, ServiceAction, ServiceDetails, ServiceLogPriority,
+    ServiceLogs, ServiceSummary, StorageMount, SystemCapabilities, SystemInfo, SystemMetrics,
 };
 use serde::Deserialize;
 use tokio::net::UnixListener;
@@ -25,6 +25,7 @@ use crate::{
     storage::read_storage, system::read_system_info, update::UpdateManager,
 };
 
+mod backups;
 mod config;
 mod diagnostics;
 mod error;
@@ -111,6 +112,7 @@ async fn main() {
         .route("/v1/system/update", post(update_system))
         .route("/v1/system/metrics", get(system_metrics))
         .route("/v1/storage", get(storage))
+        .route("/v1/backups", get(list_backups))
         .route("/v1/services", get(list_services))
         .route("/v1/services/{service_id}", get(service_details))
         .route("/v1/services/{service_id}/start", post(start_service))
@@ -276,6 +278,10 @@ async fn system_metrics() -> Result<Json<SystemMetrics>, AgentError> {
 
 async fn storage() -> Result<Json<Vec<StorageMount>>, AgentError> {
     read_storage().await.map(Json)
+}
+
+async fn list_backups() -> Result<Json<Vec<BackupSummary>>, AgentError> {
+    backups::list_backups().await.map(Json)
 }
 
 async fn list_services(

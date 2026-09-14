@@ -212,6 +212,7 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
         .route("/system/metrics", get(proxy_metrics))
         .route("/events/metrics", get(metrics_stream::metrics_events))
         .route("/storage", get(proxy_storage))
+        .route("/backups", get(proxy_backups))
         .route("/services", get(proxy_services))
         .route("/services/{service_id}", get(proxy_service_details))
         .route("/services/{service_id}/start", post(proxy_start_service))
@@ -629,6 +630,13 @@ async fn proxy_storage(
     Extension(request_id): Extension<RequestId>,
 ) -> Response {
     proxy_agent(&state.agent, "GET", "/v1/storage", &request_id).await
+}
+
+async fn proxy_backups(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/backups", &request_id).await
 }
 
 async fn proxy_services(

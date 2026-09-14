@@ -76,6 +76,13 @@ export interface StorageMount {
   standard: boolean;
 }
 
+export interface BackupSummary {
+  name: string;
+  previous_version: string | null;
+  created_at_ms: number | null;
+  size_bytes: number;
+}
+
 export interface ServiceSummary {
   id: string;
   description: string;
@@ -338,6 +345,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
     }),
   storage: () => request<StorageMount[]>("/api/v1/storage"),
+  backups: () => request<BackupSummary[]>("/api/v1/backups"),
   diagnostics: () => request<DiagnosticsResponse>("/api/v1/diagnostics"),
   diagnosticsReport: () => requestBlob("/api/v1/diagnostics/report"),
   auditEvents: (beforeMs?: number) =>

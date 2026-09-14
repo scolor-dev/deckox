@@ -245,6 +245,22 @@ pub struct StorageMount {
     pub standard: bool,
 }
 
+/// One pre-update snapshot the installer took under `/var/lib/deckox/backups/`.
+///
+/// Owned `root:root`, so only the Agent (not the unprivileged Server) can
+/// list these; the Server proxies the read the same way it does storage and
+/// services.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupSummary {
+    pub name: String,
+    /// `None` when the installer could not determine the version being
+    /// replaced (recorded as `unknown` in the directory name).
+    pub previous_version: Option<String>,
+    /// `None` when the directory's filesystem metadata could not be read.
+    pub created_at_ms: Option<u64>,
+    pub size_bytes: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceSummary {
     pub id: String,
