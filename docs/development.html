@@ -91,12 +91,14 @@ npm run build</code></pre>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH</code></td><td>なし</td><td>Server（開発・コンテナ向け）</td></tr>
             <tr><td><code>DECKOX_AUDIT_LOG_FILE</code></td><td><code>/var/lib/deckox/audit.log</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_SECURE_COOKIE</code></td><td><code>false</code></td><td>Server。HTTPS終端時に<code>true</code></td></tr>
+            <tr><td><code>DECKOX_WEBHOOK_URL</code></td><td>なし(通知無効)</td><td>Server</td></tr>
             <tr><td><code>RUST_LOG</code></td><td>各プロセスの<code>info</code></td><td>Server / Agent</td></tr>
           </tbody>
         </table>
         <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH</code>でハッシュを直接指定した場合は永続的な保存先がないため、設定画面からのパスワード変更・TOTP設定は無効になります。</aside>
         <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code>の内容はパスワードハッシュとTOTP設定を含むJSONです。旧バージョンが書いた生のArgon2idハッシュ文字列も読み込み時に自動判定し、書き込み時にJSON形式へ移行します。</aside>
         <aside class="note"><code>DECKOX_AUDIT_LOG_FILE</code>は最大5000件を新しい順に保持するJSON Linesファイルです。超過分は書き込みのたびに古い順から切り詰められます。</aside>
+        <aside class="note"><code>DECKOX_WEBHOOK_URL</code>を設定すると、Serverが30秒間隔でAgentの許可済みサービスのfailed状態・Swap使用率80%以上・最も使用率が高いマウントの90%以上・Agent自体への接続断を監視し、状態が変化した瞬間(発生時と復旧時)だけ<code>{"event","message","text","timestamp_ms"}</code>を含むJSONをPOSTします。管理画面を開いていなくても動作し、送信結果は監査ログにも(actor <code>system</code>として)記録されます。webhook送信の失敗はログに残るだけでServerの動作には影響しません。</aside>
       </section>
 
       <section class="section" aria-labelledby="cli-title">

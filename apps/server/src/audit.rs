@@ -69,6 +69,14 @@ impl AuditLog {
             .await;
     }
 
+    /// Same as [`record`](Self::record), but for the background threshold
+    /// monitor, which has no authenticated admin or network peer to
+    /// attribute either.
+    pub async fn record_system(&self, event: &str, result: &str, detail: Option<String>) {
+        self.record_raw(event, "system", "monitor".to_owned(), result, detail)
+            .await;
+    }
+
     async fn record_raw(
         &self,
         event: &str,

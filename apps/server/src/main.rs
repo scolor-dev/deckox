@@ -36,6 +36,7 @@ mod cli;
 mod diagnostics;
 mod fsutil;
 mod metrics_stream;
+mod notifier;
 mod request_context;
 mod security_headers;
 mod update;
@@ -161,6 +162,11 @@ async fn main() {
         env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| DEFAULT_AGENT_SOCKET.to_owned()),
     ));
     let updates = load_update_checker();
+    notifier::spawn(
+        agent.clone(),
+        audit.clone(),
+        env::var("DECKOX_WEBHOOK_URL").ok(),
+    );
     let state = AppState {
         agent: agent.clone(),
         auth: auth.clone(),
