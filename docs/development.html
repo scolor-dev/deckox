@@ -99,7 +99,7 @@ npm run build</code></pre>
         <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH</code>でハッシュを直接指定した場合は永続的な保存先がないため、設定画面からのパスワード変更・TOTP設定は無効になります。</aside>
         <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code>の内容はパスワードハッシュとTOTP設定を含むJSONです。旧バージョンが書いた生のArgon2idハッシュ文字列も読み込み時に自動判定し、書き込み時にJSON形式へ移行します。</aside>
         <aside class="note"><code>DECKOX_AUDIT_LOG_FILE</code>は最大5000件を新しい順に保持するJSON Linesファイルです。超過分は書き込みのたびに古い順から切り詰められます。</aside>
-        <aside class="note"><code>DECKOX_WEBHOOK_URL</code>を設定すると、Serverが30秒間隔でAgentの許可済みサービスのfailed状態・Swap使用率80%以上・最も使用率が高いマウントの90%以上・Agent自体への接続断を監視し、状態が変化した瞬間(発生時と復旧時)だけ<code>{"event","message","text","timestamp_ms"}</code>を含むJSONをPOSTします。管理画面を開いていなくても動作し、送信結果は監査ログにも(actor <code>system</code>として)記録されます。webhook送信の失敗はログに残るだけでServerの動作には影響しません。</aside>
+        <aside class="note"><code>DECKOX_WEBHOOK_URL</code>を設定すると、Serverが30秒間隔でAgentの許可済みサービスのfailed状態・Swap使用率80%以上・最も使用率が高いマウントの90%以上・Agent自体への接続断・新しいDeckoxバージョンの公開を監視し、状態が変化した瞬間(発生時と復旧時)だけ<code>{"event","message","text","timestamp_ms"}</code>を含むJSONをPOSTします。新バージョン検知は<code>UpdateChecker</code>の15分キャッシュを共有するため毎tickでも実質的にGitHubへは追加アクセスしません。管理画面を開いていなくても動作し、送信結果は監査ログにも(actor <code>system</code>として)記録されます。webhook送信の失敗はログに残るだけでServerの動作には影響しません。設定画面の「テスト通知を送信」ボタン(<code>POST /api/v1/settings/webhook/test</code>)は同じ送信処理を呼び出し、結果を呼び出した管理者のアクションとして監査ログに記録します(actor <code>admin</code>)。</aside>
       </section>
 
       <section class="section" aria-labelledby="cli-title">

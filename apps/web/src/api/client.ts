@@ -13,6 +13,7 @@ export interface ServerStatus {
   port: number;
   agent: AgentStatus | null;
   agent_error: string | null;
+  webhook_configured: boolean;
 }
 
 export interface SystemInfo {
@@ -414,6 +415,7 @@ export const api = {
       `/api/v1/schedules/${encodeURIComponent(scheduleId)}/${enabled ? "enable" : "disable"}`,
       { method: "POST" },
     ),
+  testWebhook: () => request<unknown>("/api/v1/settings/webhook/test", { method: "POST" }),
 };
 
 export function buildUpdateCommand(version: string | null | undefined): string | null {

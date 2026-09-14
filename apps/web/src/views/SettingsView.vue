@@ -7,6 +7,7 @@ import {
   buildUpdateCommand,
   safeReleaseUrl,
   writeClipboardText,
+  type ServerStatus,
   type SystemCapabilities,
   type TotpStatus,
   type UpdateStatus,
@@ -44,6 +45,9 @@ const totpRecoveryCodes = ref<string[] | null>(null);
 const totpDisablePassword = ref("");
 const totpDisableCode = ref("");
 const totpDisabling = ref(false);
+const serverStatus = ref<ServerStatus | null>(null);
+const webhookTesting = ref(false);
+const webhookErrorKey = ref<string | null>(null);
 const updateCommand = computed(() => buildUpdateCommand(updateStatus.value?.latest_version));
 const releaseUrl = computed(() => safeReleaseUrl(updateStatus.value?.release_url));
 const updateCheckedAt = computed(() => {
@@ -238,9 +242,33 @@ async function copyUpdateCommand() {
   }
 }
 
+async function loadServerStatus() {
+  try {
+    serverStatus.value = await api.serverStatus();
+  } catch {
+    // Overview already surfaces connectivity problems; this section only
+    // needs webhook_configured, so a failed fetch just leaves it unknown.
+  }
+}
+
+async function testWebhook() {
+  webhookErrorKey.value = null;
+  webhookTesting.value = true;
+  try {
+    await api.testWebhook();
+    notify("success", t("settings.webhookTestSuccess"));
+  } catch (caught) {
+    webhookErrorKey.value = apiErrorKey(caught, "errors.webhookTestFailed");
+    notify("error", t(webhookErrorKey.value));
+  } finally {
+    webhookTesting.value = false;
+  }
+}
+
 onMounted(() => {
   void loadSystemCapabilities();
   void loadTotpStatus();
+  void loadServerStatus();
 });
 </script>
 
@@ -411,6 +439,48 @@ onMounted(() => {
         >
           {{ updateChecking ? t("settings.checkingUpdate") : t("settings.checkUpdate") }}
         </button>
+      </div>
+    </section>
+
+    <section
+      class="settings-section"
+      aria-labelledby="webhook-heading"
+    >
+      <div class="settings-description">
+        <h2 id="webhook-heading">
+          {{ t("settings.webhookTitle") }}
+        </h2>
+        <p>{{ t("settings.webhookDescription") }}</p>
+      </div>
+      <div class="settings-form">
+        <template v-if="serverStatus">
+          <div
+            v-if="!serverStatus.webhook_configured"
+            class="notice warning"
+          >
+            {{ t("settings.webhookNotConfigured") }}
+          </div>
+          <template v-else>
+            <div class="notice success">
+              {{ t("settings.webhookConfigured") }}
+            </div>
+            <p
+              v-if="webhookErrorKey"
+              class="notice error"
+              role="alert"
+            >
+              {{ t(webhookErrorKey) }}
+            </p>
+            <button
+              class="button"
+              type="button"
+              :disabled="webhookTesting"
+              @click="testWebhook"
+            >
+              {{ webhookTesting ? t("settings.webhookTesting") : t("settings.webhookTest") }}
+            </button>
+          </template>
+        </template>
       </div>
     </section>
 

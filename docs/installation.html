@@ -159,12 +159,12 @@ allowed = [
 
       <section class="section" aria-labelledby="webhook-title">
         <h2 id="webhook-title">Webhook通知を有効にする</h2>
-        <p>管理画面を開いていなくても異常に気づけるよう、Webhook URLを設定すると許可済みサービスの障害・Swap使用率・ディスク使用率・Agentへの接続断をServerが自動で監視し通知します。初期状態では無効です。</p>
+        <p>管理画面を開いていなくても異常に気づけるよう、Webhook URLを設定すると許可済みサービスの障害・Swap使用率・ディスク使用率・Agentへの接続断・新しいDeckoxバージョンの公開をServerが自動で監視し通知します。初期状態では無効です。</p>
         <pre><code>sudo systemctl edit deckox-server</code></pre>
         <pre><code>[Service]
 Environment=DECKOX_WEBHOOK_URL=https://example.com/webhook</code></pre>
         <pre><code>sudo systemctl restart deckox-server</code></pre>
-        <p>設定後は30秒間隔で状態を確認し、変化した瞬間(発生時・復旧時)だけ<code>{"event", "message", "text", "timestamp_ms"}</code>を含むJSONをPOSTします。Slack等のシンプルな受信Webhookは<code>text</code>フィールドをそのまま表示に使えます。送信結果は監査ログにも記録されます。</p>
+        <p>設定後は30秒間隔で状態を確認し、変化した瞬間(発生時・復旧時)だけ<code>{"event", "message", "text", "timestamp_ms"}</code>を含むJSONをPOSTします。Slack等のシンプルな受信Webhookは<code>text</code>フィールドをそのまま表示に使えます。送信結果は監査ログにも記録されます。設定画面には設定状況が表示され、「テスト通知を送信」ボタンで実際に届くか即座に確認できます。</p>
       </section>
 
       <section class="section" aria-labelledby="migration-title">

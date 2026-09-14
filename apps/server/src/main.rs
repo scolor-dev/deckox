@@ -52,6 +52,7 @@ struct AppState {
     audit: AuditLog,
     metrics: MetricsHub,
     updates: update::UpdateChecker,
+    webhook_url: Option<String>,
     instance_id: String,
     listen_port: u16,
 }
@@ -76,6 +77,7 @@ struct ServerStatus {
     port: u16,
     agent: Option<AgentStatus>,
     agent_error: Option<String>,
+    webhook_configured: bool,
 }
 
 #[derive(Serialize)]
@@ -162,10 +164,12 @@ async fn main() {
         env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| DEFAULT_AGENT_SOCKET.to_owned()),
     ));
     let updates = load_update_checker();
+    let webhook_url = env::var("DECKOX_WEBHOOK_URL").ok();
     notifier::spawn(
         agent.clone(),
         audit.clone(),
-        env::var("DECKOX_WEBHOOK_URL").ok(),
+        updates.clone(),
+        webhook_url.clone(),
     );
     let state = AppState {
         agent: agent.clone(),
@@ -173,6 +177,7 @@ async fn main() {
         audit,
         metrics: MetricsHub::new(agent),
         updates,
+        webhook_url,
         instance_id: format!("{:016x}", rand::random::<u64>()),
         listen_port: listen_addr.port(),
     };
@@ -255,6 +260,7 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
         .route("/settings/totp/setup", post(auth::totp_setup))
         .route("/settings/totp/confirm", post(auth::totp_confirm))
         .route("/settings/totp/disable", post(auth::totp_disable))
+        .route("/settings/webhook/test", post(test_webhook))
         .route_layer(middleware::from_fn_with_state(
             auth.clone(),
             auth::require_auth,
@@ -319,6 +325,7 @@ async fn status(
             port: state.listen_port,
             agent: Some(agent),
             agent_error: None,
+            webhook_configured: state.webhook_url.is_some(),
         }),
         Err(error) => Json(ServerStatus {
             name: "deckox",
@@ -327,6 +334,7 @@ async fn status(
             port: state.listen_port,
             agent: None,
             agent_error: Some(error),
+            webhook_configured: state.webhook_url.is_some(),
         }),
     }
 }
@@ -805,6 +813,71 @@ async fn proxy_disallow_service(
         Some(&user),
     )
     .await
+}
+
+/// Lets an admin verify `DECKOX_WEBHOOK_URL` works without waiting for a
+/// real threshold breach. Reuses [`notifier::send_once`] — the exact same
+/// request the background ticker would make — but reports the outcome
+/// straight back to the caller and audit-logs it under their own identity
+/// instead of `system`.
+async fn test_webhook(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    let Some(webhook_url) = &state.webhook_url else {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "webhook_not_configured",
+            "DECKOX_WEBHOOK_URL is not set",
+        );
+    };
+
+    let result = notifier::send_once(
+        &reqwest::Client::new(),
+        webhook_url,
+        "test",
+        "Deckoxからのテスト通知です。".to_owned(),
+    )
+    .await;
+
+    match result {
+        Ok(()) => {
+            state
+                .audit
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "webhook_test",
+                    "success",
+                    None,
+                    "webhook test notification sent",
+                )
+                .await;
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(message) => {
+            state
+                .audit
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "webhook_test",
+                    "failure",
+                    Some(message.clone()),
+                    "webhook test notification failed",
+                )
+                .await;
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    code: "webhook_test_failed",
+                    message,
+                }),
+            )
+                .into_response()
+        }
+    }
 }
 
 async fn proxy_schedules(

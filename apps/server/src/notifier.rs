@@ -8,14 +8,19 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Write as _,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use deckox_protocol::{ServiceSummary, StorageMount, SystemMetrics};
+use deckox_protocol::{
+    ServiceSummary, StorageMount, SystemMetrics, UpdateCheckStatus, UpdateStatus,
+};
 use reqwest::Client;
 use tracing::warn;
 
-use crate::{agent_client::AgentClient, audit::AuditLog, request_context::RequestId};
+use crate::{
+    agent_client::AgentClient, audit::AuditLog, request_context::RequestId, update::UpdateChecker,
+};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(30);
 const WEBHOOK_TIMEOUT: Duration = Duration::from_secs(5);
@@ -28,12 +33,21 @@ struct NotifierState {
     swap_high: bool,
     disk_high: bool,
     failed_services: HashSet<String>,
+    /// The latest version we have already sent a webhook for, so a sustained
+    /// `update_available` state is not renotified every tick — only a
+    /// version that is new relative to the last one we announced.
+    notified_update_version: Option<String>,
 }
 
 /// Spawns the polling loop. A no-op (returns immediately without spawning)
 /// when no webhook URL is configured, so the feature costs nothing when
 /// unused.
-pub fn spawn(agent: AgentClient, audit: AuditLog, webhook_url: Option<String>) {
+pub fn spawn(
+    agent: AgentClient,
+    audit: AuditLog,
+    updates: UpdateChecker,
+    webhook_url: Option<String>,
+) {
     let Some(webhook_url) = webhook_url else {
         return;
     };
@@ -41,7 +55,7 @@ pub fn spawn(agent: AgentClient, audit: AuditLog, webhook_url: Option<String>) {
         let client = Client::new();
         let mut state = NotifierState::default();
         loop {
-            tick(&agent, &audit, &client, &webhook_url, &mut state).await;
+            tick(&agent, &audit, &updates, &client, &webhook_url, &mut state).await;
             tokio::time::sleep(POLL_INTERVAL).await;
         }
     });
@@ -50,10 +64,13 @@ pub fn spawn(agent: AgentClient, audit: AuditLog, webhook_url: Option<String>) {
 async fn tick(
     agent: &AgentClient,
     audit: &AuditLog,
+    updates: &UpdateChecker,
     client: &Client,
     webhook_url: &str,
     state: &mut NotifierState,
 ) {
+    check_update(updates, client, webhook_url, audit, state).await;
+
     let request_id = RequestId(format!(
         "monitor-{}",
         hex::encode(rand::random::<[u8; 16]>())
@@ -143,6 +160,62 @@ fn service_transitions(
         .collect();
 
     (newly_failed, recovered, currently_failed)
+}
+
+/// `UpdateChecker::check` caches its GitHub lookup for 15 minutes, so
+/// calling it on every 30-second tick is cheap — it only actually reaches
+/// GitHub as often as the cache expires.
+async fn check_update(
+    updates: &UpdateChecker,
+    client: &Client,
+    webhook_url: &str,
+    audit: &AuditLog,
+    state: &mut NotifierState,
+) {
+    let status = updates.check().await;
+    match status.status {
+        // Genuinely caught up — clear so a future release notifies again.
+        UpdateCheckStatus::UpToDate => {
+            state.notified_update_version = None;
+            return;
+        }
+        // The check itself failed (e.g. GitHub hiccup); this says nothing
+        // about whether an already-announced update is still pending, so
+        // leave `notified_update_version` untouched rather than resetting
+        // it — resetting here would re-fire the same notification once the
+        // next successful check sees the same version again.
+        UpdateCheckStatus::Unavailable => return,
+        UpdateCheckStatus::Available => {}
+    }
+    let Some(latest_version) =
+        update_notification(&status, state.notified_update_version.as_deref())
+    else {
+        return;
+    };
+    state.notified_update_version = Some(latest_version.clone());
+
+    let mut message = format!(
+        "新しいバージョン {latest_version} が利用可能です(現在: {})。",
+        status.current_version
+    );
+    if let Some(release_url) = &status.release_url {
+        let _ = write!(message, " {release_url}");
+    }
+    send(client, webhook_url, audit, "update_available", message).await;
+}
+
+/// `Some(version)` when `status` names a newer version than the one we last
+/// notified about; `None` when there is nothing new to say. Assumes the
+/// caller has already checked `status.update_available` (and cleared
+/// `previously_notified` when it is false) — kept as a separate, pure
+/// function so the "is this actually new" decision is unit-testable without
+/// a live `UpdateChecker`.
+fn update_notification(status: &UpdateStatus, previously_notified: Option<&str>) -> Option<String> {
+    let latest = status.latest_version.as_ref()?;
+    if previously_notified == Some(latest.as_str()) {
+        return None;
+    }
+    Some(latest.clone())
 }
 
 async fn check_swap(
@@ -252,45 +325,16 @@ async fn check_services(
     state.failed_services = currently_failed;
 }
 
+/// Posts one notification and records the outcome to the audit log under the
+/// `system` actor — used by the background ticker, which has nobody to
+/// attribute the send to. [`send_once`] is the version other callers (the
+/// admin-triggered "send test notification" button) use when they want to
+/// report the outcome themselves instead.
 async fn send(client: &Client, webhook_url: &str, audit: &AuditLog, event: &str, message: String) {
-    let payload = serde_json::json!({
-        "source": "deckox",
-        "event": event,
-        "message": message,
-        "text": message,
-        "timestamp_ms": now_ms(),
-    });
-    let body = match serde_json::to_vec(&payload) {
-        Ok(body) => body,
-        Err(error) => {
-            warn!(%error, event, "failed to encode webhook payload");
-            return;
-        }
-    };
-
-    let result = client
-        .post(webhook_url)
-        .timeout(WEBHOOK_TIMEOUT)
-        .header("Content-Type", "application/json")
-        .body(body)
-        .send()
-        .await;
-
-    match result {
-        Ok(response) if response.status().is_success() => {
+    match send_once(client, webhook_url, event, message).await {
+        Ok(()) => {
             audit
                 .record_system("webhook_notification", "success", Some(event.to_owned()))
-                .await;
-        }
-        Ok(response) => {
-            let status = response.status();
-            warn!(%status, event, "webhook endpoint rejected notification");
-            audit
-                .record_system(
-                    "webhook_notification",
-                    "failure",
-                    Some(format!("event={event} status={status}")),
-                )
                 .await;
         }
         Err(error) => {
@@ -303,6 +347,47 @@ async fn send(client: &Client, webhook_url: &str, audit: &AuditLog, event: &str,
                 )
                 .await;
         }
+    }
+}
+
+/// Posts one webhook notification and returns a human-readable failure
+/// reason on anything short of a successful HTTP response. Does no logging
+/// of its own so it can be reused by both the unattended ticker (via
+/// [`send`], which audit-logs as `system`) and the settings page's test
+/// button (which reports the outcome straight back to the admin who clicked
+/// it).
+pub async fn send_once(
+    client: &Client,
+    webhook_url: &str,
+    event: &str,
+    message: String,
+) -> Result<(), String> {
+    let payload = serde_json::json!({
+        "source": "deckox",
+        "event": event,
+        "message": message,
+        "text": message,
+        "timestamp_ms": now_ms(),
+    });
+    let body = serde_json::to_vec(&payload)
+        .map_err(|error| format!("failed to encode payload: {error}"))?;
+
+    let response = client
+        .post(webhook_url)
+        .timeout(WEBHOOK_TIMEOUT)
+        .header("Content-Type", "application/json")
+        .body(body)
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "webhook endpoint returned HTTP {}",
+            response.status()
+        ))
     }
 }
 
@@ -325,6 +410,38 @@ mod tests {
         assert_eq!(threshold_transition(true, 80.0, 80.0), None);
         assert_eq!(threshold_transition(true, 79.9, 80.0), Some(false));
         assert_eq!(threshold_transition(false, 79.9, 80.0), None);
+    }
+
+    fn update_status(latest_version: Option<&str>) -> UpdateStatus {
+        UpdateStatus {
+            current_version: "0.5.2".to_owned(),
+            latest_version: latest_version.map(str::to_owned),
+            update_available: latest_version.is_some(),
+            release_url: None,
+            checked_at_ms: Some(0),
+            status: if latest_version.is_some() {
+                UpdateCheckStatus::Available
+            } else {
+                UpdateCheckStatus::UpToDate
+            },
+        }
+    }
+
+    #[test]
+    fn update_notification_fires_once_per_new_version() {
+        let status = update_status(Some("0.6.0"));
+
+        assert_eq!(update_notification(&status, None), Some("0.6.0".to_owned()));
+        assert_eq!(
+            update_notification(&status, Some("0.6.0")),
+            None,
+            "already notified about this exact version"
+        );
+        assert_eq!(
+            update_notification(&status, Some("0.5.9")),
+            Some("0.6.0".to_owned()),
+            "a newer version than the one last notified should notify again"
+        );
     }
 
     fn service(id: &str, active_state: &str, control_allowed: bool) -> ServiceSummary {
