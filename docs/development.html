@@ -86,6 +86,7 @@ npm run build</code></pre>
             <tr><td><code>DECKOX_LISTEN_ADDR</code></td><td><code>127.0.0.1:8080</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_AGENT_CONFIG</code></td><td><code>/etc/deckox/agent.toml</code></td><td>Agent</td></tr>
             <tr><td><code>DECKOX_AGENT_SOCKET</code></td><td><code>/run/deckox/agent.sock</code></td><td>Server / Agent</td></tr>
+            <tr><td><code>DECKOX_SCHEDULES_FILE</code></td><td><code>/var/lib/deckox/schedules.json</code></td><td>Agent</td></tr>
             <tr><td><code>DECKOX_WEB_DIR</code></td><td><code>/usr/local/share/deckox/web</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code></td><td><code>/var/lib/deckox/admin-password.hash</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH</code></td><td>なし</td><td>Server（開発・コンテナ向け）</td></tr>
@@ -159,6 +160,14 @@ allowed = [
         <p><code>system.allow_reboot</code>は初期値<code>false</code>です。<code>true</code>にした場合だけ、パスワード再確認後のホスト再起動を受け付けます。<code>system.allow_update</code>も初期値<code>false</code>で、<code>true</code>にした場合だけ管理画面からの更新実行を受け付けます。</p>
         <p>サービス一覧の各項目には、判定によるタグが付与されます。ユニットファイルの<code>FragmentPath</code>が<code>/usr/lib/systemd/system/</code>または<code>/lib/systemd/system/</code>配下にある場合は「標準」(OS・パッケージ提供)、IDが<code>deckox-agent.service</code>・<code>deckox-server.service</code>と一致する場合は「Deckox」タグになります。どちらにも該当しないサービス(<code>/etc/systemd/system/</code>などローカルに配置されたユニット)はタグなしです。</p>
         <p>これとは別に、ユニット名の基本部分(<code>@instance</code>と<code>.service</code>を除いた部分。例: <code>postgresql@14-main.service</code>なら<code>postgresql</code>)を既知の主要ソフトウェアの一覧と突き合わせ、一致すれば製品名タグ(例: <code>docker.service</code>→「Docker」)を付与します。standard_systemとは独立した判定なので、両方のタグが付くこともあります。ストレージのマウント一覧にも同様に、マウントポイントが<code>/</code>・<code>/boot</code>・<code>/boot/efi</code>・<code>/home</code>・<code>/var</code>・<code>/tmp</code>のいずれかと完全一致する場合だけ「標準」タグを付与します(サブディレクトリやDockerのoverlayマウントなどは対象外)。</p>
+      </section>
+
+      <section class="section" aria-labelledby="schedules-title">
+        <h2 id="schedules-title">サービスのスケジュール実行</h2>
+        <p>許可リスト内のサービスに限り、起動・停止・再起動を曜日(月-日、複数選択可)と時刻(ホストのローカル時刻、分単位)を指定して自動実行できます。管理画面のサービス一覧から登録・削除・有効/無効の切り替えができ、SSHでの設定は不要です。</p>
+        <p>Agentは20秒ごとに現在の曜日・時刻を確認し、一致するスケジュールを<code>ServiceManager::control</code>(手動操作と同じ経路)で実行します。同じ分に複数回確認しても実行は一度だけです。Agentが再起動した場合、直前の実行記録は保持されないため、再起動とちょうど重なった分は再実行される可能性があります(許容している既知の制限です)。</p>
+        <p>登録内容は<code>/var/lib/deckox/schedules.json</code>にJSONとして永続化されます(TOMLの配列テーブルを手書きで編集する<code>config::write_allowed_services</code>のような仕組みは、この用途には見合わないため採用していません)。パスは<code>DECKOX_SCHEDULES_FILE</code>環境変数で上書きできます。</p>
+        <p>実行結果(成功、または失敗理由)と前回実行日時はスケジュールごとに記録され、管理画面の一覧に表示されます。定期実行そのものはAgent内で完結するため、Serverの監査ログには残りません(スケジュールの登録・削除・有効化・無効化という管理操作は監査ログに記録されます)。<code>deckox-agent.service</code>・<code>deckox-server.service</code>はスケジュール登録の対象外です。</p>
       </section>
 
       <section class="section" aria-labelledby="test-title">

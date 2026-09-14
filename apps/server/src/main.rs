@@ -9,8 +9,8 @@ use axum::{
     routing::{get, post},
 };
 use deckox_protocol::{
-    AgentStatus, AgentUpdateRequest, AuditPage, DiagnosticsReport, ServiceLogPriority, ServiceLogs,
-    UpdateStatus,
+    AgentStatus, AgentUpdateRequest, AuditPage, CreateScheduleRequest, DiagnosticsReport,
+    ServiceLogPriority, ServiceLogs, UpdateStatus,
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
@@ -242,6 +242,13 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
             "/services/{service_id}/logs/report",
             get(service_logs_report),
         )
+        .route("/schedules", get(proxy_schedules).post(create_schedule))
+        .route(
+            "/schedules/{schedule_id}",
+            axum::routing::delete(delete_schedule),
+        )
+        .route("/schedules/{schedule_id}/enable", post(enable_schedule))
+        .route("/schedules/{schedule_id}/disable", post(disable_schedule))
         .route("/auth/logout", post(auth::logout))
         .route("/settings/password", post(auth::change_password))
         .route("/settings/totp/status", get(auth::totp_status))
@@ -798,6 +805,148 @@ async fn proxy_disallow_service(
         Some(&user),
     )
     .await
+}
+
+async fn proxy_schedules(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/schedules", &request_id).await
+}
+
+async fn create_schedule(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(payload): Json<CreateScheduleRequest>,
+) -> Response {
+    if !valid_service_id(&payload.service_id) {
+        return invalid_service_id();
+    }
+    let service_id = payload.service_id.clone();
+    let response = agent_result_to_response(
+        state
+            .agent
+            .request_with_json_body("POST", "/v1/schedules", &request_id, &payload)
+            .await,
+    );
+    log_schedule_event(
+        &state,
+        &request_id,
+        &user,
+        "schedule_create",
+        &service_id,
+        response.status(),
+    )
+    .await;
+    response
+}
+
+async fn delete_schedule(
+    State(state): State<AppState>,
+    Path(schedule_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    let response = proxy_agent(
+        &state.agent,
+        "DELETE",
+        &format!("/v1/schedules/{schedule_id}"),
+        &request_id,
+    )
+    .await;
+    log_schedule_event(
+        &state,
+        &request_id,
+        &user,
+        "schedule_delete",
+        &schedule_id,
+        response.status(),
+    )
+    .await;
+    response
+}
+
+async fn enable_schedule(
+    State(state): State<AppState>,
+    Path(schedule_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    let response = proxy_agent(
+        &state.agent,
+        "POST",
+        &format!("/v1/schedules/{schedule_id}/enable"),
+        &request_id,
+    )
+    .await;
+    log_schedule_event(
+        &state,
+        &request_id,
+        &user,
+        "schedule_enable",
+        &schedule_id,
+        response.status(),
+    )
+    .await;
+    response
+}
+
+async fn disable_schedule(
+    State(state): State<AppState>,
+    Path(schedule_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    let response = proxy_agent(
+        &state.agent,
+        "POST",
+        &format!("/v1/schedules/{schedule_id}/disable"),
+        &request_id,
+    )
+    .await;
+    log_schedule_event(
+        &state,
+        &request_id,
+        &user,
+        "schedule_disable",
+        &schedule_id,
+        response.status(),
+    )
+    .await;
+    response
+}
+
+/// Shared by the four schedule-mutation handlers so each one only needs to
+/// name its event and the resource it acted on. Takes the response's
+/// `StatusCode` rather than the `Response` itself: `Response` wraps a body
+/// type that is not `Sync`, so a `&Response` held across the `.await` below
+/// would make the caller's handler future `!Send` — which axum requires and
+/// reports, unhelpfully, as "the trait `Handler` is not satisfied".
+async fn log_schedule_event(
+    state: &AppState,
+    request_id: &RequestId,
+    user: &AuthenticatedUser,
+    event: &'static str,
+    detail_id: &str,
+    status: StatusCode,
+) {
+    let result = if status.is_success() {
+        "success"
+    } else {
+        "failure"
+    };
+    state
+        .audit
+        .log_admin(
+            request_id,
+            user.source_ip,
+            event,
+            result,
+            Some(format!("id={detail_id} status={}", status.as_u16())),
+            "schedule change",
+        )
+        .await;
 }
 
 async fn proxy_service_logs(

@@ -96,6 +96,29 @@ export interface ServiceSummary {
   product: string | null;
 }
 
+export type ScheduleAction = "start" | "stop" | "restart";
+
+export interface ServiceSchedule {
+  id: string;
+  service_id: string;
+  action: ScheduleAction;
+  hour: number;
+  minute: number;
+  weekdays: number[];
+  enabled: boolean;
+  created_at_ms: number;
+  last_run_at_ms: number | null;
+  last_result: string | null;
+}
+
+export interface CreateScheduleRequest {
+  service_id: string;
+  action: ScheduleAction;
+  hour: number;
+  minute: number;
+  weekdays: number[];
+}
+
 export type ServiceLogPriority = "all" | "error" | "warning" | "info";
 
 export interface ServiceLogEntry {
@@ -373,6 +396,22 @@ export const api = {
   ) =>
     request<CommandResult>(
       `/api/v1/services/${encodeURIComponent(serviceId)}/${action}`,
+      { method: "POST" },
+    ),
+  schedules: () => request<ServiceSchedule[]>("/api/v1/schedules"),
+  createSchedule: (payload: CreateScheduleRequest) =>
+    request<ServiceSchedule>("/api/v1/schedules", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    }),
+  deleteSchedule: (scheduleId: string) =>
+    request<unknown>(`/api/v1/schedules/${encodeURIComponent(scheduleId)}`, {
+      method: "DELETE",
+    }),
+  setScheduleEnabled: (scheduleId: string, enabled: boolean) =>
+    request<ServiceSchedule>(
+      `/api/v1/schedules/${encodeURIComponent(scheduleId)}/${enabled ? "enable" : "disable"}`,
       { method: "POST" },
     ),
 };

@@ -3,8 +3,11 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   api,
+  type CreateScheduleRequest,
+  type ScheduleAction,
   type ServiceLogEntry,
   type ServiceLogPriority,
+  type ServiceSchedule,
   type ServiceSummary,
 } from "../api/client";
 import { apiErrorKey } from "../api/errors";
@@ -28,6 +31,21 @@ const logError = ref<string | null>(null);
 
 const LOG_LINE_OPTIONS = [50, 100, 200, 500] as const;
 const LOG_PRIORITY_OPTIONS: ServiceLogPriority[] = ["all", "error", "warning", "info"];
+
+const schedules = ref<ServiceSchedule[]>([]);
+const schedulesLoading = ref(true);
+const schedulesError = ref<string | null>(null);
+const schedulePending = ref<string | null>(null);
+
+const scheduleServiceId = ref("");
+const scheduleAction = ref<ScheduleAction>("restart");
+const scheduleHour = ref(3);
+const scheduleMinute = ref(0);
+const scheduleWeekdays = ref<number[]>([1, 2, 3, 4, 5, 6, 7]);
+
+// ISO weekday numbers (1 = Monday ... 7 = Sunday), matching ServiceSchedule.
+const WEEKDAY_OPTIONS = [1, 2, 3, 4, 5, 6, 7] as const;
+const SCHEDULE_ACTION_OPTIONS: ScheduleAction[] = ["start", "stop", "restart"];
 
 function serviceTags(service: ServiceSummary): ServiceTagFilterKey[] {
   const tags: ServiceTagFilterKey[] = [];
@@ -103,6 +121,116 @@ function unitStateLabel(state: string | null) {
   if (state === "disabled") return t("services.disabled");
   if (state === "static") return t("services.static");
   return state ?? t("common.none");
+}
+
+// Only services already eligible for manual start/stop/restart (and not
+// Deckox's own units) can be scheduled — scheduling is automated timing for
+// the same operation, not a new permission.
+const schedulableServices = computed(() =>
+  services.value.filter((service) => service.control_allowed && !service.deckox_managed),
+);
+
+const scheduleTime = computed({
+  get: () => `${String(scheduleHour.value).padStart(2, "0")}:${String(scheduleMinute.value).padStart(2, "0")}`,
+  set: (value: string) => {
+    const [hour, minute] = value.split(":").map(Number);
+    if (Number.isInteger(hour)) scheduleHour.value = hour;
+    if (Number.isInteger(minute)) scheduleMinute.value = minute;
+  },
+});
+
+function weekdayLabel(day: number) {
+  return t(`services.weekday.${String(day)}`);
+}
+
+function toggleScheduleWeekday(day: number) {
+  scheduleWeekdays.value = scheduleWeekdays.value.includes(day)
+    ? scheduleWeekdays.value.filter((existing) => existing !== day)
+    : [...scheduleWeekdays.value, day].sort((a, b) => a - b);
+}
+
+function scheduleTimeLabel(schedule: ServiceSchedule) {
+  return `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`;
+}
+
+function scheduleWeekdaysLabel(schedule: ServiceSchedule) {
+  return schedule.weekdays.length === 7
+    ? t("services.scheduleEveryDay")
+    : schedule.weekdays.map(weekdayLabel).join(t("services.scheduleWeekdaySeparator"));
+}
+
+function scheduleLastRunLabel(schedule: ServiceSchedule) {
+  if (schedule.last_run_at_ms == null) return t("services.scheduleNeverRun");
+  return new Intl.DateTimeFormat(locale.value, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(schedule.last_run_at_ms));
+}
+
+async function loadSchedules() {
+  schedulesLoading.value = true;
+  schedulesError.value = null;
+  try {
+    schedules.value = await api.schedules();
+  } catch (cause) {
+    schedulesError.value = t(apiErrorKey(cause, "errors.schedules"));
+  } finally {
+    schedulesLoading.value = false;
+  }
+}
+
+async function createSchedule() {
+  if (!scheduleServiceId.value || scheduleWeekdays.value.length === 0) return;
+  schedulePending.value = "create";
+  schedulesError.value = null;
+  try {
+    const payload: CreateScheduleRequest = {
+      service_id: scheduleServiceId.value,
+      action: scheduleAction.value,
+      hour: scheduleHour.value,
+      minute: scheduleMinute.value,
+      weekdays: scheduleWeekdays.value,
+    };
+    await api.createSchedule(payload);
+    notify("success", t("services.scheduleCreated"));
+    await loadSchedules();
+  } catch (cause) {
+    schedulesError.value = t(apiErrorKey(cause, "errors.schedules"));
+    notify("error", schedulesError.value);
+  } finally {
+    schedulePending.value = null;
+  }
+}
+
+async function deleteSchedule(schedule: ServiceSchedule) {
+  if (!window.confirm(t("services.confirmDeleteSchedule", { id: schedule.service_id }))) return;
+  schedulePending.value = schedule.id;
+  schedulesError.value = null;
+  try {
+    await api.deleteSchedule(schedule.id);
+    await loadSchedules();
+  } catch (cause) {
+    schedulesError.value = t(apiErrorKey(cause, "errors.schedules"));
+    notify("error", schedulesError.value);
+  } finally {
+    schedulePending.value = null;
+  }
+}
+
+async function toggleScheduleEnabled(schedule: ServiceSchedule) {
+  schedulePending.value = schedule.id;
+  schedulesError.value = null;
+  try {
+    await api.setScheduleEnabled(schedule.id, !schedule.enabled);
+    await loadSchedules();
+  } catch (cause) {
+    schedulesError.value = t(apiErrorKey(cause, "errors.schedules"));
+    notify("error", schedulesError.value);
+  } finally {
+    schedulePending.value = null;
+  }
 }
 
 async function refresh() {
@@ -228,7 +356,10 @@ function closeLogs() {
   logError.value = null;
 }
 
-onMounted(refresh);
+onMounted(() => {
+  void refresh();
+  void loadSchedules();
+});
 </script>
 
 <template>
@@ -416,6 +547,160 @@ onMounted(refresh);
     <aside class="inline-note">
       {{ t("services.allowlist") }}
     </aside>
+
+    <section class="table-panel">
+      <div class="table-toolbar">
+        <h2 class="panel-title">
+          {{ t("services.scheduleTitle") }}
+        </h2>
+        <span class="table-count">{{ t("services.count", { count: schedules.length }) }}</span>
+      </div>
+
+      <div
+        v-if="schedulesError"
+        class="notice error"
+      >
+        {{ schedulesError }}
+      </div>
+
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>{{ t("services.service") }}</th>
+              <th>{{ t("services.scheduleAction") }}</th>
+              <th>{{ t("services.scheduleWeekdays") }}</th>
+              <th>{{ t("services.scheduleTime") }}</th>
+              <th>{{ t("services.scheduleLastRun") }}</th>
+              <th>{{ t("services.actions") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="schedulesLoading && schedules.length === 0">
+              <td
+                colspan="6"
+                class="empty"
+              >
+                {{ t("common.loading") }}
+              </td>
+            </tr>
+            <tr v-else-if="schedules.length === 0">
+              <td
+                colspan="6"
+                class="empty"
+              >
+                {{ t("services.scheduleEmpty") }}
+              </td>
+            </tr>
+            <tr
+              v-for="schedule in schedules"
+              :key="schedule.id"
+            >
+              <td><strong class="service-name">{{ schedule.service_id }}</strong></td>
+              <td>{{ t(`services.${schedule.action}`) }}</td>
+              <td>{{ scheduleWeekdaysLabel(schedule) }}</td>
+              <td>{{ scheduleTimeLabel(schedule) }}</td>
+              <td>
+                <span>{{ scheduleLastRunLabel(schedule) }}</span>
+                <small v-if="schedule.last_result">{{ schedule.last_result }}</small>
+              </td>
+              <td>
+                <div class="actions">
+                  <button
+                    class="action-button"
+                    type="button"
+                    :disabled="schedulePending !== null"
+                    @click="toggleScheduleEnabled(schedule)"
+                  >
+                    {{ schedule.enabled ? t("services.scheduleDisable") : t("services.scheduleEnable") }}
+                  </button>
+                  <button
+                    class="action-button danger"
+                    type="button"
+                    :disabled="schedulePending !== null"
+                    @click="deleteSchedule(schedule)"
+                  >
+                    {{ t("services.scheduleDelete") }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <form
+        class="schedule-form"
+        @submit.prevent="createSchedule"
+      >
+        <label>
+          <span>{{ t("services.service") }}</span>
+          <select
+            v-model="scheduleServiceId"
+            required
+          >
+            <option
+              value=""
+              disabled
+            >
+              {{ t("services.scheduleSelectService") }}
+            </option>
+            <option
+              v-for="service in schedulableServices"
+              :key="service.id"
+              :value="service.id"
+            >
+              {{ service.id }}
+            </option>
+          </select>
+        </label>
+        <label>
+          <span>{{ t("services.scheduleAction") }}</span>
+          <select v-model="scheduleAction">
+            <option
+              v-for="action in SCHEDULE_ACTION_OPTIONS"
+              :key="action"
+              :value="action"
+            >
+              {{ t(`services.${action}`) }}
+            </option>
+          </select>
+        </label>
+        <label>
+          <span>{{ t("services.scheduleTime") }}</span>
+          <input
+            v-model="scheduleTime"
+            type="time"
+            required
+          >
+        </label>
+        <fieldset class="schedule-weekdays">
+          <legend>{{ t("services.scheduleWeekdays") }}</legend>
+          <label
+            v-for="day in WEEKDAY_OPTIONS"
+            :key="day"
+            class="tag-toggle"
+          >
+            <input
+              type="checkbox"
+              :checked="scheduleWeekdays.includes(day)"
+              @change="toggleScheduleWeekday(day)"
+            >
+            {{ weekdayLabel(day) }}
+          </label>
+        </fieldset>
+        <button
+          class="button"
+          type="submit"
+          :disabled="schedulePending !== null || !scheduleServiceId || scheduleWeekdays.length === 0"
+        >
+          {{ t("services.scheduleAdd") }}
+        </button>
+      </form>
+      <aside class="inline-note">
+        {{ t("services.scheduleNote") }}
+      </aside>
+    </section>
 
     <div
       v-if="logService"

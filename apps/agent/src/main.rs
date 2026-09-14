@@ -12,8 +12,9 @@ use axum::{
 };
 use deckox_protocol::{
     AgentDiagnostics, AgentStatus, AgentUpdateRequest, BackupSummary, CommandResult,
-    HealthResponse, RuntimeConfigSummary, ServiceAction, ServiceDetails, ServiceLogPriority,
-    ServiceLogs, ServiceSummary, StorageMount, SystemCapabilities, SystemInfo, SystemMetrics,
+    CreateScheduleRequest, HealthResponse, RuntimeConfigSummary, ServiceAction, ServiceDetails,
+    ServiceLogPriority, ServiceLogs, ServiceSchedule, ServiceSummary, StorageMount,
+    SystemCapabilities, SystemInfo, SystemMetrics,
 };
 use serde::Deserialize;
 use tokio::net::UnixListener;
@@ -21,8 +22,9 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    config::AgentConfig, error::AgentError, power::PowerManager, services::ServiceManager,
-    storage::read_storage, system::read_system_info, update::UpdateManager,
+    config::AgentConfig, error::AgentError, power::PowerManager, schedules::ScheduleStore,
+    services::ServiceManager, storage::read_storage, system::read_system_info,
+    update::UpdateManager,
 };
 
 mod backups;
@@ -31,6 +33,7 @@ mod diagnostics;
 mod error;
 mod power;
 mod request_context;
+mod schedules;
 mod services;
 mod storage;
 mod system;
@@ -42,6 +45,7 @@ struct AppState {
     services: ServiceManager,
     update: UpdateManager,
     runtime_config: RuntimeConfigSummary,
+    schedules: ScheduleStore,
 }
 
 #[derive(Debug, Deserialize)]
@@ -84,6 +88,13 @@ async fn main() {
             eprintln!("invalid service control configuration: {error:?}");
             std::process::exit(2);
         });
+    let schedule_store = ScheduleStore::load(ScheduleStore::resolve_path())
+        .await
+        .unwrap_or_else(|error| {
+            eprintln!("failed to load schedules: {error:?}");
+            std::process::exit(2);
+        });
+    schedules::spawn(schedule_store.clone(), services.clone());
 
     if let Err(error) = prepare_socket(&socket_path) {
         error!(%error, path = %socket_path.display(), "failed to prepare agent socket");
@@ -124,11 +135,22 @@ async fn main() {
         .route("/v1/services/{service_id}/allow", post(allow_service))
         .route("/v1/services/{service_id}/disallow", post(disallow_service))
         .route("/v1/services/{service_id}/logs", get(service_logs))
+        .route("/v1/schedules", get(list_schedules).post(create_schedule))
+        .route(
+            "/v1/schedules/{schedule_id}",
+            axum::routing::delete(delete_schedule),
+        )
+        .route("/v1/schedules/{schedule_id}/enable", post(enable_schedule))
+        .route(
+            "/v1/schedules/{schedule_id}/disable",
+            post(disable_schedule),
+        )
         .with_state(AppState {
             power,
             services,
             update,
             runtime_config,
+            schedules: schedule_store,
         })
         .layer(middleware::from_fn(request_context::assign_request_id));
 
@@ -366,6 +388,70 @@ async fn disallow_service(
         &format!("service={service_id} action=disallow"),
         result,
     )
+}
+
+async fn list_schedules(State(state): State<AppState>) -> Json<Vec<ServiceSchedule>> {
+    Json(state.schedules.list().await)
+}
+
+async fn create_schedule(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<request_context::RequestId>,
+    Json(payload): Json<CreateScheduleRequest>,
+) -> Result<Json<ServiceSchedule>, AgentError> {
+    let detail = format!(
+        "service={} action={:?} hour={} minute={}",
+        payload.service_id, payload.action, payload.hour, payload.minute
+    );
+    let result = state.schedules.create(payload, &state.services).await;
+    match &result {
+        Ok(schedule) => info!(
+            event = "schedule_create",
+            request_id = %request_id.0,
+            detail,
+            schedule_id = %schedule.id,
+            result = "accepted",
+            "schedule created"
+        ),
+        Err(error) => warn!(
+            event = "schedule_create",
+            request_id = %request_id.0,
+            detail,
+            error = ?error,
+            result = "rejected",
+            "schedule rejected"
+        ),
+    }
+    result.map(Json)
+}
+
+async fn delete_schedule(
+    State(state): State<AppState>,
+    AxumPath(schedule_id): AxumPath<String>,
+) -> Result<(), AgentError> {
+    state.schedules.delete(&schedule_id).await
+}
+
+async fn enable_schedule(
+    State(state): State<AppState>,
+    AxumPath(schedule_id): AxumPath<String>,
+) -> Result<Json<ServiceSchedule>, AgentError> {
+    state
+        .schedules
+        .set_enabled(&schedule_id, true)
+        .await
+        .map(Json)
+}
+
+async fn disable_schedule(
+    State(state): State<AppState>,
+    AxumPath(schedule_id): AxumPath<String>,
+) -> Result<Json<ServiceSchedule>, AgentError> {
+    state
+        .schedules
+        .set_enabled(&schedule_id, false)
+        .await
+        .map(Json)
 }
 
 async fn service_logs(

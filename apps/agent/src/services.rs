@@ -262,6 +262,13 @@ impl ServiceManager {
         })
     }
 
+    /// Whether `service_id` is currently on the control allowlist — used by
+    /// the schedule store to reject schedules for services that are not (or
+    /// are no longer) eligible for manual control either.
+    pub async fn is_allowed(&self, service_id: &str) -> bool {
+        self.allowed.read().await.contains(service_id)
+    }
+
     async fn ensure_allowed(&self, service_id: &str) -> Result<(), AgentError> {
         if PROTECTED_SERVICES.contains(&service_id) {
             return Err(AgentError::forbidden(

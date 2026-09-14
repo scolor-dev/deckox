@@ -319,6 +319,48 @@ pub enum ServiceAction {
     Disable,
 }
 
+/// The subset of [`ServiceAction`] meaningful to schedule unattended: not
+/// `Enable`/`Disable`, which are one-off admin toggles rather than something
+/// worth repeating on a timer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScheduleAction {
+    Start,
+    Stop,
+    Restart,
+}
+
+/// A recurring `action` the Agent runs against `service_id` on its own,
+/// without an admin present. Only allow-listed services (the same ones
+/// eligible for manual start/stop/restart) can be scheduled.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceSchedule {
+    pub id: String,
+    pub service_id: String,
+    pub action: ScheduleAction,
+    /// Local time, 0-23.
+    pub hour: u8,
+    /// Local time, 0-59.
+    pub minute: u8,
+    /// ISO weekday numbers (1 = Monday ... 7 = Sunday), never empty.
+    pub weekdays: Vec<u8>,
+    pub enabled: bool,
+    pub created_at_ms: u64,
+    pub last_run_at_ms: Option<u64>,
+    /// `"success"` or `"failed: <reason>"`; `None` until the schedule has
+    /// fired at least once.
+    pub last_result: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateScheduleRequest {
+    pub service_id: String,
+    pub action: ScheduleAction,
+    pub hour: u8,
+    pub minute: u8,
+    pub weekdays: Vec<u8>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceLogs {
     pub service_id: String,
