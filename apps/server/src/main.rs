@@ -3,13 +3,14 @@ use std::{env, net::SocketAddr, path::PathBuf};
 use axum::{
     Extension, Json, Router,
     extract::{FromRef, Path, Query, State},
-    http::StatusCode,
+    http::{StatusCode, header},
     middleware,
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use deckox_protocol::{
-    AgentStatus, AgentUpdateRequest, AuditPage, DiagnosticsReport, ServiceLogPriority, UpdateStatus,
+    AgentStatus, AgentUpdateRequest, AuditPage, DiagnosticsReport, ServiceLogPriority, ServiceLogs,
+    UpdateStatus,
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
@@ -225,6 +226,10 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
             post(proxy_disable_service),
         )
         .route("/services/{service_id}/logs", get(proxy_service_logs))
+        .route(
+            "/services/{service_id}/logs/report",
+            get(service_logs_report),
+        )
         .route("/auth/logout", post(auth::logout))
         .route("/settings/password", post(auth::change_password))
         .route("/settings/totp/status", get(auth::totp_status))
@@ -765,6 +770,64 @@ async fn proxy_service_logs(
     proxy_agent(&state.agent, "GET", &path, &request_id).await
 }
 
+/// Downloads the same bounded log window `proxy_service_logs` displays, as a
+/// file. `service_id` is safe to embed in the `Content-Disposition` header
+/// unescaped because `valid_service_id` already restricts it to
+/// `[A-Za-z0-9@_.:-]` ending in `.service`.
+async fn service_logs_report(
+    State(state): State<AppState>,
+    Path(service_id): Path<String>,
+    Query(query): Query<ServiceLogsQuery>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    if !valid_service_id(&service_id) {
+        return invalid_service_id();
+    }
+    if !valid_log_lines(query.lines) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "bad_request",
+            "log lines must be one of 50, 100, 200, or 500",
+        );
+    }
+
+    let priority = log_priority_name(query.priority);
+    let path = format!(
+        "/v1/services/{service_id}/logs?lines={}&priority={priority}",
+        query.lines
+    );
+    match state
+        .agent
+        .get_json::<ServiceLogs>(&path, &request_id)
+        .await
+    {
+        Ok(logs) => service_logs_attachment(&service_id, &logs),
+        Err(message) => (
+            StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse {
+                code: "agent_unavailable",
+                message,
+            }),
+        )
+            .into_response(),
+    }
+}
+
+fn service_logs_attachment(service_id: &str, logs: &ServiceLogs) -> Response {
+    let Ok(body) = serde_json::to_vec_pretty(logs) else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let disposition = format!("attachment; filename=\"deckox-service-logs-{service_id}.json\"");
+    (
+        [
+            (header::CONTENT_TYPE, "application/json".to_owned()),
+            (header::CONTENT_DISPOSITION, disposition),
+        ],
+        body,
+    )
+        .into_response()
+}
+
 async fn proxy_service_request(
     client: &AgentClient,
     audit: &AuditLog,
@@ -908,9 +971,10 @@ async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use deckox_protocol::ServiceLogPriority;
+    use axum::{http::header, response::IntoResponse};
+    use deckox_protocol::{ServiceLogPriority, ServiceLogs};
 
-    use super::{log_priority_name, valid_log_lines, valid_service_id};
+    use super::{log_priority_name, service_logs_attachment, valid_log_lines, valid_service_id};
 
     #[test]
     fn validates_service_ids_before_proxying() {
@@ -931,5 +995,21 @@ mod tests {
         assert_eq!(log_priority_name(ServiceLogPriority::Error), "error");
         assert_eq!(log_priority_name(ServiceLogPriority::Warning), "warning");
         assert_eq!(log_priority_name(ServiceLogPriority::Info), "info");
+    }
+
+    #[test]
+    fn log_attachment_names_the_file_after_the_service() {
+        let logs = ServiceLogs {
+            service_id: "nginx.service".to_owned(),
+            entries: vec![],
+        };
+        let response = service_logs_attachment("nginx.service", &logs).into_response();
+        assert_eq!(
+            response
+                .headers()
+                .get(header::CONTENT_DISPOSITION)
+                .and_then(|value| value.to_str().ok()),
+            Some("attachment; filename=\"deckox-service-logs-nginx.service.json\"")
+        );
     }
 }

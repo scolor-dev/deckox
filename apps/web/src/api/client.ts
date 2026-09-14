@@ -352,6 +352,12 @@ export const api = {
       `/api/v1/services/${encodeURIComponent(serviceId)}/logs?${query.toString()}`,
     );
   },
+  serviceLogsReport: (serviceId: string, lines: number, priority: ServiceLogPriority) => {
+    const query = new URLSearchParams({ lines: String(lines), priority });
+    return requestBlob(
+      `/api/v1/services/${encodeURIComponent(serviceId)}/logs/report?${query.toString()}`,
+    );
+  },
   serviceAction: (
     serviceId: string,
     action: "start" | "stop" | "restart" | "enable" | "disable",

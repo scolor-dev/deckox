@@ -23,6 +23,7 @@ const logEntries = ref<ServiceLogEntry[]>([]);
 const logLines = ref(100);
 const logPriority = ref<ServiceLogPriority>("all");
 const logLoading = ref(false);
+const logDownloading = ref(false);
 const logError = ref<string | null>(null);
 
 const LOG_LINE_OPTIONS = [50, 100, 200, 500] as const;
@@ -185,6 +186,30 @@ async function loadLogs() {
     logError.value = t(apiErrorKey(cause, "errors.serviceLogs"));
   } finally {
     logLoading.value = false;
+  }
+}
+
+async function downloadLogs() {
+  if (!logService.value) return;
+  logDownloading.value = true;
+  logError.value = null;
+  try {
+    const blob = await api.serviceLogsReport(logService.value.id, logLines.value, logPriority.value);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `deckox-service-logs-${logService.value.id}.json`;
+    anchor.hidden = true;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    notify("success", t("services.logReportSaved"));
+  } catch (cause) {
+    logError.value = t(apiErrorKey(cause, "errors.serviceLogs"));
+    notify("error", logError.value);
+  } finally {
+    logDownloading.value = false;
   }
 }
 
@@ -391,13 +416,23 @@ onMounted(refresh);
             <h2>{{ t("services.logTitle", { id: logService.id }) }}</h2>
             <small>{{ t("services.logDescription") }}</small>
           </div>
-          <button
-            class="button"
-            type="button"
-            @click="closeLogs"
-          >
-            {{ t("common.close") }}
-          </button>
+          <div class="header-actions">
+            <button
+              class="button"
+              type="button"
+              :disabled="logDownloading"
+              @click="downloadLogs"
+            >
+              {{ logDownloading ? t("services.logDownloading") : t("services.logDownload") }}
+            </button>
+            <button
+              class="button"
+              type="button"
+              @click="closeLogs"
+            >
+              {{ t("common.close") }}
+            </button>
+          </div>
         </header>
         <div class="log-toolbar">
           <label>
