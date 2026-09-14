@@ -76,6 +76,11 @@ pub struct DiagnosticHost {
     pub architecture: String,
     pub uptime_seconds: u64,
     pub timezone: Option<String>,
+    /// Packages `apt` already knows are upgradable from its existing local
+    /// cache. `None` on non-`apt` hosts or when the count could not be
+    /// read; never triggers `apt update` itself, so this can go stale until
+    /// something else refreshes the cache.
+    pub upgradable_packages: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

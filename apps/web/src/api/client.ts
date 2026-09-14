@@ -148,6 +148,7 @@ export interface DiagnosticsResponse {
     architecture: string;
     uptime_seconds: number;
     timezone: string | null;
+    upgradable_packages: number | null;
   } | null;
   deckox_services: {
     agent: {

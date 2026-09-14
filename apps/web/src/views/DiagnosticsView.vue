@@ -164,6 +164,7 @@ onMounted(refresh);
             <div><dt>{{ t("diagnostics.architecture") }}</dt><dd>{{ diagnostics.host.architecture }}</dd></div>
             <div><dt>{{ t("diagnostics.uptime") }}</dt><dd>{{ formatUptime(diagnostics.host.uptime_seconds, locale) }}</dd></div>
             <div><dt>{{ t("diagnostics.timezone") }}</dt><dd>{{ diagnostics.host.timezone ?? t("common.none") }}</dd></div>
+            <div><dt>{{ t("diagnostics.upgradablePackages") }}</dt><dd>{{ diagnostics.host.upgradable_packages ?? t("diagnostics.upgradablePackagesUnavailable") }}</dd></div>
           </dl>
           <p
             v-else

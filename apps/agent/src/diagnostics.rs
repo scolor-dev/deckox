@@ -30,9 +30,10 @@ pub async fn read_diagnostics(
     runtime_config: RuntimeConfigSummary,
 ) -> Result<AgentDiagnostics, AgentError> {
     let system = read_system_info().await?;
-    let (agent, server) = tokio::join!(
+    let (agent, server, upgradable_packages) = tokio::join!(
         read_unit_state(DeckoxUnit::Agent),
-        read_unit_state(DeckoxUnit::Server)
+        read_unit_state(DeckoxUnit::Server),
+        read_upgradable_package_count(),
     );
 
     Ok(AgentDiagnostics {
@@ -45,10 +46,52 @@ pub async fn read_diagnostics(
             architecture: system.architecture,
             uptime_seconds: system.uptime_seconds,
             timezone: system.timezone,
+            upgradable_packages,
         },
         deckox_services: DeckoxServiceDiagnostics { agent, server },
         runtime_config,
     })
+}
+
+/// Counts packages `apt` already knows are upgradable, from its existing
+/// local cache. Deliberately read-only: never runs `apt update` (which
+/// needs network access and can take a while), so the count can go stale
+/// until something else refreshes the cache. `None` on non-`apt` hosts.
+async fn read_upgradable_package_count() -> Option<u32> {
+    let result = tokio::time::timeout(
+        Duration::from_secs(5),
+        Command::new("apt").args(["list", "--upgradable"]).output(),
+    )
+    .await;
+
+    match result {
+        Ok(Ok(output)) if output.status.success() => Some(count_upgradable_lines(
+            &String::from_utf8_lossy(&output.stdout),
+        )),
+        Ok(Ok(_)) => {
+            warn!("apt list --upgradable failed");
+            None
+        }
+        Ok(Err(error)) => {
+            warn!(%error, "failed to execute apt");
+            None
+        }
+        Err(_) => {
+            warn!("apt list --upgradable timed out");
+            None
+        }
+    }
+}
+
+/// `apt list --upgradable` prints a `Listing...` header line (to stdout,
+/// alongside an unrelated CLI-stability warning on stderr) followed by one
+/// line per upgradable package.
+fn count_upgradable_lines(output: &str) -> u32 {
+    let count = output
+        .lines()
+        .filter(|line| !line.is_empty() && !line.starts_with("Listing..."))
+        .count();
+    u32::try_from(count).unwrap_or(u32::MAX)
 }
 
 async fn read_unit_state(unit: DeckoxUnit) -> DiagnosticUnitState {
@@ -124,7 +167,19 @@ fn unavailable_unit_state() -> DiagnosticUnitState {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_unit_state;
+    use super::{count_upgradable_lines, parse_unit_state};
+
+    #[test]
+    fn counts_upgradable_lines_excluding_the_header() {
+        assert_eq!(
+            count_upgradable_lines(
+                "Listing...\nnginx/stable 1.2 amd64 [upgradable from: 1.1]\ncurl/stable 7.8 amd64 [upgradable from: 7.7]\n"
+            ),
+            2
+        );
+        assert_eq!(count_upgradable_lines("Listing...\n"), 0);
+        assert_eq!(count_upgradable_lines(""), 0);
+    }
 
     #[test]
     fn parses_only_fixed_unit_state_properties() {

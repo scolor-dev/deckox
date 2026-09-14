@@ -91,7 +91,7 @@
         <dl class="definition-list">
           <dt>Server</dt><dd>バージョンと稼働状態</dd>
           <dt>Agent</dt><dd>接続状態、取得できた場合のバージョン、失敗時の固定エラーコード</dd>
-          <dt>Host</dt><dd>ホスト名、OS、OSバージョン、カーネル、アーキテクチャ、稼働時間、タイムゾーン。boot IDは除外</dd>
+          <dt>Host</dt><dd>ホスト名、OS、OSバージョン、カーネル、アーキテクチャ、稼働時間、タイムゾーン、<code>apt</code>の既存キャッシュから読む更新可能パッケージ数(<code>apt update</code>は実行しない)。boot IDは除外</dd>
           <dt>Deckox services</dt><dd><code>deckox-agent.service</code>と<code>deckox-server.service</code>のload・active・sub・unit file状態</dd>
           <dt>Runtime config</dt><dd>再起動許可・更新実行許可、許可サービスの件数という要約だけを返し、設定値そのものは返さない</dd>
           <dt>Partial result</dt><dd>Agentへ接続できない場合はAgent由来のhost・Deckox services・runtime configを<code>null</code>とし、Server情報と接続エラーを含む診断は成功応答として返す</dd>
