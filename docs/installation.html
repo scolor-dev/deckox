@@ -153,7 +153,8 @@ allowed = [
 ]</code></pre>
         <p>変更後はAgentを再起動します。</p>
         <pre><code>sudo systemctl restart deckox-agent</code></pre>
-        <p>管理画面では許可したサービスのjournalログを最大500行まで表示し、全件・エラー・警告・情報で絞り込めます。任意の<code>journalctl</code>引数やログのダウンロードは提供せず、対話操作は通常のSSHを利用します。</p>
+        <p>初回のみ再起動が必要ですが、その後は管理画面のサービス一覧から許可リストへの追加・削除を直接行えます。追加時はサービスの実在を確認し、削除時は確認ダイアログを挟みます。<code>deckox-agent.service</code>・<code>deckox-server.service</code>自身は許可リストへ追加できません。</p>
+        <p>管理画面では許可したサービスのjournalログを最大500行まで表示し、全件・エラー・警告・情報で絞り込め、表示中の内容をJSONファイルとして保存できます。任意の<code>journalctl</code>引数は提供せず、対話操作は通常のSSHを利用します。</p>
       </section>
 
       <section class="section" aria-labelledby="migration-title">

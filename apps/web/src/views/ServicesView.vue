@@ -119,13 +119,15 @@ async function refresh() {
 
 async function runAction(
   service: ServiceSummary,
-  action: "start" | "stop" | "restart" | "enable" | "disable",
+  action: "start" | "stop" | "restart" | "enable" | "disable" | "allow" | "disallow",
 ) {
   if ((action === "stop" || action === "restart") &&
       !window.confirm(t(action === "stop" ? "services.confirmStop" : "services.confirmRestart", { id: service.id }))) {
     return;
   }
   if (action === "disable" && !window.confirm(t("services.confirmDisable", { id: service.id }))) return;
+  if (action === "allow" && !window.confirm(t("services.confirmAllow", { id: service.id }))) return;
+  if (action === "disallow" && !window.confirm(t("services.confirmDisallow", { id: service.id }))) return;
 
   pending.value = `${service.id}:${action}`;
   error.value = null;
@@ -330,65 +332,80 @@ onMounted(refresh);
               </td>
               <td><span class="unit-state">{{ unitStateLabel(service.unit_file_state) }}</span></td>
               <td>
-                <div
-                  v-if="service.control_allowed"
-                  class="actions"
-                >
-                  <button
-                    class="action-button"
-                    type="button"
-                    :disabled="pending !== null || service.active_state === 'active'"
-                    @click="runAction(service, 'start')"
-                  >
-                    {{ t("services.start") }}
-                  </button>
-                  <button
-                    class="action-button"
-                    type="button"
-                    :disabled="pending !== null || service.active_state !== 'active'"
-                    @click="runAction(service, 'restart')"
-                  >
-                    {{ t("services.restart") }}
-                  </button>
-                  <button
-                    class="action-button danger"
-                    type="button"
-                    :disabled="pending !== null || service.active_state !== 'active'"
-                    @click="runAction(service, 'stop')"
-                  >
-                    {{ t("services.stop") }}
-                  </button>
-                  <button
-                    v-if="service.unit_file_state === 'disabled'"
-                    class="action-button"
-                    type="button"
-                    :disabled="pending !== null"
-                    @click="runAction(service, 'enable')"
-                  >
-                    {{ t("services.enable") }}
-                  </button>
-                  <button
-                    v-else-if="service.unit_file_state === 'enabled'"
-                    class="action-button"
-                    type="button"
-                    :disabled="pending !== null"
-                    @click="runAction(service, 'disable')"
-                  >
-                    {{ t("services.disable") }}
-                  </button>
-                  <button
-                    class="action-button"
-                    type="button"
-                    :disabled="pending !== null"
-                    @click="openLogs(service)"
-                  >
-                    {{ t("services.logs") }}
-                  </button>
+                <div class="actions">
+                  <template v-if="service.control_allowed">
+                    <button
+                      class="action-button"
+                      type="button"
+                      :disabled="pending !== null || service.active_state === 'active'"
+                      @click="runAction(service, 'start')"
+                    >
+                      {{ t("services.start") }}
+                    </button>
+                    <button
+                      class="action-button"
+                      type="button"
+                      :disabled="pending !== null || service.active_state !== 'active'"
+                      @click="runAction(service, 'restart')"
+                    >
+                      {{ t("services.restart") }}
+                    </button>
+                    <button
+                      class="action-button danger"
+                      type="button"
+                      :disabled="pending !== null || service.active_state !== 'active'"
+                      @click="runAction(service, 'stop')"
+                    >
+                      {{ t("services.stop") }}
+                    </button>
+                    <button
+                      v-if="service.unit_file_state === 'disabled'"
+                      class="action-button"
+                      type="button"
+                      :disabled="pending !== null"
+                      @click="runAction(service, 'enable')"
+                    >
+                      {{ t("services.enable") }}
+                    </button>
+                    <button
+                      v-else-if="service.unit_file_state === 'enabled'"
+                      class="action-button"
+                      type="button"
+                      :disabled="pending !== null"
+                      @click="runAction(service, 'disable')"
+                    >
+                      {{ t("services.disable") }}
+                    </button>
+                    <button
+                      class="action-button"
+                      type="button"
+                      :disabled="pending !== null"
+                      @click="openLogs(service)"
+                    >
+                      {{ t("services.logs") }}
+                    </button>
+                    <button
+                      class="action-button danger"
+                      type="button"
+                      :disabled="pending !== null"
+                      @click="runAction(service, 'disallow')"
+                    >
+                      {{ t("services.disallow") }}
+                    </button>
+                  </template>
+                  <template v-else>
+                    <button
+                      v-if="!service.deckox_managed"
+                      class="action-button"
+                      type="button"
+                      :disabled="pending !== null"
+                      @click="runAction(service, 'allow')"
+                    >
+                      {{ t("services.allow") }}
+                    </button>
+                    <span class="locked">{{ t("services.readOnly") }}</span>
+                  </template>
                 </div>
-                <span
-                  v-else
-                  class="locked"
-                >{{ t("services.readOnly") }}</span>
               </td>
             </tr>
           </tbody>

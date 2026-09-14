@@ -369,7 +369,7 @@ export const api = {
   },
   serviceAction: (
     serviceId: string,
-    action: "start" | "stop" | "restart" | "enable" | "disable",
+    action: "start" | "stop" | "restart" | "enable" | "disable" | "allow" | "disallow",
   ) =>
     request<CommandResult>(
       `/api/v1/services/${encodeURIComponent(serviceId)}/${action}`,

@@ -79,10 +79,11 @@ async fn main() {
         .parent()
         .map_or_else(|| PathBuf::from("/run/deckox"), Path::to_path_buf);
     let update = UpdateManager::new(config.system.allow_update, &runtime_dir);
-    let services = ServiceManager::new(config.services.allowed).unwrap_or_else(|error| {
-        eprintln!("invalid service control configuration: {error:?}");
-        std::process::exit(2);
-    });
+    let services = ServiceManager::new(config.services.allowed, AgentConfig::resolve_path())
+        .unwrap_or_else(|error| {
+            eprintln!("invalid service control configuration: {error:?}");
+            std::process::exit(2);
+        });
 
     if let Err(error) = prepare_socket(&socket_path) {
         error!(%error, path = %socket_path.display(), "failed to prepare agent socket");
@@ -120,6 +121,8 @@ async fn main() {
         .route("/v1/services/{service_id}/restart", post(restart_service))
         .route("/v1/services/{service_id}/enable", post(enable_service))
         .route("/v1/services/{service_id}/disable", post(disable_service))
+        .route("/v1/services/{service_id}/allow", post(allow_service))
+        .route("/v1/services/{service_id}/disallow", post(disallow_service))
         .route("/v1/services/{service_id}/logs", get(service_logs))
         .with_state(AppState {
             power,
@@ -335,6 +338,34 @@ async fn disable_service(
     Extension(request_id): Extension<request_context::RequestId>,
 ) -> Result<Json<CommandResult>, AgentError> {
     control_service(state, service_id, ServiceAction::Disable, request_id).await
+}
+
+async fn allow_service(
+    State(state): State<AppState>,
+    AxumPath(service_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<CommandResult>, AgentError> {
+    let result = state.services.allow(&service_id).await;
+    log_command_result(
+        "service_allowlist",
+        &request_id,
+        &format!("service={service_id} action=allow"),
+        result,
+    )
+}
+
+async fn disallow_service(
+    State(state): State<AppState>,
+    AxumPath(service_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<CommandResult>, AgentError> {
+    let result = state.services.disallow(&service_id).await;
+    log_command_result(
+        "service_allowlist",
+        &request_id,
+        &format!("service={service_id} action=disallow"),
+        result,
+    )
 }
 
 async fn service_logs(

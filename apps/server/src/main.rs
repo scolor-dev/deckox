@@ -226,6 +226,11 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
             "/services/{service_id}/disable",
             post(proxy_disable_service),
         )
+        .route("/services/{service_id}/allow", post(proxy_allow_service))
+        .route(
+            "/services/{service_id}/disallow",
+            post(proxy_disallow_service),
+        )
         .route("/services/{service_id}/logs", get(proxy_service_logs))
         .route(
             "/services/{service_id}/logs/report",
@@ -747,6 +752,42 @@ async fn proxy_disable_service(
         "POST",
         &service_id,
         Some("disable"),
+        &request_id,
+        Some(&user),
+    )
+    .await
+}
+
+async fn proxy_allow_service(
+    State(state): State<AppState>,
+    Path(service_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    proxy_service_request(
+        &state.agent,
+        &state.audit,
+        "POST",
+        &service_id,
+        Some("allow"),
+        &request_id,
+        Some(&user),
+    )
+    .await
+}
+
+async fn proxy_disallow_service(
+    State(state): State<AppState>,
+    Path(service_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    proxy_service_request(
+        &state.agent,
+        &state.audit,
+        "POST",
+        &service_id,
+        Some("disallow"),
         &request_id,
         Some(&user),
     )
