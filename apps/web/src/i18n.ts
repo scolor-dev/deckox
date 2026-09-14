@@ -51,6 +51,7 @@ export const messages = {
       title: "ストレージ", summary: "{count}件のマウント", mount: "マウント先", filesystem: "ファイルシステム", capacity: "容量", usage: "使用状況",
       loading: "ストレージ情報を読み込んでいます…", empty: "マウントされたファイルシステムはありません。", available: "空き {value}", used: "{value} 使用",
       overallUsage: "全体の使用率", overallUsageDetail: "{used} / {total} 使用中", allocation: "マウント別の使用量の内訳", other: "その他", free: "空き容量",
+      tagVisibility: "表示するタグ", tagStandard: "標準", tagOther: "その他", count: "{count}件",
     },
     diagnostics: {
       title: "診断", subtitle: "DeckoxとLinuxホストの動作状態を確認します。", generatedAt: "取得日時 {time}", download: "レポートを保存", downloading: "保存中…",
@@ -163,6 +164,7 @@ export const messages = {
       title: "Storage", summary: "{count} mounts", mount: "Mount point", filesystem: "File system", capacity: "Capacity", usage: "Usage",
       loading: "Loading storage information…", empty: "No mounted file systems.", available: "{value} available", used: "{value} used",
       overallUsage: "Overall usage", overallUsageDetail: "{used} / {total} used", allocation: "Usage breakdown by mount", other: "Other", free: "Free",
+      tagVisibility: "Visible tags", tagStandard: "Standard", tagOther: "Other", count: "{count}",
     },
     diagnostics: {
       title: "Diagnostics", subtitle: "Check the operating status of Deckox and the Linux host.", generatedAt: "Collected {time}", download: "Save report", downloading: "Saving…",

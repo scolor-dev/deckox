@@ -27,6 +27,13 @@ const filteredEvents = computed(() =>
   ),
 );
 
+// Event/result identifiers are free-form snake_case strings from the Rust
+// audit log (there is no fixed enum to map through i18n), so this only
+// tidies punctuation for the dropdown rather than translating each one.
+function optionLabel(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 function formatTime(timestampMs: number) {
   return new Intl.DateTimeFormat(locale.value, {
     dateStyle: "medium",
@@ -128,30 +135,32 @@ onMounted(refresh);
 
     <section class="table-panel">
       <div class="table-toolbar">
-        <label>
-          <span class="sr-only">{{ t("audit.filterEvent") }}</span>
-          <select v-model="eventFilter">
-            <option
-              v-for="option in eventOptions"
-              :key="option"
-              :value="option"
-            >
-              {{ option === "all" ? t("audit.allEvents") : option }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span class="sr-only">{{ t("audit.filterResult") }}</span>
-          <select v-model="resultFilter">
-            <option
-              v-for="option in resultOptions"
-              :key="option"
-              :value="option"
-            >
-              {{ option === "all" ? t("audit.allResults") : option }}
-            </option>
-          </select>
-        </label>
+        <div class="table-filters">
+          <label>
+            <span class="sr-only">{{ t("audit.filterEvent") }}</span>
+            <select v-model="eventFilter">
+              <option
+                v-for="option in eventOptions"
+                :key="option"
+                :value="option"
+              >
+                {{ option === "all" ? t("audit.allEvents") : optionLabel(option) }}
+              </option>
+            </select>
+          </label>
+          <label>
+            <span class="sr-only">{{ t("audit.filterResult") }}</span>
+            <select v-model="resultFilter">
+              <option
+                v-for="option in resultOptions"
+                :key="option"
+                :value="option"
+              >
+                {{ option === "all" ? t("audit.allResults") : optionLabel(option) }}
+              </option>
+            </select>
+          </label>
+        </div>
         <span class="table-count">{{ t("audit.count", { count: filteredEvents.length }) }}</span>
       </div>
 

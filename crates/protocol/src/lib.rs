@@ -234,6 +234,10 @@ pub struct StorageMount {
     pub used_bytes: u64,
     pub available_bytes: u64,
     pub usage_percent: f64,
+    /// `true` for well-known system mount points (`/`, `/boot`, `/home`, ...),
+    /// mirroring `ServiceSummary::standard_system`'s "ships with the OS"
+    /// distinction for services.
+    pub standard: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -252,6 +256,11 @@ pub struct ServiceSummary {
     pub standard_system: bool,
     /// `true` for Deckox's own `deckox-agent.service` / `deckox-server.service`.
     pub deckox_managed: bool,
+    /// Display name (`"Docker"`, `"PostgreSQL"`, ...) when the service's base
+    /// unit name matches a curated list of well-known software, independent
+    /// of `standard_system` — a distro-packaged and a manually installed
+    /// Docker are both tagged `Some("Docker")`.
+    pub product: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -266,6 +275,7 @@ pub struct ServiceDetails {
     pub control_allowed: bool,
     pub standard_system: bool,
     pub deckox_managed: bool,
+    pub product: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

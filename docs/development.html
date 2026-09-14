@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.5.1</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.5.2</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -155,6 +155,7 @@ allowed = [
         <p>journalログは最大500行までで、priorityは<code>all</code>・<code>error</code>・<code>warning</code>・<code>info</code>だけを指定できます。任意の<code>journalctl</code>引数、ログのダウンロード、Webコンソールは提供しません。</p>
         <p><code>system.allow_reboot</code>は初期値<code>false</code>です。<code>true</code>にした場合だけ、パスワード再確認後のホスト再起動を受け付けます。<code>system.allow_update</code>も初期値<code>false</code>で、<code>true</code>にした場合だけ管理画面からの更新実行を受け付けます。</p>
         <p>サービス一覧の各項目には、判定によるタグが付与されます。ユニットファイルの<code>FragmentPath</code>が<code>/usr/lib/systemd/system/</code>または<code>/lib/systemd/system/</code>配下にある場合は「標準」(OS・パッケージ提供)、IDが<code>deckox-agent.service</code>・<code>deckox-server.service</code>と一致する場合は「Deckox」タグになります。どちらにも該当しないサービス(<code>/etc/systemd/system/</code>などローカルに配置されたユニット)はタグなしです。</p>
+        <p>これとは別に、ユニット名の基本部分(<code>@instance</code>と<code>.service</code>を除いた部分。例: <code>postgresql@14-main.service</code>なら<code>postgresql</code>)を既知の主要ソフトウェアの一覧と突き合わせ、一致すれば製品名タグ(例: <code>docker.service</code>→「Docker」)を付与します。standard_systemとは独立した判定なので、両方のタグが付くこともあります。ストレージのマウント一覧にも同様に、マウントポイントが<code>/</code>・<code>/boot</code>・<code>/boot/efi</code>・<code>/home</code>・<code>/var</code>・<code>/tmp</code>のいずれかと完全一致する場合だけ「標準」タグを付与します(サブディレクトリやDockerのoverlayマウントなどは対象外)。</p>
       </section>
 
       <section class="section" aria-labelledby="test-title">

@@ -73,6 +73,7 @@ export interface StorageMount {
   used_bytes: number;
   available_bytes: number;
   usage_percent: number;
+  standard: boolean;
 }
 
 export interface ServiceSummary {
@@ -85,6 +86,7 @@ export interface ServiceSummary {
   control_allowed: boolean;
   standard_system: boolean;
   deckox_managed: boolean;
+  product: string | null;
 }
 
 export type ServiceLogPriority = "all" | "error" | "warning" | "info";

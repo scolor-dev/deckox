@@ -7,12 +7,14 @@ describe("preferences", () => {
       locale: "en",
       realtimeEnabled: false,
       metricsInterval: 5,
-      hiddenServiceTags: ["standard", "bogus", 42],
+      hiddenServiceTags: ["standard", "Docker", 42, ""],
+      hiddenStorageTags: ["standard", 42],
     })).toEqual({
       locale: "en",
       realtimeEnabled: false,
       metricsInterval: 5,
-      hiddenServiceTags: ["standard"],
+      hiddenServiceTags: ["standard", "Docker"],
+      hiddenStorageTags: ["standard"],
     });
     expect(normalizePreferences({
       locale: "fr",
@@ -23,6 +25,7 @@ describe("preferences", () => {
       realtimeEnabled: true,
       metricsInterval: 1,
       hiddenServiceTags: [],
+      hiddenStorageTags: [],
     });
   });
 

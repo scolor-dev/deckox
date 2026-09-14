@@ -4,6 +4,12 @@ use tokio::process::Command;
 
 use crate::error::AgentError;
 
+/// Well-known system mount points, mirroring `is_standard_system` in
+/// `services.rs`: a mount here is part of the base OS layout rather than an
+/// application's own data volume (a Docker overlay mount under
+/// `/var/lib/docker`, for example, does not match).
+const STANDARD_MOUNT_POINTS: [&str; 6] = ["/", "/boot", "/boot/efi", "/home", "/var", "/tmp"];
+
 pub async fn read_storage() -> Result<Vec<StorageMount>, AgentError> {
     if !cfg!(target_os = "linux") {
         return Err(AgentError::unavailable(
@@ -43,15 +49,18 @@ fn parse_df(input: &str) -> Result<Vec<StorageMount>, AgentError> {
             let used = fields[3].parse::<u64>().ok()?;
             let available = fields[4].parse::<u64>().ok()?;
             let usage_percent = fields[5].trim_end_matches('%').parse::<f64>().ok()?;
+            let mount_point = fields[6..].join(" ");
+            let standard = STANDARD_MOUNT_POINTS.contains(&mount_point.as_str());
 
             Some(StorageMount {
                 filesystem: fields[0].to_owned(),
                 filesystem_type: fields[1].to_owned(),
-                mount_point: fields[6..].join(" "),
+                mount_point,
                 total_bytes: total,
                 used_bytes: used,
                 available_bytes: available,
                 usage_percent,
+                standard,
             })
         })
         .collect::<Vec<_>>();
@@ -80,5 +89,21 @@ mod tests {
         assert_eq!(mounts[0].filesystem_type, "ext4");
         assert!((mounts[0].usage_percent - 40.0).abs() < f64::EPSILON);
         assert_eq!(mounts[1].mount_point, "/boot/efi");
+    }
+
+    #[test]
+    fn tags_only_well_known_system_mount_points_as_standard() {
+        let mounts = parse_df(
+            "Filesystem Type 1-blocks Used Available Capacity Mounted on\n\
+             /dev/sda2 ext4 1000000 400000 600000 40% /\n\
+             overlay overlay 1000000 400000 600000 40% /var/lib/docker\n",
+        )
+        .expect("valid df output");
+
+        assert!(mounts[0].standard, "/ is a well-known system mount point");
+        assert!(
+            !mounts[1].standard,
+            "an application data mount is not a system mount point"
+        );
     }
 }

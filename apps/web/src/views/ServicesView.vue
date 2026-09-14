@@ -13,10 +13,6 @@ import { preferences, type ServiceTagFilterKey } from "../preferences";
 
 const { t, locale } = useI18n();
 
-type ServiceTag = "standard" | "deckox";
-
-const TAG_FILTER_KEYS: ServiceTagFilterKey[] = ["standard", "deckox", "other"];
-
 const services = ref<ServiceSummary[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
@@ -32,20 +28,29 @@ const logError = ref<string | null>(null);
 const LOG_LINE_OPTIONS = [50, 100, 200, 500] as const;
 const LOG_PRIORITY_OPTIONS: ServiceLogPriority[] = ["all", "error", "warning", "info"];
 
-function serviceTags(service: ServiceSummary): ServiceTag[] {
-  const tags: ServiceTag[] = [];
+function serviceTags(service: ServiceSummary): ServiceTagFilterKey[] {
+  const tags: ServiceTagFilterKey[] = [];
   if (service.deckox_managed) tags.push("deckox");
   if (service.standard_system) tags.push("standard");
+  if (service.product) tags.push(service.product);
   return tags;
 }
 
 function tagLabel(tag: ServiceTagFilterKey) {
   if (tag === "deckox") return t("services.tagDeckox");
   if (tag === "standard") return t("services.tagStandard");
-  return t("services.tagOther");
+  if (tag === "other") return t("services.tagOther");
+  return tag;
 }
 
-function filterKeys(tags: ServiceTag[]): ServiceTagFilterKey[] {
+// "standard"/"deckox"/"other" get their own styling; any other tag is a
+// recognized product name and shares one generic "product" style, since the
+// set of possible products is open-ended.
+function tagClass(tag: ServiceTagFilterKey) {
+  return tag === "standard" || tag === "deckox" || tag === "other" ? tag : "product";
+}
+
+function filterKeys(tags: ServiceTagFilterKey[]): ServiceTagFilterKey[] {
   return tags.length ? tags : ["other"];
 }
 
@@ -58,6 +63,17 @@ function toggleTag(tag: ServiceTagFilterKey) {
     ? preferences.hiddenServiceTags.filter((hidden) => hidden !== tag)
     : [...preferences.hiddenServiceTags, tag];
 }
+
+// Built from whatever tags are actually present on this host (plus the
+// fixed "other" bucket for untagged services), rather than a hardcoded list,
+// since recognized products vary per host.
+const availableTagKeys = computed<ServiceTagFilterKey[]>(() => {
+  const productTags = new Set<string>();
+  for (const service of services.value) {
+    if (service.product) productTags.add(service.product);
+  }
+  return ["standard", "deckox", ...Array.from(productTags).sort(), "other"];
+});
 
 const filteredServices = computed(() => {
   const needle = query.value.trim().toLowerCase();
@@ -228,9 +244,9 @@ onMounted(refresh);
             {{ t("services.tagVisibility") }}
           </legend>
           <label
-            v-for="tag in TAG_FILTER_KEYS"
+            v-for="tag in availableTagKeys"
             :key="tag"
-            :class="['tag-toggle', tag, { off: isTagHidden(tag) }]"
+            :class="['tag-toggle', tagClass(tag), { off: isTagHidden(tag) }]"
           >
             <input
               type="checkbox"
@@ -276,7 +292,7 @@ onMounted(refresh);
                   <span
                     v-for="tag in serviceTags(service)"
                     :key="tag"
-                    :class="['tag-badge', tag]"
+                    :class="['tag-badge', tagClass(tag)]"
                   >{{ tagLabel(tag) }}</span>
                 </span>
                 <small>{{ service.description || t("services.noDescription") }}</small>
