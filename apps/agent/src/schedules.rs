@@ -84,13 +84,6 @@ impl ScheduleStore {
             )));
         }
 
-        let mut schedules = self.schedules.write().await;
-        if schedules.len() >= MAX_SCHEDULES {
-            return Err(AgentError::bad_request(format!(
-                "at most {MAX_SCHEDULES} schedules are supported"
-            )));
-        }
-
         let schedule = ServiceSchedule {
             id: new_id(),
             service_id: request.service_id,
@@ -103,19 +96,31 @@ impl ScheduleStore {
             last_run_at_ms: None,
             last_result: None,
         };
-        schedules.push(schedule.clone());
-        self.persist(&schedules).await?;
+        let snapshot = {
+            let mut schedules = self.schedules.write().await;
+            if schedules.len() >= MAX_SCHEDULES {
+                return Err(AgentError::bad_request(format!(
+                    "at most {MAX_SCHEDULES} schedules are supported"
+                )));
+            }
+            schedules.push(schedule.clone());
+            schedules.clone()
+        };
+        self.persist(&snapshot).await?;
         Ok(schedule)
     }
 
     pub async fn delete(&self, id: &str) -> Result<(), AgentError> {
-        let mut schedules = self.schedules.write().await;
-        let before = schedules.len();
-        schedules.retain(|schedule| schedule.id != id);
-        if schedules.len() == before {
-            return Err(AgentError::not_found("schedule not found"));
-        }
-        self.persist(&schedules).await
+        let snapshot = {
+            let mut schedules = self.schedules.write().await;
+            let before = schedules.len();
+            schedules.retain(|schedule| schedule.id != id);
+            if schedules.len() == before {
+                return Err(AgentError::not_found("schedule not found"));
+            }
+            schedules.clone()
+        };
+        self.persist(&snapshot).await
     }
 
     pub async fn set_enabled(
@@ -123,25 +128,30 @@ impl ScheduleStore {
         id: &str,
         enabled: bool,
     ) -> Result<ServiceSchedule, AgentError> {
-        let mut schedules = self.schedules.write().await;
-        let schedule = schedules
-            .iter_mut()
-            .find(|schedule| schedule.id == id)
-            .ok_or_else(|| AgentError::not_found("schedule not found"))?;
-        schedule.enabled = enabled;
-        let updated = schedule.clone();
-        self.persist(&schedules).await?;
+        let (updated, snapshot) = {
+            let mut schedules = self.schedules.write().await;
+            let schedule = schedules
+                .iter_mut()
+                .find(|schedule| schedule.id == id)
+                .ok_or_else(|| AgentError::not_found("schedule not found"))?;
+            schedule.enabled = enabled;
+            (schedule.clone(), schedules.clone())
+        };
+        self.persist(&snapshot).await?;
         Ok(updated)
     }
 
     async fn record_run(&self, id: &str, result: String) {
-        let mut schedules = self.schedules.write().await;
-        let Some(schedule) = schedules.iter_mut().find(|schedule| schedule.id == id) else {
-            return;
+        let snapshot = {
+            let mut schedules = self.schedules.write().await;
+            let Some(schedule) = schedules.iter_mut().find(|schedule| schedule.id == id) else {
+                return;
+            };
+            schedule.last_run_at_ms = Some(now_ms());
+            schedule.last_result = Some(result);
+            schedules.clone()
         };
-        schedule.last_run_at_ms = Some(now_ms());
-        schedule.last_result = Some(result);
-        if let Err(error) = self.persist(&schedules).await {
+        if let Err(error) = self.persist(&snapshot).await {
             warn!(error = ?error, schedule_id = id, "failed to persist schedule run result");
         }
     }
@@ -247,8 +257,8 @@ async fn run_schedule(
     }
 }
 
-const fn iso_weekday(weekday: chrono::Weekday) -> u8 {
-    weekday.number_from_monday() as u8
+fn iso_weekday(weekday: chrono::Weekday) -> u8 {
+    u8::try_from(weekday.number_from_monday()).unwrap_or(1)
 }
 
 fn validate_time(hour: u8, minute: u8) -> Result<(), AgentError> {

@@ -69,36 +69,31 @@ async fn tick(
         .get_json::<Vec<StorageMount>>("/v1/storage", &request_id)
         .await;
 
-    let (services, metrics, storage) = match (services, metrics, storage) {
-        (Ok(services), Ok(metrics), Ok(storage)) => {
-            if state.agent_unreachable {
-                state.agent_unreachable = false;
-                send(
-                    client,
-                    webhook_url,
-                    audit,
-                    "agent_recovered",
-                    "Deckox AgentへのAPI接続が復旧しました。".to_owned(),
-                )
-                .await;
-            }
-            (services, metrics, storage)
+    let (Ok(services), Ok(metrics), Ok(storage)) = (services, metrics, storage) else {
+        if !state.agent_unreachable {
+            state.agent_unreachable = true;
+            send(
+                client,
+                webhook_url,
+                audit,
+                "agent_unreachable",
+                "Deckox AgentへAPI接続できません。".to_owned(),
+            )
+            .await;
         }
-        _ => {
-            if !state.agent_unreachable {
-                state.agent_unreachable = true;
-                send(
-                    client,
-                    webhook_url,
-                    audit,
-                    "agent_unreachable",
-                    "Deckox AgentへAPI接続できません。".to_owned(),
-                )
-                .await;
-            }
-            return;
-        }
+        return;
     };
+    if state.agent_unreachable {
+        state.agent_unreachable = false;
+        send(
+            client,
+            webhook_url,
+            audit,
+            "agent_recovered",
+            "Deckox AgentへのAPI接続が復旧しました。".to_owned(),
+        )
+        .await;
+    }
 
     check_swap(&metrics, client, webhook_url, audit, state).await;
     check_disk(&storage, client, webhook_url, audit, state).await;
@@ -160,6 +155,10 @@ async fn check_swap(
     if metrics.memory.swap_total_bytes == 0 {
         return;
     }
+    // Real memory/swap sizes stay far below 2^52, so this conversion never
+    // actually loses precision — the byte counts involved fit exactly in an
+    // f64 mantissa.
+    #[allow(clippy::cast_precision_loss)]
     let swap_percent =
         metrics.memory.swap_used_bytes as f64 / metrics.memory.swap_total_bytes as f64 * 100.0;
     let Some(now_high) = threshold_transition(state.swap_high, swap_percent, SWAP_HIGH_PERCENT)
@@ -310,7 +309,8 @@ async fn send(client: &Client, webhook_url: &str, audit: &AuditLog, event: &str,
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
         .unwrap_or_default()
 }
 
