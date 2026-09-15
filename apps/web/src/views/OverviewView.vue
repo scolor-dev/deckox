@@ -253,6 +253,7 @@ onMounted(refresh);
           :values="cpuHistory"
           :maximum="100"
           :label="t('overview.cpuChart')"
+          :limit="HISTORY_LIMIT"
         />
       </article>
       <article class="metric-card">
@@ -264,6 +265,7 @@ onMounted(refresh);
           :values="memoryHistory"
           :maximum="100"
           :label="t('overview.memoryChart')"
+          :limit="HISTORY_LIMIT"
         />
         <small class="metric-foot">{{ memoryPercent.toFixed(1) }}%</small>
       </article>
@@ -276,6 +278,7 @@ onMounted(refresh);
           :values="loadHistory"
           :maximum="loadMaximum"
           :label="t('overview.loadChart')"
+          :limit="HISTORY_LIMIT"
         />
         <small class="metric-foot">{{ t("overview.fifteenMinutes", { value: metrics?.load_average.fifteen_minutes.toFixed(2) ?? t("common.none") }) }}</small>
       </article>
@@ -288,6 +291,7 @@ onMounted(refresh);
           :values="swapHistory"
           :maximum="100"
           :label="t('overview.swapChart')"
+          :limit="HISTORY_LIMIT"
         />
         <small
           v-if="swapPercent !== null && swapPercent >= 80"
@@ -307,6 +311,7 @@ onMounted(refresh);
           :secondary-values="networkTransmittedHistory"
           :maximum="networkMaximum"
           :label="t('overview.networkChart')"
+          :limit="HISTORY_LIMIT"
         />
         <div class="metric-legend">
           <span>{{ t("overview.received") }}</span><span class="secondary">{{ t("overview.transmitted") }}</span>
@@ -325,6 +330,7 @@ onMounted(refresh);
           :secondary-values="diskWrittenHistory"
           :maximum="diskMaximum"
           :label="t('overview.diskIoChart')"
+          :limit="HISTORY_LIMIT"
         />
         <div class="metric-legend">
           <span>{{ t("overview.read") }}</span><span class="secondary">{{ t("overview.write") }}</span>
@@ -363,6 +369,7 @@ onMounted(refresh);
           :values="temperatureHistory"
           :maximum="100"
           :label="t('overview.temperatureChart')"
+          :limit="HISTORY_LIMIT"
         />
         <small class="metric-foot">{{ temperature === null ? t("overview.notAvailable") : t("overview.sensorValue") }}</small>
       </article>
