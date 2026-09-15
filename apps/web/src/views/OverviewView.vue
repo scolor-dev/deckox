@@ -126,6 +126,11 @@ function formatRate(value: number | null | undefined) {
   });
 }
 
+const percentFormatter = (value: number) => `${String(Math.round(value))}%`;
+const decimalFormatter = (value: number) => value.toFixed(1);
+const temperatureFormatter = (value: number) => `${String(Math.round(value))}°C`;
+const rateFormatter = (value: number) => formatBytes(value, locale.value);
+
 async function refresh() {
   loading.value = true;
   error.value = null;
@@ -254,6 +259,7 @@ onMounted(refresh);
           :maximum="100"
           :label="t('overview.cpuChart')"
           :limit="HISTORY_LIMIT"
+          :value-formatter="percentFormatter"
         />
       </article>
       <article class="metric-card">
@@ -266,6 +272,7 @@ onMounted(refresh);
           :maximum="100"
           :label="t('overview.memoryChart')"
           :limit="HISTORY_LIMIT"
+          :value-formatter="percentFormatter"
         />
         <small class="metric-foot">{{ memoryPercent.toFixed(1) }}%</small>
       </article>
@@ -279,6 +286,7 @@ onMounted(refresh);
           :maximum="loadMaximum"
           :label="t('overview.loadChart')"
           :limit="HISTORY_LIMIT"
+          :value-formatter="decimalFormatter"
         />
         <small class="metric-foot">{{ t("overview.fifteenMinutes", { value: metrics?.load_average.fifteen_minutes.toFixed(2) ?? t("common.none") }) }}</small>
       </article>
@@ -292,6 +300,7 @@ onMounted(refresh);
           :maximum="100"
           :label="t('overview.swapChart')"
           :limit="HISTORY_LIMIT"
+          :value-formatter="percentFormatter"
         />
         <small
           v-if="swapPercent !== null && swapPercent >= 80"
@@ -312,6 +321,7 @@ onMounted(refresh);
           :maximum="networkMaximum"
           :label="t('overview.networkChart')"
           :limit="HISTORY_LIMIT"
+          :value-formatter="rateFormatter"
         />
         <div class="metric-legend">
           <span>{{ t("overview.received") }}</span><span class="secondary">{{ t("overview.transmitted") }}</span>
@@ -331,6 +341,7 @@ onMounted(refresh);
           :maximum="diskMaximum"
           :label="t('overview.diskIoChart')"
           :limit="HISTORY_LIMIT"
+          :value-formatter="rateFormatter"
         />
         <div class="metric-legend">
           <span>{{ t("overview.read") }}</span><span class="secondary">{{ t("overview.write") }}</span>
@@ -370,6 +381,7 @@ onMounted(refresh);
           :maximum="100"
           :label="t('overview.temperatureChart')"
           :limit="HISTORY_LIMIT"
+          :value-formatter="temperatureFormatter"
         />
         <small class="metric-foot">{{ temperature === null ? t("overview.notAvailable") : t("overview.sensorValue") }}</small>
       </article>
