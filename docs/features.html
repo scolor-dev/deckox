@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.5.2</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.6.0</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -45,7 +45,7 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/auth/login/totp</code></span></td><td><span class="status done">実装済み</span></td><td><code>deckox_preauth</code> Cookieを検証し、TOTPコードまたはリカバリーコードでセッションCookieを発行。リカバリーコードは使い捨て</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/auth/session</code></span></td><td><span class="status done">実装済み</span></td><td>現在の認証状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/auth/logout</code></span></td><td><span class="status done">実装済み</span></td><td>セッションを無効化</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>Serverの名前・バージョン・状態・待受ポートとAgent状態。Agent障害時は<code>degraded</code></td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/status</code></span></td><td><span class="status done">実装済み</span></td><td>Serverの名前・バージョン・状態・待受ポート・Webhook設定有無とAgent状態。Agent障害時は<code>degraded</code></td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/diagnostics</code></span></td><td><span class="status done">実装済み</span></td><td>生成時刻、Server、Agent、ホスト、Deckoxのsystemdユニット、機能設定の安全な固定項目をJSONで返却。Agent不通時も部分診断を返す</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/diagnostics/report</code></span></td><td><span class="status done">実装済み</span></td><td>同じ固定スキーマを<code>deckox-diagnostics.json</code>としてダウンロード</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/update</code></span></td><td><span class="status done">実装済み</span></td><td>現在版とGitHubの最新安定版を比較。取得失敗時も外部エラーを隠した<code>unavailable</code>を返す</td></tr>
@@ -56,15 +56,23 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>CPU・メモリ・Swap・負荷平均、ネットワーク送受信速度、ディスクI/O速度、任意のCPU温度を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">SSE</span><code>/api/v1/events/metrics?interval=1|2|5</code></span></td><td><span class="status done">実装済み</span></td><td>拡張リソースメトリクスを認証済みブラウザへ配信。購読者0件では追加統計を含む採取を休止</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのストレージAPIを中継。既知のシステムマウントポイントには標準タグを付与</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/backups</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのバックアップAPIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継。各サービスに標準システム・Deckox管理・既知の主要ソフトウェア(Docker・nginxなど)のタグ判定を付与</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス詳細を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/services/{id}/{action}</code></span></td><td><span class="status done">実装済み</span></td><td>起動・停止・再起動・有効化・無効化。Agentの許可・エラー状態を維持して返却</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}/logs</code></span></td><td><span class="status done">実装済み</span></td><td><code>lines</code>と<code>priority=all|error|warning|info</code>を検証し、完全一致許可リスト内のjournalログを中継。最大500行</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}/logs/report</code></span></td><td><span class="status done">実装済み</span></td><td>同じ条件で取得したログを<code>deckox-service-logs-{id}.json</code>としてダウンロード</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>Agentのスケジュール一覧を中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内サービスの起動・停止・再起動を曜日・時刻指定で登録。監査ログに記録</td></tr>
+            <tr><td><span class="endpoint"><span class="method">DELETE</span><code>/api/v1/schedules/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>スケジュールを削除。監査ログに記録</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/schedules/{id}/enable</code></span></td><td><span class="status done">実装済み</span></td><td>スケジュールを有効化。監査ログに記録</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/schedules/{id}/disable</code></span></td><td><span class="status done">実装済み</span></td><td>スケジュールを無効化。監査ログに記録</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/password</code></span></td><td><span class="status done">実装済み</span></td><td>現在のパスワードを確認し、Argon2idハッシュを更新して全セッションを失効。5分間に5回の確認失敗で制限</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/settings/totp/status</code></span></td><td><span class="status done">実装済み</span></td><td>TOTP有効状態と残りリカバリーコード数</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/totp/setup</code></span></td><td><span class="status done">実装済み</span></td><td>Base32シークレットとotpauth URIを発行。この時点ではアカウントへ保存しない</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/totp/confirm</code></span></td><td><span class="status done">実装済み</span></td><td>コード検証後にTOTPを有効化し、リカバリーコード10個を一度だけ平文で返す</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/totp/disable</code></span></td><td><span class="status done">実装済み</span></td><td>現在のパスワードとTOTP・リカバリーコードを確認してTOTPを無効化</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/settings/webhook/test</code></span></td><td><span class="status done">実装済み</span></td><td>DECKOX_WEBHOOK_URLへテスト通知を送信し、結果を監査ログに記録。未設定時は<code>webhook_not_configured</code>を返却</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/audit?limit=&before_ms=</code></span></td><td><span class="status done">実装済み</span></td><td>認証・パスワード変更・TOTP設定・サービス操作・ホスト再起動・CLI操作の監査ログを新しい順にページング取得</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/audit/report</code></span></td><td><span class="status done">実装済み</span></td><td>保存されている監査ログ全件を<code>deckox-audit.json</code>としてダウンロード</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/*</code></span></td><td><span class="status done">実装済み</span></td><td>Vue静的ファイル。未知のパスは<code>index.html</code>へSPAフォールバック</td></tr>
@@ -87,6 +95,7 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/system/update</code></span></td><td><span class="status done">実装済み</span></td><td>許可時のみ、Serverが取得したタグ固定の<code>install.sh</code>を検証して<code>/run/deckox/update.sh</code>へ書き込み、<code>systemd-run</code>で独立ユニットとして実行</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>CPU使用率・コア数・任意の温度、メモリ・Swap、ロードアベレージ、ネットワーク送受信速度、ディスク読み書き速度。追加統計が取得不能でも他の値を返却</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>ファイルシステム、形式、マウントポイント、容量・使用量、既知のシステムマウントポイント判定</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/backups</code></span></td><td><span class="status done">実装済み</span></td><td><code>/var/lib/deckox/backups/</code>配下のバックアップ一覧(名前・更新前バージョン・取得日時・サイズ)。<code>root:root</code>所有のためAgent経由でのみ読み取り可能</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>ロード済みsystemdサービス一覧と有効化状態、既知の主要ソフトウェア判定</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>サービス詳細、Main PID、操作許可状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/start</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを起動</td></tr>
@@ -95,6 +104,13 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/enable</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを有効化</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/disable</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを無効化</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services/{id}/logs</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスに限定してjournalを取得。最大500行、<code>all|error|warning|info</code>のpriority絞込に対応</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/allow</code></span></td><td><span class="status done">実装済み</span></td><td>サービスの存在を確認したうえで<code>/etc/deckox/agent.toml</code>の許可リストへ追加。Deckox自身の2ユニットは対象外</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/disallow</code></span></td><td><span class="status done">実装済み</span></td><td><code>/etc/deckox/agent.toml</code>の許可リストから削除。Deckox自身の2ユニットは対象外</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>登録済みスケジュールの一覧(サービス・操作・曜日・時刻・有効状態・前回実行結果)</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスのみ登録可能。曜日(月-日)・時刻(ホストのローカル時刻)・起動/停止/再起動を指定。<code>/var/lib/deckox/schedules.json</code>へ永続化</td></tr>
+            <tr><td><span class="endpoint"><span class="method">DELETE</span><code>/v1/schedules/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>スケジュールを削除</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/schedules/{id}/enable</code></span></td><td><span class="status done">実装済み</span></td><td>スケジュールを有効化</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/schedules/{id}/disable</code></span></td><td><span class="status done">実装済み</span></td><td>スケジュールを無効化(削除せず一時停止)</td></tr>
           </tbody>
         </table>
         <aside class="note">Agent APIはTCPではなく、<code>/run/deckox/agent.sock</code>上で提供されます。</aside>
@@ -108,14 +124,16 @@
           <article class="card"><span class="status done">実装済み</span><h3>管理者ログイン</h3><p>セッション確認、ログイン、ログアウト、TOTP設定時の2段階目コード入力、APIの401応答時のログイン画面復帰、パスワードを忘れた場合のSSHコンソール手順案内を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>二要素認証(TOTP)</h3><p>設定画面でBase32シークレットとotpauth URIを表示して有効化し、確認コード入力後にリカバリーコード10個を一度だけ表示します。残りコード数の確認と、パスワード・コード確認付きの無効化を提供します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>監査ログ</h3><p>認証・パスワード変更・TOTP設定・サービス操作・ホスト再起動・SSHコンソールからのCLI操作を時刻・種別・actor・送信元IP・結果で一覧表示し、イベント種別・結果で絞り込み、JSONとして保存できます。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動・有効化・無効化を提供します。許可対象のjournalログは最大500行まで表示し、全件・エラー・警告・情報で絞り込めます。各サービスには「標準」(OS・パッケージ提供のユニット)・「Deckox」(自身が管理するユニット)に加えて、ユニット名から判定したDocker・nginx・PostgreSQLなど既知の主要ソフトウェアのタグを表示します。表示するタグの一覧はホスト上で実際に見つかったタグから組み立てられ、タグ単位での表示・非表示切り替え、検索語としての一致に対応します。非表示にしたタグはブラウザに保存され、次回このブラウザで画面を開いたときも同じ表示状態になります。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動・有効化・無効化を提供します。許可対象のjournalログは最大500行まで表示し、全件・エラー・警告・情報で絞り込め、表示中の内容をJSONファイルとして保存できます。許可リストへの追加・削除もこの画面から行え、追加時はサービスの実在確認、削除時は確認ダイアログを挟みます(SSHでの<code>/etc/deckox/agent.toml</code>手動編集は不要になりました)。Deckox自身の2ユニットは許可リストの対象外です。各サービスには「標準」(OS・パッケージ提供のユニット)・「Deckox」(自身が管理するユニット)に加えて、ユニット名から判定したDocker・nginx・PostgreSQLなど既知の主要ソフトウェアのタグを表示します。表示するタグの一覧はホスト上で実際に見つかったタグから組み立てられ、タグ単位での表示・非表示切り替え、検索語としての一致に対応します。非表示にしたタグはブラウザに保存され、次回このブラウザで画面を開いたときも同じ表示状態になります。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>サービスのスケジュール実行</h3><p>許可リスト内のサービスに限り、起動・停止・再起動を曜日と時刻を指定して自動実行できます。Agentがホストのローカル時刻で20秒ごとに確認し、該当する時刻・曜日で一度だけ実行します(継続的な再実行はしません)。一覧では前回の実行日時と成否を確認でき、削除せず一時的に無効化することもできます。Deckox自身の2ユニットはスケジュール対象外です。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示し、全マウント合計の使用率とマウント別の使用配分を色分けした内訳で示します。<code>/</code>や<code>/home</code>など既知のシステムマウントポイントには「標準」タグを表示し、サービス画面と同じ表示・非表示切り替えに対応します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ホスト再起動</h3><p>Agent側で明示的に許可した場合だけ、管理者パスワードを再確認して再起動し、新しいServerプロセスを検知してログインへ戻ります。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>システム診断</h3><p>Server・Agentの状態、公開可能なホスト情報、Deckoxユニット状態、権限設定の要約を専用画面に表示し、同じ内容をJSONで保存します。Agent不通時もServer側の結果を表示します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>Webhook通知</h3><p><code>DECKOX_WEBHOOK_URL</code>を設定すると、管理画面を開いていなくてもServerが30秒間隔で許可済みサービスのfailed状態・Swap使用率80%以上・最も使用率が高いマウントの90%以上・Agentへの接続断・新しいDeckoxバージョンの公開を監視し、状態が変化した瞬間だけJSONをPOSTします。継続中の状態を繰り返し通知することはありません(新バージョン公開はキャッシュ済みの更新確認結果を使うため、GitHubへの追加アクセスは発生しません)。設定画面からテスト通知を送信でき、送信結果は監査ログにも記録されます。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>システム診断</h3><p>Server・Agentの状態、公開可能なホスト情報、Deckoxユニット状態、権限設定の要約に加えて、<code>apt</code>の既存キャッシュから読む更新可能パッケージ数を専用画面に表示し、同じ内容をJSONで保存します。パッケージ数の取得は<code>apt update</code>を実行しないため、キャッシュが古いままの場合があります。同じ画面で、インストーラーが更新前に<code>/var/lib/deckox/backups/</code>へ保存したバックアップの一覧(取得日時・更新前バージョン・サイズ)も確認できます。Agent不通時もServer側の結果を表示します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>画面URL</h3><p><code>/</code>、<code>/services</code>、<code>/storage</code>、<code>/diagnostics</code>、<code>/audit</code>、<code>/settings</code>へ直接移動できるVue Router構成です。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>日本語・英語</h3><p>端末言語の自動判定と手動選択に対応し、APIエラーコードも選択言語の文言へ変換します。</p></article>
-          <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、ホスト再起動、リアルタイム更新の有効化・1/2/5秒間隔、共通通知を提供します。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>設定と通知</h3><p>管理者パスワード、ホスト再起動、リアルタイム更新の有効化・1/2/5秒間隔、共通通知を提供します。Webhookが設定されている場合はその旨を表示し、テスト通知を送信できます。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>更新確認と更新実行</h3><p>設定画面で現在版と最新安定版を確認し、検証済みのタグに限ってReleaseリンクとコピー可能な更新コマンドを表示します。Agent設定で許可した場合だけ、確認済みの更新がある間「今すぐ更新」ボタンが表示され、管理者パスワードの再確認後にServerが取得したインストーラーをAgentが独立したsystemdユニットとして実行します。許可していない環境では引き続き手動確認・手動実行のみです。</p></article>
         </div>
       </section>
@@ -135,13 +153,15 @@
             <tr><td><code>RealtimeMetricsEvent</code></td><td><span class="status done">使用中</span></td><td>SSEの連番、取得時刻、Agent接続状態、拡張メトリクス、エラーコード。取得不能な追加値は省略可能</td></tr>
             <tr><td><code>DiagnosticsReport</code>ほか</td><td><span class="status done">使用中</span></td><td>生成時刻、Server・Agent状態、boot IDを除いたホスト情報、Deckoxユニット状態、再起動許可・許可サービス数</td></tr>
             <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動、有効化、無効化</td></tr>
+            <tr><td><code>ScheduleAction</code></td><td><span class="status done">使用中</span></td><td><code>ServiceAction</code>のうちスケジュール可能な起動・停止・再起動のみの部分集合</td></tr>
+            <tr><td><code>ServiceSchedule</code> / <code>CreateScheduleRequest</code></td><td><span class="status done">使用中</span></td><td>スケジュールの登録内容(サービス・操作・曜日・時刻)と、Agent側の状態(有効/無効・前回実行日時・結果)</td></tr>
             <tr><td><code>CommandResult</code></td><td><span class="status done">使用中</span></td><td>操作完了時のコマンドID、実行状態、メッセージ</td></tr>
             <tr><td><code>AgentCommand</code></td><td><span class="status defined">型のみ定義済み</span></td><td>汎用コマンド型。現在のHTTPハンドラーでは未使用</td></tr>
             <tr><td><code>AuditEvent</code> / <code>AuditPage</code></td><td><span class="status done">使用中</span></td><td>監査ログの1件と、新しい順のページング応答。Server専用でAgent側の型は変更していない</td></tr>
           </tbody>
         </table>
         <aside class="note"><strong>診断データの境界:</strong> 診断は固定した安全な項目だけを構築します。生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、セッション、Cookie、boot IDはAPI・画面・ダウンロードへ含めません。</aside>
-        <aside class="note"><strong>サービス管理の境界:</strong> 専用HTTPエンドポイントと<code>ServiceAction</code>で実装されています。ログ閲覧も完全一致許可リスト、最大500行、<code>all|error|warning|info</code>だけを受け付け、ダウンロードは提供しません。汎用<code>AgentCommand</code>とWebコンソールは使っていません。</aside>
+        <aside class="note"><strong>サービス管理の境界:</strong> 専用HTTPエンドポイントと<code>ServiceAction</code>で実装されています。ログ閲覧も完全一致許可リスト、最大500行、<code>all|error|warning|info</code>だけを受け付けます。許可リストの追加・削除は<code>/etc/deckox/agent.toml</code>への直接書き込みのみで行い、サービス自体の起動・停止などとは独立した専用エンドポイントです。汎用<code>AgentCommand</code>とWebコンソールは使っていません。</aside>
       </section>
 
       <section class="section" aria-labelledby="not-title">

@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.5.2</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.6.0</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -86,17 +86,20 @@ npm run build</code></pre>
             <tr><td><code>DECKOX_LISTEN_ADDR</code></td><td><code>127.0.0.1:8080</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_AGENT_CONFIG</code></td><td><code>/etc/deckox/agent.toml</code></td><td>Agent</td></tr>
             <tr><td><code>DECKOX_AGENT_SOCKET</code></td><td><code>/run/deckox/agent.sock</code></td><td>Server / Agent</td></tr>
+            <tr><td><code>DECKOX_SCHEDULES_FILE</code></td><td><code>/var/lib/deckox/schedules.json</code></td><td>Agent</td></tr>
             <tr><td><code>DECKOX_WEB_DIR</code></td><td><code>/usr/local/share/deckox/web</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code></td><td><code>/var/lib/deckox/admin-password.hash</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH</code></td><td>なし</td><td>Server（開発・コンテナ向け）</td></tr>
             <tr><td><code>DECKOX_AUDIT_LOG_FILE</code></td><td><code>/var/lib/deckox/audit.log</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_SECURE_COOKIE</code></td><td><code>false</code></td><td>Server。HTTPS終端時に<code>true</code></td></tr>
+            <tr><td><code>DECKOX_WEBHOOK_URL</code></td><td>なし(通知無効)</td><td>Server</td></tr>
             <tr><td><code>RUST_LOG</code></td><td>各プロセスの<code>info</code></td><td>Server / Agent</td></tr>
           </tbody>
         </table>
         <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH</code>でハッシュを直接指定した場合は永続的な保存先がないため、設定画面からのパスワード変更・TOTP設定は無効になります。</aside>
         <aside class="note"><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code>の内容はパスワードハッシュとTOTP設定を含むJSONです。旧バージョンが書いた生のArgon2idハッシュ文字列も読み込み時に自動判定し、書き込み時にJSON形式へ移行します。</aside>
         <aside class="note"><code>DECKOX_AUDIT_LOG_FILE</code>は最大5000件を新しい順に保持するJSON Linesファイルです。超過分は書き込みのたびに古い順から切り詰められます。</aside>
+        <aside class="note"><code>DECKOX_WEBHOOK_URL</code>を設定すると、Serverが30秒間隔でAgentの許可済みサービスのfailed状態・Swap使用率80%以上・最も使用率が高いマウントの90%以上・Agent自体への接続断・新しいDeckoxバージョンの公開を監視し、状態が変化した瞬間(発生時と復旧時)だけ<code>{"event","message","text","timestamp_ms"}</code>を含むJSONをPOSTします。新バージョン検知は<code>UpdateChecker</code>の15分キャッシュを共有するため毎tickでも実質的にGitHubへは追加アクセスしません。管理画面を開いていなくても動作し、送信結果は監査ログにも(actor <code>system</code>として)記録されます。webhook送信の失敗はログに残るだけでServerの動作には影響しません。設定画面の「テスト通知を送信」ボタン(<code>POST /api/v1/settings/webhook/test</code>)は同じ送信処理を呼び出し、結果を呼び出した管理者のアクションとして監査ログに記録します(actor <code>admin</code>)。</aside>
       </section>
 
       <section class="section" aria-labelledby="cli-title">
@@ -152,10 +155,19 @@ allowed = [
   "postgresql.service",
 ]</code></pre>
         <p><code>deckox-agent.service</code>と<code>deckox-server.service</code>は登録しても起動時に拒否されます。</p>
-        <p>journalログは最大500行までで、priorityは<code>all</code>・<code>error</code>・<code>warning</code>・<code>info</code>だけを指定できます。任意の<code>journalctl</code>引数、ログのダウンロード、Webコンソールは提供しません。</p>
+        <p>journalログは最大500行までで、priorityは<code>all</code>・<code>error</code>・<code>warning</code>・<code>info</code>だけを指定できます。任意の<code>journalctl</code>引数、Webコンソールは提供しません。表示中のログはJSONファイルとして保存できます。</p>
+        <p>許可リストは<code>POST /api/v1/services/{id}/allow</code>・<code>POST /api/v1/services/{id}/disallow</code>から追加・削除でき、管理画面のサービス一覧からも操作できます。追加前に<code>systemctl</code>でサービスの存在を確認し、存在しないIDは拒否します。<code>deckox-agent.service</code>と<code>deckox-server.service</code>はどちらのエンドポイントでも対象外です。書き込みは<code>agent.toml</code>の<code>[services]</code>セクションのみを置換する形で行い、コメントを含む他のセクションは保持します(<code>[services]</code>がファイル末尾のテーブルであることを前提とした実装です)。設定はプロセス内の許可リストとファイルの両方へ即座に反映され、Agentの再起動は不要です。</p>
         <p><code>system.allow_reboot</code>は初期値<code>false</code>です。<code>true</code>にした場合だけ、パスワード再確認後のホスト再起動を受け付けます。<code>system.allow_update</code>も初期値<code>false</code>で、<code>true</code>にした場合だけ管理画面からの更新実行を受け付けます。</p>
         <p>サービス一覧の各項目には、判定によるタグが付与されます。ユニットファイルの<code>FragmentPath</code>が<code>/usr/lib/systemd/system/</code>または<code>/lib/systemd/system/</code>配下にある場合は「標準」(OS・パッケージ提供)、IDが<code>deckox-agent.service</code>・<code>deckox-server.service</code>と一致する場合は「Deckox」タグになります。どちらにも該当しないサービス(<code>/etc/systemd/system/</code>などローカルに配置されたユニット)はタグなしです。</p>
         <p>これとは別に、ユニット名の基本部分(<code>@instance</code>と<code>.service</code>を除いた部分。例: <code>postgresql@14-main.service</code>なら<code>postgresql</code>)を既知の主要ソフトウェアの一覧と突き合わせ、一致すれば製品名タグ(例: <code>docker.service</code>→「Docker」)を付与します。standard_systemとは独立した判定なので、両方のタグが付くこともあります。ストレージのマウント一覧にも同様に、マウントポイントが<code>/</code>・<code>/boot</code>・<code>/boot/efi</code>・<code>/home</code>・<code>/var</code>・<code>/tmp</code>のいずれかと完全一致する場合だけ「標準」タグを付与します(サブディレクトリやDockerのoverlayマウントなどは対象外)。</p>
+      </section>
+
+      <section class="section" aria-labelledby="schedules-title">
+        <h2 id="schedules-title">サービスのスケジュール実行</h2>
+        <p>許可リスト内のサービスに限り、起動・停止・再起動を曜日(月-日、複数選択可)と時刻(ホストのローカル時刻、分単位)を指定して自動実行できます。管理画面のサービス一覧から登録・削除・有効/無効の切り替えができ、SSHでの設定は不要です。</p>
+        <p>Agentは20秒ごとに現在の曜日・時刻を確認し、一致するスケジュールを<code>ServiceManager::control</code>(手動操作と同じ経路)で実行します。同じ分に複数回確認しても実行は一度だけです。Agentが再起動した場合、直前の実行記録は保持されないため、再起動とちょうど重なった分は再実行される可能性があります(許容している既知の制限です)。</p>
+        <p>登録内容は<code>/var/lib/deckox/schedules.json</code>にJSONとして永続化されます(TOMLの配列テーブルを手書きで編集する<code>config::write_allowed_services</code>のような仕組みは、この用途には見合わないため採用していません)。パスは<code>DECKOX_SCHEDULES_FILE</code>環境変数で上書きできます。</p>
+        <p>実行結果(成功、または失敗理由)と前回実行日時はスケジュールごとに記録され、管理画面の一覧に表示されます。定期実行そのものはAgent内で完結するため、Serverの監査ログには残りません(スケジュールの登録・削除・有効化・無効化という管理操作は監査ログに記録されます)。<code>deckox-agent.service</code>・<code>deckox-server.service</code>はスケジュール登録の対象外です。</p>
       </section>
 
       <section class="section" aria-labelledby="test-title">

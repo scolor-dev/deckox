@@ -76,6 +76,11 @@ pub struct DiagnosticHost {
     pub architecture: String,
     pub uptime_seconds: u64,
     pub timezone: Option<String>,
+    /// Packages `apt` already knows are upgradable from its existing local
+    /// cache. `None` on non-`apt` hosts or when the count could not be
+    /// read; never triggers `apt update` itself, so this can go stale until
+    /// something else refreshes the cache.
+    pub upgradable_packages: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -240,6 +245,22 @@ pub struct StorageMount {
     pub standard: bool,
 }
 
+/// One pre-update snapshot the installer took under `/var/lib/deckox/backups/`.
+///
+/// Owned `root:root`, so only the Agent (not the unprivileged Server) can
+/// list these; the Server proxies the read the same way it does storage and
+/// services.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupSummary {
+    pub name: String,
+    /// `None` when the installer could not determine the version being
+    /// replaced (recorded as `unknown` in the directory name).
+    pub previous_version: Option<String>,
+    /// `None` when the directory's filesystem metadata could not be read.
+    pub created_at_ms: Option<u64>,
+    pub size_bytes: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceSummary {
     pub id: String,
@@ -296,6 +317,48 @@ pub enum ServiceAction {
     Restart,
     Enable,
     Disable,
+}
+
+/// The subset of [`ServiceAction`] meaningful to schedule unattended: not
+/// `Enable`/`Disable`, which are one-off admin toggles rather than something
+/// worth repeating on a timer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScheduleAction {
+    Start,
+    Stop,
+    Restart,
+}
+
+/// A recurring `action` the Agent runs against `service_id` on its own,
+/// without an admin present. Only allow-listed services (the same ones
+/// eligible for manual start/stop/restart) can be scheduled.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceSchedule {
+    pub id: String,
+    pub service_id: String,
+    pub action: ScheduleAction,
+    /// Local time, 0-23.
+    pub hour: u8,
+    /// Local time, 0-59.
+    pub minute: u8,
+    /// ISO weekday numbers (1 = Monday ... 7 = Sunday), never empty.
+    pub weekdays: Vec<u8>,
+    pub enabled: bool,
+    pub created_at_ms: u64,
+    pub last_run_at_ms: Option<u64>,
+    /// `"success"` or `"failed: <reason>"`; `None` until the schedule has
+    /// fired at least once.
+    pub last_result: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateScheduleRequest {
+    pub service_id: String,
+    pub action: ScheduleAction,
+    pub hour: u8,
+    pub minute: u8,
+    pub weekdays: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

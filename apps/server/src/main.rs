@@ -3,13 +3,14 @@ use std::{env, net::SocketAddr, path::PathBuf};
 use axum::{
     Extension, Json, Router,
     extract::{FromRef, Path, Query, State},
-    http::StatusCode,
+    http::{StatusCode, header},
     middleware,
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use deckox_protocol::{
-    AgentStatus, AgentUpdateRequest, AuditPage, DiagnosticsReport, ServiceLogPriority, UpdateStatus,
+    AgentStatus, AgentUpdateRequest, AuditPage, CreateScheduleRequest, DiagnosticsReport,
+    ServiceLogPriority, ServiceLogs, UpdateStatus,
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
@@ -35,6 +36,7 @@ mod cli;
 mod diagnostics;
 mod fsutil;
 mod metrics_stream;
+mod notifier;
 mod request_context;
 mod security_headers;
 mod update;
@@ -50,6 +52,7 @@ struct AppState {
     audit: AuditLog,
     metrics: MetricsHub,
     updates: update::UpdateChecker,
+    webhook_url: Option<String>,
     instance_id: String,
     listen_port: u16,
 }
@@ -74,6 +77,7 @@ struct ServerStatus {
     port: u16,
     agent: Option<AgentStatus>,
     agent_error: Option<String>,
+    webhook_configured: bool,
 }
 
 #[derive(Serialize)]
@@ -160,12 +164,20 @@ async fn main() {
         env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| DEFAULT_AGENT_SOCKET.to_owned()),
     ));
     let updates = load_update_checker();
+    let webhook_url = env::var("DECKOX_WEBHOOK_URL").ok();
+    notifier::spawn(
+        agent.clone(),
+        audit.clone(),
+        updates.clone(),
+        webhook_url.clone(),
+    );
     let state = AppState {
         agent: agent.clone(),
         auth: auth.clone(),
         audit,
         metrics: MetricsHub::new(agent),
         updates,
+        webhook_url,
         instance_id: format!("{:016x}", rand::random::<u64>()),
         listen_port: listen_addr.port(),
     };
@@ -211,6 +223,7 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
         .route("/system/metrics", get(proxy_metrics))
         .route("/events/metrics", get(metrics_stream::metrics_events))
         .route("/storage", get(proxy_storage))
+        .route("/backups", get(proxy_backups))
         .route("/services", get(proxy_services))
         .route("/services/{service_id}", get(proxy_service_details))
         .route("/services/{service_id}/start", post(proxy_start_service))
@@ -224,13 +237,30 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
             "/services/{service_id}/disable",
             post(proxy_disable_service),
         )
+        .route("/services/{service_id}/allow", post(proxy_allow_service))
+        .route(
+            "/services/{service_id}/disallow",
+            post(proxy_disallow_service),
+        )
         .route("/services/{service_id}/logs", get(proxy_service_logs))
+        .route(
+            "/services/{service_id}/logs/report",
+            get(service_logs_report),
+        )
+        .route("/schedules", get(proxy_schedules).post(create_schedule))
+        .route(
+            "/schedules/{schedule_id}",
+            axum::routing::delete(delete_schedule),
+        )
+        .route("/schedules/{schedule_id}/enable", post(enable_schedule))
+        .route("/schedules/{schedule_id}/disable", post(disable_schedule))
         .route("/auth/logout", post(auth::logout))
         .route("/settings/password", post(auth::change_password))
         .route("/settings/totp/status", get(auth::totp_status))
         .route("/settings/totp/setup", post(auth::totp_setup))
         .route("/settings/totp/confirm", post(auth::totp_confirm))
         .route("/settings/totp/disable", post(auth::totp_disable))
+        .route("/settings/webhook/test", post(test_webhook))
         .route_layer(middleware::from_fn_with_state(
             auth.clone(),
             auth::require_auth,
@@ -295,6 +325,7 @@ async fn status(
             port: state.listen_port,
             agent: Some(agent),
             agent_error: None,
+            webhook_configured: state.webhook_url.is_some(),
         }),
         Err(error) => Json(ServerStatus {
             name: "deckox",
@@ -303,6 +334,7 @@ async fn status(
             port: state.listen_port,
             agent: None,
             agent_error: Some(error),
+            webhook_configured: state.webhook_url.is_some(),
         }),
     }
 }
@@ -626,6 +658,13 @@ async fn proxy_storage(
     proxy_agent(&state.agent, "GET", "/v1/storage", &request_id).await
 }
 
+async fn proxy_backups(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/backups", &request_id).await
+}
+
 async fn proxy_services(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
@@ -740,6 +779,249 @@ async fn proxy_disable_service(
     .await
 }
 
+async fn proxy_allow_service(
+    State(state): State<AppState>,
+    Path(service_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    proxy_service_request(
+        &state.agent,
+        &state.audit,
+        "POST",
+        &service_id,
+        Some("allow"),
+        &request_id,
+        Some(&user),
+    )
+    .await
+}
+
+async fn proxy_disallow_service(
+    State(state): State<AppState>,
+    Path(service_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    proxy_service_request(
+        &state.agent,
+        &state.audit,
+        "POST",
+        &service_id,
+        Some("disallow"),
+        &request_id,
+        Some(&user),
+    )
+    .await
+}
+
+/// Lets an admin verify `DECKOX_WEBHOOK_URL` works without waiting for a
+/// real threshold breach. Reuses [`notifier::send_once`] — the exact same
+/// request the background ticker would make — but reports the outcome
+/// straight back to the caller and audit-logs it under their own identity
+/// instead of `system`.
+async fn test_webhook(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    let Some(webhook_url) = &state.webhook_url else {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "webhook_not_configured",
+            "DECKOX_WEBHOOK_URL is not set",
+        );
+    };
+
+    let result = notifier::send_once(
+        &reqwest::Client::new(),
+        webhook_url,
+        "test",
+        "Deckoxからのテスト通知です。".to_owned(),
+    )
+    .await;
+
+    match result {
+        Ok(()) => {
+            state
+                .audit
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "webhook_test",
+                    "success",
+                    None,
+                    "webhook test notification sent",
+                )
+                .await;
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(message) => {
+            state
+                .audit
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "webhook_test",
+                    "failure",
+                    Some(message.clone()),
+                    "webhook test notification failed",
+                )
+                .await;
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    code: "webhook_test_failed",
+                    message,
+                }),
+            )
+                .into_response()
+        }
+    }
+}
+
+async fn proxy_schedules(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/schedules", &request_id).await
+}
+
+async fn create_schedule(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(payload): Json<CreateScheduleRequest>,
+) -> Response {
+    if !valid_service_id(&payload.service_id) {
+        return invalid_service_id();
+    }
+    let service_id = payload.service_id.clone();
+    let response = agent_result_to_response(
+        state
+            .agent
+            .request_with_json_body("POST", "/v1/schedules", &request_id, &payload)
+            .await,
+    );
+    log_schedule_event(
+        &state,
+        &request_id,
+        &user,
+        "schedule_create",
+        &service_id,
+        response.status(),
+    )
+    .await;
+    response
+}
+
+async fn delete_schedule(
+    State(state): State<AppState>,
+    Path(schedule_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    let response = proxy_agent(
+        &state.agent,
+        "DELETE",
+        &format!("/v1/schedules/{schedule_id}"),
+        &request_id,
+    )
+    .await;
+    log_schedule_event(
+        &state,
+        &request_id,
+        &user,
+        "schedule_delete",
+        &schedule_id,
+        response.status(),
+    )
+    .await;
+    response
+}
+
+async fn enable_schedule(
+    State(state): State<AppState>,
+    Path(schedule_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    let response = proxy_agent(
+        &state.agent,
+        "POST",
+        &format!("/v1/schedules/{schedule_id}/enable"),
+        &request_id,
+    )
+    .await;
+    log_schedule_event(
+        &state,
+        &request_id,
+        &user,
+        "schedule_enable",
+        &schedule_id,
+        response.status(),
+    )
+    .await;
+    response
+}
+
+async fn disable_schedule(
+    State(state): State<AppState>,
+    Path(schedule_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    let response = proxy_agent(
+        &state.agent,
+        "POST",
+        &format!("/v1/schedules/{schedule_id}/disable"),
+        &request_id,
+    )
+    .await;
+    log_schedule_event(
+        &state,
+        &request_id,
+        &user,
+        "schedule_disable",
+        &schedule_id,
+        response.status(),
+    )
+    .await;
+    response
+}
+
+/// Shared by the four schedule-mutation handlers so each one only needs to
+/// name its event and the resource it acted on. Takes the response's
+/// `StatusCode` rather than the `Response` itself: `Response` wraps a body
+/// type that is not `Sync`, so a `&Response` held across the `.await` below
+/// would make the caller's handler future `!Send` — which axum requires and
+/// reports, unhelpfully, as "the trait `Handler` is not satisfied".
+async fn log_schedule_event(
+    state: &AppState,
+    request_id: &RequestId,
+    user: &AuthenticatedUser,
+    event: &'static str,
+    detail_id: &str,
+    status: StatusCode,
+) {
+    let result = if status.is_success() {
+        "success"
+    } else {
+        "failure"
+    };
+    state
+        .audit
+        .log_admin(
+            request_id,
+            user.source_ip,
+            event,
+            result,
+            Some(format!("id={detail_id} status={}", status.as_u16())),
+            "schedule change",
+        )
+        .await;
+}
+
 async fn proxy_service_logs(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
@@ -763,6 +1045,64 @@ async fn proxy_service_logs(
         query.lines
     );
     proxy_agent(&state.agent, "GET", &path, &request_id).await
+}
+
+/// Downloads the same bounded log window `proxy_service_logs` displays, as a
+/// file. `service_id` is safe to embed in the `Content-Disposition` header
+/// unescaped because `valid_service_id` already restricts it to
+/// `[A-Za-z0-9@_.:-]` ending in `.service`.
+async fn service_logs_report(
+    State(state): State<AppState>,
+    Path(service_id): Path<String>,
+    Query(query): Query<ServiceLogsQuery>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    if !valid_service_id(&service_id) {
+        return invalid_service_id();
+    }
+    if !valid_log_lines(query.lines) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "bad_request",
+            "log lines must be one of 50, 100, 200, or 500",
+        );
+    }
+
+    let priority = log_priority_name(query.priority);
+    let path = format!(
+        "/v1/services/{service_id}/logs?lines={}&priority={priority}",
+        query.lines
+    );
+    match state
+        .agent
+        .get_json::<ServiceLogs>(&path, &request_id)
+        .await
+    {
+        Ok(logs) => service_logs_attachment(&service_id, &logs),
+        Err(message) => (
+            StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse {
+                code: "agent_unavailable",
+                message,
+            }),
+        )
+            .into_response(),
+    }
+}
+
+fn service_logs_attachment(service_id: &str, logs: &ServiceLogs) -> Response {
+    let Ok(body) = serde_json::to_vec_pretty(logs) else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let disposition = format!("attachment; filename=\"deckox-service-logs-{service_id}.json\"");
+    (
+        [
+            (header::CONTENT_TYPE, "application/json".to_owned()),
+            (header::CONTENT_DISPOSITION, disposition),
+        ],
+        body,
+    )
+        .into_response()
 }
 
 async fn proxy_service_request(
@@ -908,9 +1248,10 @@ async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use deckox_protocol::ServiceLogPriority;
+    use axum::{http::header, response::IntoResponse};
+    use deckox_protocol::{ServiceLogPriority, ServiceLogs};
 
-    use super::{log_priority_name, valid_log_lines, valid_service_id};
+    use super::{log_priority_name, service_logs_attachment, valid_log_lines, valid_service_id};
 
     #[test]
     fn validates_service_ids_before_proxying() {
@@ -931,5 +1272,21 @@ mod tests {
         assert_eq!(log_priority_name(ServiceLogPriority::Error), "error");
         assert_eq!(log_priority_name(ServiceLogPriority::Warning), "warning");
         assert_eq!(log_priority_name(ServiceLogPriority::Info), "info");
+    }
+
+    #[test]
+    fn log_attachment_names_the_file_after_the_service() {
+        let logs = ServiceLogs {
+            service_id: "nginx.service".to_owned(),
+            entries: vec![],
+        };
+        let response = service_logs_attachment("nginx.service", &logs).into_response();
+        assert_eq!(
+            response
+                .headers()
+                .get(header::CONTENT_DISPOSITION)
+                .and_then(|value| value.to_str().ok()),
+            Some("attachment; filename=\"deckox-service-logs-nginx.service.json\"")
+        );
     }
 }

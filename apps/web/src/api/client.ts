@@ -13,6 +13,7 @@ export interface ServerStatus {
   port: number;
   agent: AgentStatus | null;
   agent_error: string | null;
+  webhook_configured: boolean;
 }
 
 export interface SystemInfo {
@@ -76,6 +77,13 @@ export interface StorageMount {
   standard: boolean;
 }
 
+export interface BackupSummary {
+  name: string;
+  previous_version: string | null;
+  created_at_ms: number | null;
+  size_bytes: number;
+}
+
 export interface ServiceSummary {
   id: string;
   description: string;
@@ -87,6 +95,29 @@ export interface ServiceSummary {
   standard_system: boolean;
   deckox_managed: boolean;
   product: string | null;
+}
+
+export type ScheduleAction = "start" | "stop" | "restart";
+
+export interface ServiceSchedule {
+  id: string;
+  service_id: string;
+  action: ScheduleAction;
+  hour: number;
+  minute: number;
+  weekdays: number[];
+  enabled: boolean;
+  created_at_ms: number;
+  last_run_at_ms: number | null;
+  last_result: string | null;
+}
+
+export interface CreateScheduleRequest {
+  service_id: string;
+  action: ScheduleAction;
+  hour: number;
+  minute: number;
+  weekdays: number[];
 }
 
 export type ServiceLogPriority = "all" | "error" | "warning" | "info";
@@ -148,6 +179,7 @@ export interface DiagnosticsResponse {
     architecture: string;
     uptime_seconds: number;
     timezone: string | null;
+    upgradable_packages: number | null;
   } | null;
   deckox_services: {
     agent: {
@@ -337,6 +369,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
     }),
   storage: () => request<StorageMount[]>("/api/v1/storage"),
+  backups: () => request<BackupSummary[]>("/api/v1/backups"),
   diagnostics: () => request<DiagnosticsResponse>("/api/v1/diagnostics"),
   diagnosticsReport: () => requestBlob("/api/v1/diagnostics/report"),
   auditEvents: (beforeMs?: number) =>
@@ -352,14 +385,37 @@ export const api = {
       `/api/v1/services/${encodeURIComponent(serviceId)}/logs?${query.toString()}`,
     );
   },
+  serviceLogsReport: (serviceId: string, lines: number, priority: ServiceLogPriority) => {
+    const query = new URLSearchParams({ lines: String(lines), priority });
+    return requestBlob(
+      `/api/v1/services/${encodeURIComponent(serviceId)}/logs/report?${query.toString()}`,
+    );
+  },
   serviceAction: (
     serviceId: string,
-    action: "start" | "stop" | "restart" | "enable" | "disable",
+    action: "start" | "stop" | "restart" | "enable" | "disable" | "allow" | "disallow",
   ) =>
     request<CommandResult>(
       `/api/v1/services/${encodeURIComponent(serviceId)}/${action}`,
       { method: "POST" },
     ),
+  schedules: () => request<ServiceSchedule[]>("/api/v1/schedules"),
+  createSchedule: (payload: CreateScheduleRequest) =>
+    request<ServiceSchedule>("/api/v1/schedules", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    }),
+  deleteSchedule: (scheduleId: string) =>
+    request<unknown>(`/api/v1/schedules/${encodeURIComponent(scheduleId)}`, {
+      method: "DELETE",
+    }),
+  setScheduleEnabled: (scheduleId: string, enabled: boolean) =>
+    request<ServiceSchedule>(
+      `/api/v1/schedules/${encodeURIComponent(scheduleId)}/${enabled ? "enable" : "disable"}`,
+      { method: "POST" },
+    ),
+  testWebhook: () => request<unknown>("/api/v1/settings/webhook/test", { method: "POST" }),
 };
 
 export function buildUpdateCommand(version: string | null | undefined): string | null {

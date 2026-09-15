@@ -16,6 +16,10 @@ Agent復旧時の状態再取得、JSONで保存できる安全なシステム�
 更新確認も実装済みです。任意コマンドを実行するWebコンソールは提供しません。
 更新の適用は既定で無効で、`agent.toml`で明示的に許可した場合だけ設定画面から
 実行できます（詳細は[更新の適用](#更新の適用)を参照）。
+`DECKOX_WEBHOOK_URL`を設定すると、管理画面を開いていなくても許可済み
+サービスの障害・Swap/ディスク使用率の高騰・Agentへの接続断・新しい
+Deckoxバージョンの公開を状態が変化した瞬間だけWebhookへ通知します
+（既定は無効）。設定画面からテスト通知を送信して疎通確認できます。
 
 ```text
 Vue管理画面
@@ -123,12 +127,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.5.2`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.6.0`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.5.2
-git push origin v0.5.2
+git tag v0.6.0
+git push origin v0.6.0
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -153,7 +157,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.5.2 sh
+  | sudo DECKOX_VERSION=v0.6.0 sh
 ```
 
 ダウンロードや変更を行わず、対象アーキテクチャ・取得先・現在の導入状態を確認できます。
@@ -259,8 +263,12 @@ Serverが確認済みのバージョンに対応する`install.sh`をGitHubか�
 
 systemdサービスは、一覧と状態を確認したうえで、Agent設定の完全一致許可リストに
 登録した対象だけを起動・停止・再起動・有効化・無効化できます。同じ許可対象について
-journalログを最大500行まで表示し、全件・エラー・警告・情報のpriorityで絞り込めます。ログのファイルダウンロードと
-任意のjournalctl引数指定には対応していません。
+journalログを最大500行まで表示し、全件・エラー・警告・情報のpriorityで絞り込め、
+表示中の内容をJSONファイルとして保存できます。任意のjournalctl引数指定には対応していません。
+許可リストへの追加・削除も管理画面のサービス一覧から行え、SSHで`agent.toml`を
+手動編集する必要はありません(`deckox-agent.service`・`deckox-server.service`自身は対象外です)。
+許可リスト内のサービスは、起動・停止・再起動を曜日・時刻を指定してスケジュール実行
+することもでき、Agentが20秒間隔でホストのローカル時刻を確認して実行します。
 
 v0.3.3ではWebコンソールを削除しました。Linuxの対話操作には通常のSSHを利用し、
 Deckoxからは許可された管理APIだけを実行します。v0.3.2から更新すると、旧Terminal

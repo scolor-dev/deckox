@@ -66,6 +66,13 @@ impl AgentError {
             message: message.into(),
         }
     }
+
+    /// The human-readable message, for callers that need to surface it
+    /// somewhere other than an HTTP response body — e.g. a schedule's
+    /// `last_result`, which the admin panel displays as-is.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
 }
 
 impl IntoResponse for AgentError {

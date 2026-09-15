@@ -110,6 +110,7 @@ mod tests {
                 architecture: "aarch64".to_owned(),
                 uptime_seconds: 42,
                 timezone: Some("Asia/Tokyo".to_owned()),
+                upgradable_packages: Some(3),
             },
             deckox_services: DeckoxServiceDiagnostics {
                 agent: unit_state(),

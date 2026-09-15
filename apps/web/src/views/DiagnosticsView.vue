@@ -4,7 +4,9 @@ import { useI18n } from "vue-i18n";
 import {
   api,
   DIAGNOSTICS_REPORT_FILENAME,
+  formatBytes,
   formatUptime,
+  type BackupSummary,
   type DeckoxServiceDiagnostic,
   type DiagnosticsResponse,
 } from "../api/client";
@@ -16,6 +18,8 @@ const diagnostics = ref<DiagnosticsResponse | null>(null);
 const loading = ref(true);
 const downloading = ref(false);
 const error = ref<string | null>(null);
+const backups = ref<BackupSummary[]>([]);
+const backupsError = ref<string | null>(null);
 
 const generatedAt = computed(() => {
   if (!diagnostics.value) return t("common.none");
@@ -41,6 +45,13 @@ function enabledLabel(enabled: boolean) {
   return t(enabled ? "diagnostics.enabled" : "diagnostics.disabled");
 }
 
+function formatBackupDate(createdAtMs: number) {
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(createdAtMs);
+}
+
 async function refresh() {
   loading.value = true;
   error.value = null;
@@ -50,6 +61,15 @@ async function refresh() {
     error.value = t(apiErrorKey(cause, "errors.diagnostics"));
   } finally {
     loading.value = false;
+  }
+
+  // Kept independent of the diagnostics fetch above (own try/catch) so an
+  // Agent hiccup on one doesn't blank out the other.
+  try {
+    backups.value = await api.backups();
+    backupsError.value = null;
+  } catch (cause) {
+    backupsError.value = t(apiErrorKey(cause, "errors.backups"));
   }
 }
 
@@ -164,6 +184,7 @@ onMounted(refresh);
             <div><dt>{{ t("diagnostics.architecture") }}</dt><dd>{{ diagnostics.host.architecture }}</dd></div>
             <div><dt>{{ t("diagnostics.uptime") }}</dt><dd>{{ formatUptime(diagnostics.host.uptime_seconds, locale) }}</dd></div>
             <div><dt>{{ t("diagnostics.timezone") }}</dt><dd>{{ diagnostics.host.timezone ?? t("common.none") }}</dd></div>
+            <div><dt>{{ t("diagnostics.upgradablePackages") }}</dt><dd>{{ diagnostics.host.upgradable_packages ?? t("diagnostics.upgradablePackagesUnavailable") }}</dd></div>
           </dl>
           <p
             v-else
@@ -221,6 +242,44 @@ onMounted(refresh);
         >
           {{ t("diagnostics.noConfig") }}
         </p>
+      </section>
+
+      <section class="detail-panel diagnostics-panel">
+        <div class="section-title">
+          <h2>{{ t("diagnostics.backups") }}</h2>
+        </div>
+        <p
+          v-if="backupsError"
+          class="diagnostics-empty diagnostics-panel-empty"
+        >
+          {{ backupsError }}
+        </p>
+        <div
+          v-else
+          class="table-scroll"
+        >
+          <table>
+            <thead><tr><th>{{ t("diagnostics.backupCreatedAt") }}</th><th>{{ t("diagnostics.backupPreviousVersion") }}</th><th>{{ t("diagnostics.backupSize") }}</th></tr></thead>
+            <tbody>
+              <tr v-if="backups.length === 0">
+                <td
+                  colspan="3"
+                  class="empty"
+                >
+                  {{ t("diagnostics.noBackups") }}
+                </td>
+              </tr>
+              <tr
+                v-for="backup in backups"
+                :key="backup.name"
+              >
+                <td>{{ backup.created_at_ms === null ? t("common.none") : formatBackupDate(backup.created_at_ms) }}</td>
+                <td>{{ backup.previous_version ?? t("common.none") }}</td>
+                <td>{{ formatBytes(backup.size_bytes, locale) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </template>
   </div>

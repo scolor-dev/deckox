@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.5.2</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.6.0</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -56,9 +56,9 @@
       <section class="section" aria-labelledby="release-title">
         <h2 id="release-title">Releaseの作成</h2>
         <p><code>v*</code>タグのpushでRelease Workflowが起動します。</p>
-        <pre><code>git tag v0.5.2
+        <pre><code>git tag v0.6.0
 git push origin main
-git push origin v0.5.2</code></pre>
+git push origin v0.6.0</code></pre>
         <aside class="note"><strong>実行条件:</strong> インストールコマンドを利用するには、対象タグのGitHub Releaseと4つの配布ファイルが公開済みである必要があります。</aside>
       </section>
 
@@ -75,7 +75,7 @@ sudo sh install.sh</code></pre>
         <p>特定バージョンを選ぶ場合:</p>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.5.2 sh</code></pre>
+  | sudo DECKOX_VERSION=v0.6.0 sh</code></pre>
         <p>ダウンロードや変更を行わずに予定を確認する場合:</p>
         <pre><code>sh install.sh --dry-run
 sh install.sh --version</code></pre>
@@ -153,7 +153,18 @@ allowed = [
 ]</code></pre>
         <p>変更後はAgentを再起動します。</p>
         <pre><code>sudo systemctl restart deckox-agent</code></pre>
-        <p>管理画面では許可したサービスのjournalログを最大500行まで表示し、全件・エラー・警告・情報で絞り込めます。任意の<code>journalctl</code>引数やログのダウンロードは提供せず、対話操作は通常のSSHを利用します。</p>
+        <p>初回のみ再起動が必要ですが、その後は管理画面のサービス一覧から許可リストへの追加・削除を直接行えます。追加時はサービスの実在を確認し、削除時は確認ダイアログを挟みます。<code>deckox-agent.service</code>・<code>deckox-server.service</code>自身は許可リストへ追加できません。</p>
+        <p>管理画面では許可したサービスのjournalログを最大500行まで表示し、全件・エラー・警告・情報で絞り込め、表示中の内容をJSONファイルとして保存できます。任意の<code>journalctl</code>引数は提供せず、対話操作は通常のSSHを利用します。</p>
+      </section>
+
+      <section class="section" aria-labelledby="webhook-title">
+        <h2 id="webhook-title">Webhook通知を有効にする</h2>
+        <p>管理画面を開いていなくても異常に気づけるよう、Webhook URLを設定すると許可済みサービスの障害・Swap使用率・ディスク使用率・Agentへの接続断・新しいDeckoxバージョンの公開をServerが自動で監視し通知します。初期状態では無効です。</p>
+        <pre><code>sudo systemctl edit deckox-server</code></pre>
+        <pre><code>[Service]
+Environment=DECKOX_WEBHOOK_URL=https://example.com/webhook</code></pre>
+        <pre><code>sudo systemctl restart deckox-server</code></pre>
+        <p>設定後は30秒間隔で状態を確認し、変化した瞬間(発生時・復旧時)だけ<code>{"event", "message", "text", "timestamp_ms"}</code>を含むJSONをPOSTします。Slack等のシンプルな受信Webhookは<code>text</code>フィールドをそのまま表示に使えます。送信結果は監査ログにも記録されます。設定画面には設定状況が表示され、「テスト通知を送信」ボタンで実際に届くか即座に確認できます。</p>
       </section>
 
       <section class="section" aria-labelledby="migration-title">

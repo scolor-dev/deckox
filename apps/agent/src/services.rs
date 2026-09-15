@@ -1,7 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
+    path::PathBuf,
     process::Stdio,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -10,9 +14,9 @@ use deckox_protocol::{
     ServiceLogPriority, ServiceLogs, ServiceSummary,
 };
 use serde_json::Value;
-use tokio::{io::AsyncReadExt, process::Command};
+use tokio::{io::AsyncReadExt, process::Command, sync::RwLock};
 
-use crate::error::AgentError;
+use crate::{config, error::AgentError};
 
 static COMMAND_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 const PROTECTED_SERVICES: [&str; 2] = ["deckox-agent.service", "deckox-server.service"];
@@ -45,11 +49,12 @@ const MAX_LOG_MESSAGE_BYTES: usize = 8 * 1024;
 
 #[derive(Clone)]
 pub struct ServiceManager {
-    allowed: HashSet<String>,
+    allowed: Arc<RwLock<HashSet<String>>>,
+    config_path: PathBuf,
 }
 
 impl ServiceManager {
-    pub fn new(allowed: Vec<String>) -> Result<Self, AgentError> {
+    pub fn new(allowed: Vec<String>, config_path: PathBuf) -> Result<Self, AgentError> {
         let mut validated = HashSet::new();
         for service in allowed {
             validate_service_id(&service)?;
@@ -60,7 +65,68 @@ impl ServiceManager {
             }
             validated.insert(service);
         }
-        Ok(Self { allowed: validated })
+        Ok(Self {
+            allowed: Arc::new(RwLock::new(validated)),
+            config_path,
+        })
+    }
+
+    /// Adds `service_id` to the control allowlist, persisting it to the
+    /// Agent's config file so it survives a restart. Rejects Deckox's own
+    /// services and anything systemd has never loaded (almost always a
+    /// typo), the same way `control`/`logs` already reject an ID that
+    /// is not on the allowlist.
+    pub async fn allow(&self, service_id: &str) -> Result<CommandResult, AgentError> {
+        ensure_linux()?;
+        validate_service_id(service_id)?;
+        if PROTECTED_SERVICES.contains(&service_id) {
+            return Err(AgentError::forbidden(
+                "Deckox services cannot be added to the control allowlist",
+            ));
+        }
+        ensure_service_exists(service_id).await?;
+
+        {
+            let mut allowed = self.allowed.write().await;
+            if !allowed.contains(service_id) {
+                let mut updated: Vec<String> = allowed.iter().cloned().collect();
+                updated.push(service_id.to_owned());
+                config::write_allowed_services(&self.config_path, &updated)?;
+                allowed.insert(service_id.to_owned());
+            }
+        }
+
+        Ok(CommandResult {
+            command_id: command_id(),
+            status: CommandStatus::Completed,
+            message: Some(format!("{service_id} added to the control allowlist")),
+        })
+    }
+
+    /// Removes `service_id` from the control allowlist. Idempotent: removing
+    /// a service that was never allowed still succeeds.
+    pub async fn disallow(&self, service_id: &str) -> Result<CommandResult, AgentError> {
+        ensure_linux()?;
+        validate_service_id(service_id)?;
+
+        {
+            let mut allowed = self.allowed.write().await;
+            if allowed.contains(service_id) {
+                let updated: Vec<String> = allowed
+                    .iter()
+                    .filter(|id| id.as_str() != service_id)
+                    .cloned()
+                    .collect();
+                config::write_allowed_services(&self.config_path, &updated)?;
+                allowed.remove(service_id);
+            }
+        }
+
+        Ok(CommandResult {
+            command_id: command_id(),
+            status: CommandStatus::Completed,
+            message: Some(format!("{service_id} removed from the control allowlist")),
+        })
     }
 
     pub async fn list(&self) -> Result<Vec<ServiceSummary>, AgentError> {
@@ -80,12 +146,13 @@ impl ServiceManager {
             .filter_map(|line| line.split_whitespace().next().map(str::to_owned))
             .collect();
         let fragment_paths = read_fragment_paths(&ids).await?;
+        let allowed = self.allowed.read().await;
 
         Ok(parse_service_list(
             &output,
             &enabled_states,
             &fragment_paths,
-            &self.allowed,
+            &allowed,
         ))
     }
 
@@ -128,7 +195,7 @@ impl ServiceManager {
                 .get("MainPID")
                 .and_then(|value| value.parse::<u32>().ok())
                 .filter(|pid| *pid != 0),
-            control_allowed: self.allowed.contains(service_id),
+            control_allowed: self.allowed.read().await.contains(service_id),
             standard_system: values
                 .get("FragmentPath")
                 .is_some_and(|path| is_standard_system(path)),
@@ -145,7 +212,7 @@ impl ServiceManager {
         ensure_linux()?;
         validate_service_id(service_id)?;
 
-        self.ensure_allowed(service_id)?;
+        self.ensure_allowed(service_id).await?;
 
         let action_name = match action {
             ServiceAction::Start => "start",
@@ -171,7 +238,7 @@ impl ServiceManager {
     ) -> Result<ServiceLogs, AgentError> {
         ensure_linux()?;
         validate_service_id(service_id)?;
-        self.ensure_allowed(service_id)?;
+        self.ensure_allowed(service_id).await?;
         validate_log_lines(lines)?;
 
         let lines = lines.to_string();
@@ -195,19 +262,42 @@ impl ServiceManager {
         })
     }
 
-    fn ensure_allowed(&self, service_id: &str) -> Result<(), AgentError> {
+    /// Whether `service_id` is currently on the control allowlist — used by
+    /// the schedule store to reject schedules for services that are not (or
+    /// are no longer) eligible for manual control either.
+    pub async fn is_allowed(&self, service_id: &str) -> bool {
+        self.allowed.read().await.contains(service_id)
+    }
+
+    async fn ensure_allowed(&self, service_id: &str) -> Result<(), AgentError> {
         if PROTECTED_SERVICES.contains(&service_id) {
             return Err(AgentError::forbidden(
                 "Deckox services cannot be managed through the Agent",
             ));
         }
-        if !self.allowed.contains(service_id) {
+        if !self.allowed.read().await.contains(service_id) {
             return Err(AgentError::forbidden(format!(
                 "service is not in the control allowlist: {service_id}"
             )));
         }
         Ok(())
     }
+}
+
+/// Rejects a service ID systemd has never loaded, so allow-listing a typo
+/// fails immediately instead of silently doing nothing.
+async fn ensure_service_exists(service_id: &str) -> Result<(), AgentError> {
+    let output = systemctl(&["show", service_id, "--no-pager", "--property=LoadState"]).await?;
+    let values = parse_properties(&output);
+    if values
+        .get("LoadState")
+        .is_none_or(|state| state == "not-found")
+    {
+        return Err(AgentError::not_found(format!(
+            "service not found: {service_id}"
+        )));
+    }
+    Ok(())
 }
 
 fn ensure_linux() -> Result<(), AgentError> {
@@ -527,23 +617,34 @@ mod tests {
         truncate_message, validate_log_lines,
     };
 
-    #[test]
-    fn validates_allowlist() {
-        assert!(ServiceManager::new(vec!["nginx.service".to_owned()]).is_ok());
-        assert!(ServiceManager::new(vec!["nginx.service;reboot".to_owned()]).is_err());
-        assert!(ServiceManager::new(vec!["-nginx.service".to_owned()]).is_err());
-        for service in PROTECTED_SERVICES {
-            assert!(ServiceManager::new(vec![service.to_owned()]).is_err());
-        }
+    fn test_manager(allowed: Vec<String>) -> Result<ServiceManager, crate::error::AgentError> {
+        ServiceManager::new(
+            allowed,
+            std::path::PathBuf::from("/tmp/deckox-agent-test.toml"),
+        )
     }
 
     #[test]
-    fn enforces_allowlist_by_exact_service_id() {
-        let manager =
-            ServiceManager::new(vec!["nginx.service".to_owned()]).expect("allowlist is valid");
-        assert!(manager.ensure_allowed("nginx.service").is_ok());
-        assert!(manager.ensure_allowed("nginx-extra.service").is_err());
-        assert!(manager.ensure_allowed("deckox-agent.service").is_err());
+    fn validates_allowlist() {
+        assert!(test_manager(vec!["nginx.service".to_owned()]).is_ok());
+        assert!(test_manager(vec!["nginx.service;reboot".to_owned()]).is_err());
+        assert!(test_manager(vec!["-nginx.service".to_owned()]).is_err());
+        for service in PROTECTED_SERVICES {
+            assert!(test_manager(vec![service.to_owned()]).is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn enforces_allowlist_by_exact_service_id() {
+        let manager = test_manager(vec!["nginx.service".to_owned()]).expect("allowlist is valid");
+        assert!(manager.ensure_allowed("nginx.service").await.is_ok());
+        assert!(manager.ensure_allowed("nginx-extra.service").await.is_err());
+        assert!(
+            manager
+                .ensure_allowed("deckox-agent.service")
+                .await
+                .is_err()
+        );
     }
 
     #[test]
