@@ -414,7 +414,10 @@ mod tests {
 
     fn update_status(latest_version: Option<&str>) -> UpdateStatus {
         UpdateStatus {
-            current_version: "0.5.2".to_owned(),
+            // Deliberately not a real release version, so `bump-version.sh`'s
+            // leftover-reference check never flags this fixture as a stale
+            // version string to update.
+            current_version: "0.0.0-test".to_owned(),
             latest_version: latest_version.map(str::to_owned),
             update_available: latest_version.is_some(),
             release_url: None,

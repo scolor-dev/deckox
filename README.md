@@ -127,12 +127,12 @@ npm run build
 
 ## GitHubからインストール
 
-`v0.5.2`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
+`v0.6.0`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
 バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
 
 ```bash
-git tag v0.5.2
-git push origin v0.5.2
+git tag v0.6.0
+git push origin v0.6.0
 ```
 
 Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
@@ -157,7 +157,7 @@ sudo sh install.sh
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.5.2 sh
+  | sudo DECKOX_VERSION=v0.6.0 sh
 ```
 
 ダウンロードや変更を行わず、対象アーキテクチャ・取得先・現在の導入状態を確認できます。
