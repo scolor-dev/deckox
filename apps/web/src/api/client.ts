@@ -453,7 +453,40 @@ export async function writeClipboardText(
     await clipboard.writeText(value);
     return true;
   } catch {
+    // Either navigator.clipboard was undefined (insecure context — accessing
+    // .writeText threw) or the browser refused the request; either way, fall
+    // back to the legacy copy path below rather than giving up.
+    return legacyCopyToClipboard(value);
+  }
+}
+
+/**
+ * The Clipboard API used above is restricted to secure contexts (HTTPS or
+ * localhost), so it is unavailable — `navigator.clipboard` is `undefined` —
+ * when Deckox is reached over a plain-HTTP LAN address, which is how the
+ * README and install docs say to use it. `document.execCommand("copy")` is
+ * deprecated but still broadly supported and works over plain HTTP, so it is
+ * the fallback for exactly that case.
+ */
+function legacyCopyToClipboard(value: string): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- no successor: this is the fallback for exactly the insecure (plain HTTP) contexts that lack the Clipboard API
+  if (typeof document === "undefined" || typeof document.execCommand !== "function") return false;
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.append(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, value.length);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- see above
+    return document.execCommand("copy");
+  } catch {
     return false;
+  } finally {
+    textarea.remove();
   }
 }
 

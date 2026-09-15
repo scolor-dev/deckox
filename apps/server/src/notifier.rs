@@ -432,17 +432,21 @@ mod tests {
 
     #[test]
     fn update_notification_fires_once_per_new_version() {
-        let status = update_status(Some("0.6.0"));
+        // Deliberately out of range for any real release (which stay in the
+        // 0.x series for the foreseeable future), so `bump-version.sh`'s
+        // leftover-reference check never flags these as stale version
+        // strings to update.
+        let status = update_status(Some("9.9.9"));
 
-        assert_eq!(update_notification(&status, None), Some("0.6.0".to_owned()));
+        assert_eq!(update_notification(&status, None), Some("9.9.9".to_owned()));
         assert_eq!(
-            update_notification(&status, Some("0.6.0")),
+            update_notification(&status, Some("9.9.9")),
             None,
             "already notified about this exact version"
         );
         assert_eq!(
-            update_notification(&status, Some("0.5.9")),
-            Some("0.6.0".to_owned()),
+            update_notification(&status, Some("9.9.8")),
+            Some("9.9.9".to_owned()),
             "a newer version than the one last notified should notify again"
         );
     }

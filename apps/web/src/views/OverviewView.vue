@@ -66,6 +66,18 @@ const busiestMount = computed(() => storageMounts.value.length === 0
   : storageMounts.value.reduce((busiest, mount) => (
     mount.usage_percent > busiest.usage_percent ? mount : busiest
   )));
+// Matches StorageView's "overall usage" exactly (sum across every mount),
+// so the two screens never show a different number for the same concept —
+// only the per-mount warning below is specific to a single mount.
+const totalStorageCapacity = computed(
+  () => storageMounts.value.reduce((sum, mount) => sum + mount.total_bytes, 0),
+);
+const totalStorageUsed = computed(
+  () => storageMounts.value.reduce((sum, mount) => sum + mount.used_bytes, 0),
+);
+const overallStoragePercent = computed(
+  () => usagePercentage(totalStorageUsed.value, totalStorageCapacity.value) ?? 0,
+);
 const networkMaximum = computed(() => Math.max(
   1,
   ...networkReceivedHistory.value,
@@ -125,6 +137,11 @@ function formatRate(value: number | null | undefined) {
     value: formatBytes(value, locale.value),
   });
 }
+
+const percentFormatter = (value: number) => `${String(Math.round(value))}%`;
+const decimalFormatter = (value: number) => value.toFixed(1);
+const temperatureFormatter = (value: number) => `${String(Math.round(value))}°C`;
+const rateFormatter = (value: number) => formatBytes(value, locale.value);
 
 async function refresh() {
   loading.value = true;
@@ -253,6 +270,8 @@ onMounted(refresh);
           :values="cpuHistory"
           :maximum="100"
           :label="t('overview.cpuChart')"
+          :limit="HISTORY_LIMIT"
+          :value-formatter="percentFormatter"
         />
       </article>
       <article class="metric-card">
@@ -264,6 +283,8 @@ onMounted(refresh);
           :values="memoryHistory"
           :maximum="100"
           :label="t('overview.memoryChart')"
+          :limit="HISTORY_LIMIT"
+          :value-formatter="percentFormatter"
         />
         <small class="metric-foot">{{ memoryPercent.toFixed(1) }}%</small>
       </article>
@@ -276,6 +297,8 @@ onMounted(refresh);
           :values="loadHistory"
           :maximum="loadMaximum"
           :label="t('overview.loadChart')"
+          :limit="HISTORY_LIMIT"
+          :value-formatter="decimalFormatter"
         />
         <small class="metric-foot">{{ t("overview.fifteenMinutes", { value: metrics?.load_average.fifteen_minutes.toFixed(2) ?? t("common.none") }) }}</small>
       </article>
@@ -288,6 +311,8 @@ onMounted(refresh);
           :values="swapHistory"
           :maximum="100"
           :label="t('overview.swapChart')"
+          :limit="HISTORY_LIMIT"
+          :value-formatter="percentFormatter"
         />
         <small
           v-if="swapPercent !== null && swapPercent >= 80"
@@ -307,6 +332,8 @@ onMounted(refresh);
           :secondary-values="networkTransmittedHistory"
           :maximum="networkMaximum"
           :label="t('overview.networkChart')"
+          :limit="HISTORY_LIMIT"
+          :value-formatter="rateFormatter"
         />
         <div class="metric-legend">
           <span>{{ t("overview.received") }}</span><span class="secondary">{{ t("overview.transmitted") }}</span>
@@ -325,6 +352,8 @@ onMounted(refresh);
           :secondary-values="diskWrittenHistory"
           :maximum="diskMaximum"
           :label="t('overview.diskIoChart')"
+          :limit="HISTORY_LIMIT"
+          :value-formatter="rateFormatter"
         />
         <div class="metric-legend">
           <span>{{ t("overview.read") }}</span><span class="secondary">{{ t("overview.write") }}</span>
@@ -332,23 +361,27 @@ onMounted(refresh);
       </article>
       <article :class="['metric-card', 'compact-metric-card', { warning: (busiestMount?.usage_percent ?? 0) >= 90 }]">
         <div class="metric-head">
-          <span>{{ t("overview.disk") }}</span><small>{{ t("storage.summary", { count: storageMounts.length }) }}</small>
+          <span>{{ t("storage.overallUsage") }}</span><small>{{ t("storage.summary", { count: storageMounts.length }) }}</small>
         </div>
-        <strong>{{ busiestMount ? `${busiestMount.usage_percent.toFixed(0)}%` : t("common.none") }}</strong>
+        <strong>{{ storageMounts.length > 0 ? `${overallStoragePercent.toFixed(0)}%` : t("common.none") }}</strong>
         <div
-          v-if="busiestMount"
+          v-if="storageMounts.length > 0"
           class="progress disk-usage-progress"
         >
           <span
-            :class="{ critical: busiestMount.usage_percent >= 90 }"
-            :style="{ width: `${busiestMount.usage_percent}%` }"
+            :class="{ critical: (busiestMount?.usage_percent ?? 0) >= 90 }"
+            :style="{ width: `${overallStoragePercent}%` }"
           />
         </div>
+        <small
+          v-if="storageMounts.length > 0"
+          class="metric-foot"
+        >{{ t("storage.overallUsageDetail", { used: formatBytes(totalStorageUsed, locale), total: formatBytes(totalStorageCapacity, locale) }) }}</small>
         <small
           v-if="busiestMount"
           class="metric-foot"
           :title="busiestMount.mount_point"
-        >{{ busiestMount.mount_point }} · {{ t("storage.used", { value: formatBytes(busiestMount.used_bytes, locale) }) }}</small>
+        >{{ t("overview.busiestMount", { mount: busiestMount.mount_point, percent: busiestMount.usage_percent.toFixed(0) }) }}</small>
         <small
           v-if="busiestMount && busiestMount.usage_percent >= 90"
           class="metric-warning"
@@ -363,6 +396,8 @@ onMounted(refresh);
           :values="temperatureHistory"
           :maximum="100"
           :label="t('overview.temperatureChart')"
+          :limit="HISTORY_LIMIT"
+          :value-formatter="temperatureFormatter"
         />
         <small class="metric-foot">{{ temperature === null ? t("overview.notAvailable") : t("overview.sensorValue") }}</small>
       </article>
