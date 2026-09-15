@@ -51,10 +51,35 @@ describe("update APIs", () => {
     expect(safeReleaseUrl("https://github.com/other/project/releases/tag/v0.3.9")).toBeNull();
   });
 
-  it("reports clipboard failures without throwing", async () => {
+  it("reports clipboard failures without throwing when no fallback is available", async () => {
     const clipboard = { writeText: vi.fn().mockRejectedValue(new Error("denied")) };
     await expect(writeClipboardText("command", clipboard)).resolves.toBe(false);
     expect(clipboard.writeText).toHaveBeenCalledWith("command");
+  });
+
+  it("falls back to document.execCommand when the Clipboard API is unavailable", async () => {
+    // Reproduces plain-HTTP LAN access, where navigator.clipboard is
+    // undefined because the Clipboard API requires a secure context.
+    const clipboard = { writeText: vi.fn().mockRejectedValue(new Error("insecure context")) };
+    const textarea = {
+      value: "",
+      style: {} as Record<string, string>,
+      setAttribute: vi.fn(),
+      select: vi.fn(),
+      setSelectionRange: vi.fn(),
+      remove: vi.fn(),
+    };
+    const fakeDocument = {
+      createElement: vi.fn().mockReturnValue(textarea),
+      body: { append: vi.fn() },
+      execCommand: vi.fn().mockReturnValue(true),
+    };
+    vi.stubGlobal("document", fakeDocument);
+
+    await expect(writeClipboardText("command", clipboard)).resolves.toBe(true);
+    expect(textarea.value).toBe("command");
+    expect(fakeDocument.execCommand).toHaveBeenCalledWith("copy");
+    expect(textarea.remove).toHaveBeenCalled();
   });
 });
 
