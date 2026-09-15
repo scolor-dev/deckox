@@ -66,6 +66,18 @@ const busiestMount = computed(() => storageMounts.value.length === 0
   : storageMounts.value.reduce((busiest, mount) => (
     mount.usage_percent > busiest.usage_percent ? mount : busiest
   )));
+// Matches StorageView's "overall usage" exactly (sum across every mount),
+// so the two screens never show a different number for the same concept —
+// only the per-mount warning below is specific to a single mount.
+const totalStorageCapacity = computed(
+  () => storageMounts.value.reduce((sum, mount) => sum + mount.total_bytes, 0),
+);
+const totalStorageUsed = computed(
+  () => storageMounts.value.reduce((sum, mount) => sum + mount.used_bytes, 0),
+);
+const overallStoragePercent = computed(
+  () => usagePercentage(totalStorageUsed.value, totalStorageCapacity.value) ?? 0,
+);
 const networkMaximum = computed(() => Math.max(
   1,
   ...networkReceivedHistory.value,
@@ -349,23 +361,27 @@ onMounted(refresh);
       </article>
       <article :class="['metric-card', 'compact-metric-card', { warning: (busiestMount?.usage_percent ?? 0) >= 90 }]">
         <div class="metric-head">
-          <span>{{ t("overview.disk") }}</span><small>{{ t("storage.summary", { count: storageMounts.length }) }}</small>
+          <span>{{ t("storage.overallUsage") }}</span><small>{{ t("storage.summary", { count: storageMounts.length }) }}</small>
         </div>
-        <strong>{{ busiestMount ? `${busiestMount.usage_percent.toFixed(0)}%` : t("common.none") }}</strong>
+        <strong>{{ storageMounts.length > 0 ? `${overallStoragePercent.toFixed(0)}%` : t("common.none") }}</strong>
         <div
-          v-if="busiestMount"
+          v-if="storageMounts.length > 0"
           class="progress disk-usage-progress"
         >
           <span
-            :class="{ critical: busiestMount.usage_percent >= 90 }"
-            :style="{ width: `${busiestMount.usage_percent}%` }"
+            :class="{ critical: (busiestMount?.usage_percent ?? 0) >= 90 }"
+            :style="{ width: `${overallStoragePercent}%` }"
           />
         </div>
+        <small
+          v-if="storageMounts.length > 0"
+          class="metric-foot"
+        >{{ t("storage.overallUsageDetail", { used: formatBytes(totalStorageUsed, locale), total: formatBytes(totalStorageCapacity, locale) }) }}</small>
         <small
           v-if="busiestMount"
           class="metric-foot"
           :title="busiestMount.mount_point"
-        >{{ busiestMount.mount_point }} · {{ t("storage.used", { value: formatBytes(busiestMount.used_bytes, locale) }) }}</small>
+        >{{ t("overview.busiestMount", { mount: busiestMount.mount_point, percent: busiestMount.usage_percent.toFixed(0) }) }}</small>
         <small
           v-if="busiestMount && busiestMount.usage_percent >= 90"
           class="metric-warning"
