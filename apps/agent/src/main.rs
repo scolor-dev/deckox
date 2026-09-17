@@ -13,8 +13,8 @@ use axum::{
 use deckox_protocol::{
     AgentDiagnostics, AgentStatus, AgentUpdateRequest, BackupSummary, CommandResult,
     CreateScheduleRequest, HealthResponse, RuntimeConfigSummary, ServiceAction, ServiceDetails,
-    ServiceLogPriority, ServiceLogs, ServiceSchedule, ServiceSummary, StorageMount,
-    SystemCapabilities, SystemInfo, SystemMetrics,
+    ServiceLogPriority, ServiceLogs, ServiceSchedule, ServiceSummary, SoftwarePackage,
+    StorageMount, SystemCapabilities, SystemInfo, SystemMetrics,
 };
 use serde::Deserialize;
 use tokio::net::UnixListener;
@@ -23,8 +23,8 @@ use tracing_subscriber::EnvFilter;
 
 use crate::{
     config::AgentConfig, error::AgentError, power::PowerManager, schedules::ScheduleStore,
-    services::ServiceManager, storage::read_storage, system::read_system_info,
-    update::UpdateManager,
+    services::ServiceManager, software::SoftwareManager, storage::read_storage,
+    system::read_system_info, update::UpdateManager,
 };
 
 mod backups;
@@ -35,6 +35,7 @@ mod power;
 mod request_context;
 mod schedules;
 mod services;
+mod software;
 mod storage;
 mod system;
 mod update;
@@ -43,6 +44,7 @@ mod update;
 struct AppState {
     power: PowerManager,
     services: ServiceManager,
+    software: SoftwareManager,
     update: UpdateManager,
     runtime_config: RuntimeConfigSummary,
     schedules: ScheduleStore,
@@ -64,10 +66,10 @@ const fn default_log_priority() -> ServiceLogPriority {
     ServiceLogPriority::All
 }
 
-#[tokio::main]
-async fn main() {
-    init_tracing();
-
+/// Loads configuration and assembles every long-lived manager `main` wires
+/// into the router's shared state. Split out so `main` itself stays under
+/// Clippy's line-count limit.
+async fn build_state() -> (AppState, PathBuf) {
     let config = AgentConfig::load().unwrap_or_else(|error| {
         eprintln!("failed to load Agent configuration: {error:?}");
         std::process::exit(2);
@@ -88,6 +90,16 @@ async fn main() {
             eprintln!("invalid service control configuration: {error:?}");
             std::process::exit(2);
         });
+    let package_manager = software::detect_package_manager().await;
+    let software = SoftwareManager::new(
+        config.software.allowed,
+        AgentConfig::resolve_path(),
+        package_manager,
+    )
+    .unwrap_or_else(|error| {
+        eprintln!("invalid software management configuration: {error:?}");
+        std::process::exit(2);
+    });
     let schedule_store = ScheduleStore::load(ScheduleStore::resolve_path())
         .await
         .unwrap_or_else(|error| {
@@ -95,6 +107,25 @@ async fn main() {
             std::process::exit(2);
         });
     schedules::spawn(schedule_store.clone(), services.clone());
+
+    (
+        AppState {
+            power,
+            services,
+            software,
+            update,
+            runtime_config,
+            schedules: schedule_store,
+        },
+        socket_path,
+    )
+}
+
+#[tokio::main]
+async fn main() {
+    init_tracing();
+
+    let (state, socket_path) = build_state().await;
 
     if let Err(error) = prepare_socket(&socket_path) {
         error!(%error, path = %socket_path.display(), "failed to prepare agent socket");
@@ -135,6 +166,15 @@ async fn main() {
         .route("/v1/services/{service_id}/allow", post(allow_service))
         .route("/v1/services/{service_id}/disallow", post(disallow_service))
         .route("/v1/services/{service_id}/logs", get(service_logs))
+        .route("/v1/software", get(list_software))
+        .route("/v1/software/{software_id}/install", post(install_software))
+        .route("/v1/software/{software_id}/remove", post(remove_software))
+        .route("/v1/software/{software_id}/upgrade", post(upgrade_software))
+        .route("/v1/software/{software_id}/allow", post(allow_software))
+        .route(
+            "/v1/software/{software_id}/disallow",
+            post(disallow_software),
+        )
         .route("/v1/schedules", get(list_schedules).post(create_schedule))
         .route(
             "/v1/schedules/{schedule_id}",
@@ -145,13 +185,7 @@ async fn main() {
             "/v1/schedules/{schedule_id}/disable",
             post(disable_schedule),
         )
-        .with_state(AppState {
-            power,
-            services,
-            update,
-            runtime_config,
-            schedules: schedule_store,
-        })
+        .with_state(state)
         .layer(middleware::from_fn(request_context::assign_request_id));
 
     info!(path = %socket_path.display(), "deckox agent started");
@@ -386,6 +420,82 @@ async fn disallow_service(
         "service_allowlist",
         &request_id,
         &format!("service={service_id} action=disallow"),
+        result,
+    )
+}
+
+async fn list_software(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<SoftwarePackage>>, AgentError> {
+    state.software.list().await.map(Json)
+}
+
+async fn install_software(
+    State(state): State<AppState>,
+    AxumPath(software_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<CommandResult>, AgentError> {
+    let result = state.software.install(&software_id).await;
+    log_command_result(
+        "software_action",
+        &request_id,
+        &format!("software={software_id} action=install"),
+        result,
+    )
+}
+
+async fn remove_software(
+    State(state): State<AppState>,
+    AxumPath(software_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<CommandResult>, AgentError> {
+    let result = state.software.remove(&software_id).await;
+    log_command_result(
+        "software_action",
+        &request_id,
+        &format!("software={software_id} action=remove"),
+        result,
+    )
+}
+
+async fn upgrade_software(
+    State(state): State<AppState>,
+    AxumPath(software_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<CommandResult>, AgentError> {
+    let result = state.software.upgrade(&software_id).await;
+    log_command_result(
+        "software_action",
+        &request_id,
+        &format!("software={software_id} action=upgrade"),
+        result,
+    )
+}
+
+async fn allow_software(
+    State(state): State<AppState>,
+    AxumPath(software_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<CommandResult>, AgentError> {
+    let result = state.software.allow(&software_id).await;
+    log_command_result(
+        "software_allowlist",
+        &request_id,
+        &format!("software={software_id} action=allow"),
+        result,
+    )
+}
+
+async fn disallow_software(
+    State(state): State<AppState>,
+    AxumPath(software_id): AxumPath<String>,
+    Extension(request_id): Extension<request_context::RequestId>,
+) -> Result<Json<CommandResult>, AgentError> {
+    let result = state.software.disallow(&software_id).await;
+    log_command_result(
+        "software_allowlist",
+        &request_id,
+        &format!("software={software_id} action=disallow"),
         result,
     )
 }

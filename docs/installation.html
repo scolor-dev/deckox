@@ -157,6 +157,17 @@ allowed = [
         <pre><code>sudo systemctl restart deckox-agent</code></pre>
         <p>初回のみ再起動が必要ですが、その後は管理画面のサービス一覧から許可リストへの追加・削除を直接行えます。追加時はサービスの実在を確認し、削除時は確認ダイアログを挟みます。<code>deckox-agent.service</code>・<code>deckox-server.service</code>自身は許可リストへ追加できません。</p>
         <p>管理画面では許可したサービスのjournalログを最大500行まで表示し、全件・エラー・警告・情報で絞り込め、表示中の内容をJSONファイルとして保存できます。任意の<code>journalctl</code>引数は提供せず、対話操作は通常のSSHを利用します。</p>
+        <h3>ソフトウェアのインストール・削除・更新を許可する</h3>
+        <p>固定のカタログはありません。管理画面の「ソフトウェア」画面からパッケージ名を入力すると、そのホストに<strong>既に設定済み</strong>のリポジトリだけを対象に実在確認したうえで<code>/etc/deckox/agent.toml</code>の<code>[software]</code>許可リストへ追加されます。第三者リポジトリやGPG鍵を新たに追加することはありません。初期値は空で、状態の閲覧はできますが変更操作はすべて拒否されます。</p>
+        <pre><code>[software]
+allowed = [
+  "docker.io",
+  "git",
+]</code></pre>
+        <p>手動で編集した場合はAgentを再起動します。</p>
+        <pre><code>sudo systemctl restart deckox-agent</code></pre>
+        <p>通常は管理画面の「ソフトウェア」画面からパッケージ名を入力するだけで許可リストへの追加・削除が行え、Agentの再起動は不要です。インストール・削除・更新の実行には管理者パスワードの再確認が必要です。</p>
+        <aside class="note">apt(Debian・Ubuntu・Raspberry Pi OSなど)とdnf(Fedora・RHEL・Rocky Linux・AlmaLinuxなど)に対応し、Agent起動時にホストのパッケージマネージャーを自動判定します。pacman(Arch Linux)・zypper(openSUSE)・Alpine Linuxには未対応です。</aside>
       </section>
 
       <section class="section" aria-labelledby="webhook-title">

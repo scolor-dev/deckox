@@ -62,6 +62,12 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/services/{id}/{action}</code></span></td><td><span class="status done">実装済み</span></td><td>起動・停止・再起動・有効化・無効化。Agentの許可・エラー状態を維持して返却</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}/logs</code></span></td><td><span class="status done">実装済み</span></td><td><code>lines</code>と<code>priority=all|error|warning|info</code>を検証し、完全一致許可リスト内のjournalログを中継。最大500行</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}/logs/report</code></span></td><td><span class="status done">実装済み</span></td><td>同じ条件で取得したログを<code>deckox-service-logs-{id}.json</code>としてダウンロード</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/software</code></span></td><td><span class="status done">実装済み</span></td><td>管理許可リスト内パッケージの状態を中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/install</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みパッケージをインストール</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/remove</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みパッケージを削除(purgeはしない)</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/upgrade</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、インストール済みの許可済みパッケージを最新版へ更新</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/allow</code></span></td><td><span class="status done">実装済み</span></td><td>パッケージ名を、ホストに設定済みのリポジトリで実在確認したうえで<code>/etc/deckox/agent.toml</code>の管理許可リストへ追加</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/disallow</code></span></td><td><span class="status done">実装済み</span></td><td>管理許可リストから削除</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>Agentのスケジュール一覧を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内サービスの起動・停止・再起動を曜日・時刻指定で登録。監査ログに記録</td></tr>
             <tr><td><span class="endpoint"><span class="method">DELETE</span><code>/api/v1/schedules/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>スケジュールを削除。監査ログに記録</td></tr>
@@ -106,6 +112,12 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services/{id}/logs</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスに限定してjournalを取得。最大500行、<code>all|error|warning|info</code>のpriority絞込に対応</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/allow</code></span></td><td><span class="status done">実装済み</span></td><td>サービスの存在を確認したうえで<code>/etc/deckox/agent.toml</code>の許可リストへ追加。Deckox自身の2ユニットは対象外</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/disallow</code></span></td><td><span class="status done">実装済み</span></td><td><code>/etc/deckox/agent.toml</code>の許可リストから削除。Deckox自身の2ユニットは対象外</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/software</code></span></td><td><span class="status done">実装済み</span></td><td>管理許可リスト内パッケージについて、ホストのパッケージマネージャー(apt/dnf)からインストール状態・バージョンを読み取り。インデックスの更新は行わない</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/install</code></span></td><td><span class="status done">実装済み</span></td><td>許可済みなら、インデックス更新後にパッケージをインストール</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/remove</code></span></td><td><span class="status done">実装済み</span></td><td>許可済みならパッケージを削除(設定・データは残す)</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/upgrade</code></span></td><td><span class="status done">実装済み</span></td><td>許可済み・インストール済みの場合だけ、インデックス更新後に最新版へ更新</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/allow</code></span></td><td><span class="status done">実装済み</span></td><td>ホストに設定済みのリポジトリでパッケージ名を実在確認したうえで<code>/etc/deckox/agent.toml</code>の<code>[software]</code>許可リストへ追加。第三者リポジトリは追加しない</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/disallow</code></span></td><td><span class="status done">実装済み</span></td><td><code>[software]</code>許可リストから削除</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>登録済みスケジュールの一覧(サービス・操作・曜日・時刻・有効状態・前回実行結果)</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスのみ登録可能。曜日(月-日)・時刻(ホストのローカル時刻)・起動/停止/再起動を指定。<code>/var/lib/deckox/schedules.json</code>へ永続化</td></tr>
             <tr><td><span class="endpoint"><span class="method">DELETE</span><code>/v1/schedules/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>スケジュールを削除</td></tr>
@@ -126,6 +138,7 @@
           <article class="card"><span class="status done">実装済み</span><h3>監査ログ</h3><p>認証・パスワード変更・TOTP設定・サービス操作・ホスト再起動・SSHコンソールからのCLI操作を時刻・種別・actor・送信元IP・結果で一覧表示し、イベント種別・結果で絞り込み、JSONとして保存できます。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>サービス管理</h3><p>systemd一覧・検索・状態表示と、許可された起動・停止・再起動・有効化・無効化を提供します。許可対象のjournalログは最大500行まで表示し、全件・エラー・警告・情報で絞り込め、表示中の内容をJSONファイルとして保存できます。許可リストへの追加・削除もこの画面から行え、追加時はサービスの実在確認、削除時は確認ダイアログを挟みます(SSHでの<code>/etc/deckox/agent.toml</code>手動編集は不要になりました)。Deckox自身の2ユニットは許可リストの対象外です。各サービスには「標準」(OS・パッケージ提供のユニット)・「Deckox」(自身が管理するユニット)に加えて、ユニット名から判定したDocker・nginx・PostgreSQLなど既知の主要ソフトウェアのタグを表示します。表示するタグの一覧はホスト上で実際に見つかったタグから組み立てられ、タグ単位での表示・非表示切り替え、検索語としての一致に対応します。非表示にしたタグはブラウザに保存され、次回このブラウザで画面を開いたときも同じ表示状態になります。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>サービスのスケジュール実行</h3><p>許可リスト内のサービスに限り、起動・停止・再起動を曜日と時刻を指定して自動実行できます。Agentがホストのローカル時刻で20秒ごとに確認し、該当する時刻・曜日で一度だけ実行します(継続的な再実行はしません)。一覧では前回の実行日時と成否を確認でき、削除せず一時的に無効化することもできます。Deckox自身の2ユニットはスケジュール対象外です。</p></article>
+          <article class="card"><span class="status done">実装済み</span><h3>ソフトウェア管理</h3><p>固定カタログは持たず、管理者が入力したパッケージ名を、そのホストに設定済みのリポジトリだけを対象に実在確認してから管理許可リストへ追加します(第三者リポジトリ・GPG鍵の追加は行いません)。許可リスト内パッケージのインストール状態・バージョン・入手可能なバージョンを表示し、インストール・削除・最新版への更新ができます。実行には管理者パスワードの再確認が必要です。apt(Debian・Ubuntuなど)とdnf(Fedora・RHEL系)に対応し、ホストのパッケージマネージャーを起動時に自動判定します。pacman(Arch Linux)・zypper(openSUSE)・Alpine Linuxには未対応です。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ストレージ</h3><p>マウントポイントごとの容量・使用率・空き容量を表示し、全マウント合計の使用率とマウント別の使用配分を色分けした内訳で示します。<code>/</code>や<code>/home</code>など既知のシステムマウントポイントには「標準」タグを表示し、サービス画面と同じ表示・非表示切り替えに対応します。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>ホスト再起動</h3><p>Agent側で明示的に許可した場合だけ、管理者パスワードを再確認して再起動し、新しいServerプロセスを検知してログインへ戻ります。</p></article>
           <article class="card"><span class="status done">実装済み</span><h3>Agent障害表示</h3><p>接続エラーやLinux専用APIのエラーを各画面へ表示します。</p></article>
@@ -155,6 +168,8 @@
             <tr><td><code>ServiceAction</code></td><td><span class="status done">使用中</span></td><td>systemdサービスの起動、停止、再起動、有効化、無効化</td></tr>
             <tr><td><code>ScheduleAction</code></td><td><span class="status done">使用中</span></td><td><code>ServiceAction</code>のうちスケジュール可能な起動・停止・再起動のみの部分集合</td></tr>
             <tr><td><code>ServiceSchedule</code> / <code>CreateScheduleRequest</code></td><td><span class="status done">使用中</span></td><td>スケジュールの登録内容(サービス・操作・曜日・時刻)と、Agent側の状態(有効/無効・前回実行日時・結果)</td></tr>
+            <tr><td><code>SoftwarePackage</code></td><td><span class="status done">使用中</span></td><td>管理許可リスト内パッケージの状態(名前・インストール状態・バージョン・入手可能バージョン・更新有無)</td></tr>
+            <tr><td><code>SoftwareAction</code></td><td><span class="status done">使用中</span></td><td>パッケージのインストール、削除、更新</td></tr>
             <tr><td><code>CommandResult</code></td><td><span class="status done">使用中</span></td><td>操作完了時のコマンドID、実行状態、メッセージ</td></tr>
             <tr><td><code>AgentCommand</code></td><td><span class="status defined">型のみ定義済み</span></td><td>汎用コマンド型。現在のHTTPハンドラーでは未使用</td></tr>
             <tr><td><code>AuditEvent</code> / <code>AuditPage</code></td><td><span class="status done">使用中</span></td><td>監査ログの1件と、新しい順のページング応答。Server専用でAgent側の型は変更していない</td></tr>
@@ -162,13 +177,14 @@
         </table>
         <aside class="note"><strong>診断データの境界:</strong> 診断は固定した安全な項目だけを構築します。生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、セッション、Cookie、boot IDはAPI・画面・ダウンロードへ含めません。</aside>
         <aside class="note"><strong>サービス管理の境界:</strong> 専用HTTPエンドポイントと<code>ServiceAction</code>で実装されています。ログ閲覧も完全一致許可リスト、最大500行、<code>all|error|warning|info</code>だけを受け付けます。許可リストの追加・削除は<code>/etc/deckox/agent.toml</code>への直接書き込みのみで行い、サービス自体の起動・停止などとは独立した専用エンドポイントです。汎用<code>AgentCommand</code>とWebコンソールは使っていません。</aside>
+        <aside class="note"><strong>ソフトウェア管理の境界:</strong> 固定のソフトウェアカタログは持ちません。管理許可リストへ追加できるのは、そのホストに<strong>既に設定済み</strong>のパッケージリポジトリで実在確認できたパッケージ名だけです。Deckoxが新しいリポジトリやGPG鍵を追加することはありません。<code>[software]</code>許可リストは<code>[services]</code>と同じ思想の別テーブルで、書き込み時にどちらのテーブルも互いを破壊しないよう境界を区切って置換します。</aside>
       </section>
 
       <section class="section" aria-labelledby="not-title">
         <h2 id="not-title">現時点で未実装のもの</h2>
         <div class="grid">
           <article class="card"><span class="status missing">未実装</span><h3>複数ユーザー・ロール</h3><p>アカウントファイルはユーザー名をキーにした構造ですが、実際に扱うのは<code>admin</code>単一アカウントだけです。複数ユーザーの作成・ロール分けはありません。</p></article>
-          <article class="card"><span class="status missing">未実装</span><h3>専用のLinux管理画面</h3><p>Docker、ファイル、ネットワーク、パッケージを型付き操作で管理する専用API・画面はありません。</p></article>
+          <article class="card"><span class="status missing">未実装</span><h3>専用のLinux管理画面</h3><p>ファイル・ネットワークを型付き操作で管理する専用API・画面はありません。パッケージ管理は実装済みですが(「ソフトウェア管理」を参照)、Deckoxからインストールしたソフトウェア自体の設定・操作(例: nginxの設定編集、Dockerコンテナの管理)はまだできません。pacman(Arch Linux)・zypper(openSUSE)・Alpine Linuxのパッケージ管理にも未対応です。</p></article>
           <article class="card"><span class="status missing">未実装</span><h3>データベース</h3><p>アカウント・監査ログともにJSON/JSON Linesファイルで永続化しており、外部データベースは使用しません。</p></article>
           <article class="card"><span class="status missing">未実装</span><h3>TLS終端</h3><p>Server自身によるHTTPS提供はありません。</p></article>
         </div>

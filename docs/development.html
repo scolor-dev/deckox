@@ -149,6 +149,9 @@ sudo -u deckox deckox-server access-url</code></pre>
 allow_reboot = false
 allow_update = false
 
+[software]
+allowed = []
+
 [services]
 allowed = [
   "nginx.service",
@@ -156,10 +159,20 @@ allowed = [
 ]</code></pre>
         <p><code>deckox-agent.service</code>と<code>deckox-server.service</code>は登録しても起動時に拒否されます。</p>
         <p>journalログは最大500行までで、priorityは<code>all</code>・<code>error</code>・<code>warning</code>・<code>info</code>だけを指定できます。任意の<code>journalctl</code>引数、Webコンソールは提供しません。表示中のログはJSONファイルとして保存できます。</p>
-        <p>許可リストは<code>POST /api/v1/services/{id}/allow</code>・<code>POST /api/v1/services/{id}/disallow</code>から追加・削除でき、管理画面のサービス一覧からも操作できます。追加前に<code>systemctl</code>でサービスの存在を確認し、存在しないIDは拒否します。<code>deckox-agent.service</code>と<code>deckox-server.service</code>はどちらのエンドポイントでも対象外です。書き込みは<code>agent.toml</code>の<code>[services]</code>セクションのみを置換する形で行い、コメントを含む他のセクションは保持します(<code>[services]</code>がファイル末尾のテーブルであることを前提とした実装です)。設定はプロセス内の許可リストとファイルの両方へ即座に反映され、Agentの再起動は不要です。</p>
+        <p>許可リストは<code>POST /api/v1/services/{id}/allow</code>・<code>POST /api/v1/services/{id}/disallow</code>から追加・削除でき、管理画面のサービス一覧からも操作できます。追加前に<code>systemctl</code>でサービスの存在を確認し、存在しないIDは拒否します。<code>deckox-agent.service</code>と<code>deckox-server.service</code>はどちらのエンドポイントでも対象外です。書き込みは<code>agent.toml</code>の<code>[services]</code>セクションのみを置換する形で行い、コメントを含む他のセクションは保持します(<code>[services]</code>が<code>[software]</code>より後の、ファイル末尾のテーブルであることを前提とした実装です)。設定はプロセス内の許可リストとファイルの両方へ即座に反映され、Agentの再起動は不要です。</p>
         <p><code>system.allow_reboot</code>は初期値<code>false</code>です。<code>true</code>にした場合だけ、パスワード再確認後のホスト再起動を受け付けます。<code>system.allow_update</code>も初期値<code>false</code>で、<code>true</code>にした場合だけ管理画面からの更新実行を受け付けます。</p>
         <p>サービス一覧の各項目には、判定によるタグが付与されます。ユニットファイルの<code>FragmentPath</code>が<code>/usr/lib/systemd/system/</code>または<code>/lib/systemd/system/</code>配下にある場合は「標準」(OS・パッケージ提供)、IDが<code>deckox-agent.service</code>・<code>deckox-server.service</code>と一致する場合は「Deckox」タグになります。どちらにも該当しないサービス(<code>/etc/systemd/system/</code>などローカルに配置されたユニット)はタグなしです。</p>
         <p>これとは別に、ユニット名の基本部分(<code>@instance</code>と<code>.service</code>を除いた部分。例: <code>postgresql@14-main.service</code>なら<code>postgresql</code>)を既知の主要ソフトウェアの一覧と突き合わせ、一致すれば製品名タグ(例: <code>docker.service</code>→「Docker」)を付与します。standard_systemとは独立した判定なので、両方のタグが付くこともあります。ストレージのマウント一覧にも同様に、マウントポイントが<code>/</code>・<code>/boot</code>・<code>/boot/efi</code>・<code>/home</code>・<code>/var</code>・<code>/tmp</code>のいずれかと完全一致する場合だけ「標準」タグを付与します(サブディレクトリやDockerのoverlayマウントなどは対象外)。</p>
+      </section>
+
+      <section class="section" aria-labelledby="software-title">
+        <h2 id="software-title">ソフトウェア管理の許可リスト</h2>
+        <p>固定のカタログは持ちません。<code>apps/agent/src/software.rs</code>の<code>PackageManager</code>enum(<code>Apt</code>・<code>Dnf</code>)が、Agent起動時に<code>apt-get --version</code>・<code>dnf --version</code>を順に試して(<code>Command::output</code>はバイナリが無ければ<code>Err</code>を返すだけで、シェルは経由しない)ホストのパッケージマネージャーを1回だけ判定します。</p>
+        <p><code>POST /v1/software/{name}/allow</code>は、管理者が入力した任意のパッケージ名を、そのホストに<strong>既に設定済み</strong>のリポジトリだけを対象に実在確認してから許可リストへ追加します。apt側は<code>apt-cache policy &lt;pkg&gt;</code>の<code>Candidate:</code>行、dnf側は<code>dnf --quiet list &lt;pkg&gt;</code>の出力(<code>Installed Packages</code>/<code>Available Packages</code>セクション)を読み、どちらも見つからなければ<code>404</code>で拒否します。新しいリポジトリやGPG鍵を追加することはありません。</p>
+        <p>一覧取得(<code>GET /v1/software</code>)は許可リスト内パッケージだけを対象に、同じ実在確認ロジックでインストール状態・バージョンを読みます。どちらのバックエンドも読み取り専用でインデックス更新は行いません(診断画面の更新可能パッケージ数と同じ方針)。</p>
+        <p>インストール・更新は実行直前に一度だけインデックスを更新してから(apt: <code>apt-get update</code>、dnf: <code>dnf makecache --refresh</code>)、<code>apt-get install -y</code>/<code>dnf install -y</code>を実行します。削除は<code>apt-get remove -y</code>/<code>dnf remove -y</code>で、aptは設定・データを残しますが、dnfには同等の使い分けがなく設定ファイルも削除される場合があります。更新は対象がインストール済みでない場合<code>409 conflict</code>で拒否します。</p>
+        <p>許可リストの追加・削除(<code>POST /v1/software/{name}/allow</code>・<code>/disallow</code>)はサービスの許可リストと同様、管理者セッションだけで実行できます。一方インストール・削除・更新は、ホスト再起動・自己更新と同じ<code>confirm_password_or_respond()</code>(Server側、<code>main.rs</code>)でパスワード再確認を必須にしています。ホストの実際の状態を変える操作だからです。</p>
+        <p>pacman(Arch Linux)・zypper(openSUSE)は<code>PackageManager</code>へ新しいバリアントを追加するだけで対応できる設計ですが、今回は未実装です。Alpine LinuxはsystemdではなくOpenRCのため、ソフトウェア管理に限らずDeckoxのサービス管理そのものが対象外です。</p>
       </section>
 
       <section class="section" aria-labelledby="schedules-title">

@@ -17,6 +17,8 @@ pub struct AgentConfig {
     #[serde(default)]
     pub system: SystemConfig,
     #[serde(default)]
+    pub software: SoftwareConfig,
+    #[serde(default)]
     pub services: ServicesConfig,
 }
 
@@ -26,6 +28,12 @@ pub struct SystemConfig {
     pub allow_reboot: bool,
     #[serde(default)]
     pub allow_update: bool,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct SoftwareConfig {
+    #[serde(default)]
+    pub allowed: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -108,6 +116,103 @@ pub fn write_allowed_services(path: &Path, allowed: &[String]) -> Result<(), Age
     })
 }
 
+/// Rewrites only the `[software]` table of the config file at `path`,
+/// leaving everything else untouched — the same purpose as
+/// [`write_allowed_services`], but `[software]` is *not* the last table in
+/// `packaging/config/agent.toml` (`[services]` follows it), so this replaces
+/// only up to the next `[...]` header instead of assuming the rest of the
+/// file belongs to this table. Writes via a temp file plus a rename, same as
+/// [`write_allowed_services`].
+pub fn write_allowed_software(path: &Path, allowed: &[String]) -> Result<(), AgentError> {
+    let original = match std::fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => {
+            return Err(AgentError::internal(format!(
+                "failed to read config {}: {error}",
+                path.display()
+            )));
+        }
+    };
+
+    let updated = replace_bounded_section(&original, "software", &render_software_section(allowed));
+
+    let temp_path = path.with_extension("software.toml.tmp");
+    std::fs::write(&temp_path, updated).map_err(|error| {
+        AgentError::internal(format!("failed to write {}: {error}", temp_path.display()))
+    })?;
+    std::fs::rename(&temp_path, path).map_err(|error| {
+        AgentError::internal(format!(
+            "failed to replace {} with the updated config: {error}",
+            path.display()
+        ))
+    })
+}
+
+/// Each entry here has already been confirmed, at the time it was added, to
+/// resolve from the host's own already-configured package repositories —
+/// there is no fixed catalog to cross-reference.
+fn render_software_section(allowed: &[String]) -> String {
+    let mut sorted = allowed.to_vec();
+    sorted.sort();
+
+    let mut section = String::from(
+        "# Package state can always be read. Install, remove, and upgrade are permitted\n\
+         # only for package names listed here. Each name was confirmed, when added, to\n\
+         # resolve from this host's own configured package repositories (never a newly\n\
+         # added third-party one). Managed from the web admin's Software screen; hand\n\
+         # edits are kept as long as this table is followed only by [services] (or\n\
+         # nothing).\n\
+         [software]\n",
+    );
+    if sorted.is_empty() {
+        section.push_str("allowed = []\n");
+    } else {
+        section.push_str("allowed = [\n");
+        for id in &sorted {
+            let _ = writeln!(section, "  \"{id}\",");
+        }
+        section.push_str("]\n");
+    }
+    section
+}
+
+/// Replaces the `[table_name]` table in `original` with `new_section`,
+/// touching nothing before the header and nothing from the next top-level
+/// `[...]` header onward (or nothing after, when `table_name` is the last
+/// table or absent). Unlike [`replace_services_section`] — which assumes
+/// `[services]` is always the last table — this supports a managed table
+/// that has another managed table after it.
+fn replace_bounded_section(original: &str, table_name: &str, new_section: &str) -> String {
+    let header = format!("[{table_name}]");
+    let Some(start) = original.find(&header) else {
+        let mut result = original.trim_end().to_owned();
+        if !result.is_empty() {
+            result.push_str("\n\n");
+        }
+        result.push_str(new_section);
+        return result;
+    };
+
+    let search_from = start + header.len();
+    let end = original[search_from..]
+        .match_indices('\n')
+        .map(|(offset, _)| search_from + offset + 1)
+        .find(|&line_start| original[line_start..].starts_with('['))
+        .unwrap_or(original.len());
+
+    let mut result = original[..start].trim_end().to_owned();
+    if !result.is_empty() {
+        result.push_str("\n\n");
+    }
+    result.push_str(new_section);
+    if end < original.len() {
+        result.push('\n');
+        result.push_str(&original[end..]);
+    }
+    result
+}
+
 fn render_services_section(allowed: &[String]) -> String {
     let mut sorted = allowed.to_vec();
     sorted.sort();
@@ -145,7 +250,10 @@ fn replace_services_section(original: &str, new_section: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentConfig, render_services_section, replace_services_section};
+    use super::{
+        AgentConfig, render_services_section, render_software_section, replace_bounded_section,
+        replace_services_section,
+    };
 
     #[test]
     fn parses_allowed_services() {
@@ -156,6 +264,9 @@ socket = "/tmp/deckox.sock"
 [system]
 allow_reboot = true
 
+[software]
+allowed = ["nginx"]
+
 [services]
 allowed = ["nginx.service", "postgresql.service"]
 "#,
@@ -163,6 +274,7 @@ allowed = ["nginx.service", "postgresql.service"]
         .expect("config should parse");
 
         assert_eq!(config.services.allowed.len(), 2);
+        assert_eq!(config.software.allowed, vec!["nginx".to_owned()]);
         assert!(config.system.allow_reboot);
         assert!(!config.system.allow_update);
         assert_eq!(
@@ -172,6 +284,15 @@ allowed = ["nginx.service", "postgresql.service"]
                 .to_string_lossy(),
             "/tmp/deckox.sock"
         );
+    }
+
+    #[test]
+    fn parses_config_without_a_software_table() {
+        let config: AgentConfig =
+            toml::from_str("socket = \"/tmp/deckox.sock\"\n\n[services]\nallowed = []\n")
+                .expect("config should parse");
+
+        assert!(config.software.allowed.is_empty());
     }
 
     #[test]
@@ -212,5 +333,71 @@ allowed = ["nginx.service", "postgresql.service"]
         let a_index = rendered.find("\"a.service\"").expect("a.service listed");
         let b_index = rendered.find("\"b.service\"").expect("b.service listed");
         assert!(a_index < b_index, "allowlist should be sorted");
+    }
+
+    #[test]
+    fn replace_bounded_section_leaves_a_later_table_untouched() {
+        let original = "socket = \"/tmp/deckox.sock\"\n\n\
+             [system]\n\
+             allow_reboot = true\n\n\
+             [software]\n\
+             allowed = [\"docker\"]\n\n\
+             [services]\n\
+             allowed = [\"old.service\"]\n";
+
+        let updated = replace_bounded_section(
+            original,
+            "software",
+            &render_software_section(&["nginx".to_owned()]),
+        );
+
+        assert!(updated.contains("allow_reboot = true"));
+        assert!(
+            updated.contains("  \"nginx\",\n"),
+            "nginx should be listed: {updated}"
+        );
+        assert!(
+            !updated.contains("  \"docker\",\n"),
+            "docker should no longer be listed: {updated}"
+        );
+        assert!(
+            updated.contains("[services]\nallowed = [\"old.service\"]"),
+            "the [services] table after [software] must survive untouched: {updated}"
+        );
+    }
+
+    #[test]
+    fn replace_bounded_section_appends_when_absent() {
+        let updated = replace_bounded_section(
+            "socket = \"/tmp/deckox.sock\"\n",
+            "software",
+            &render_software_section(&[]),
+        );
+
+        assert!(updated.starts_with("socket = \"/tmp/deckox.sock\""));
+        assert!(updated.contains("[software]"));
+        assert!(updated.contains("allowed = []"));
+    }
+
+    #[test]
+    fn replace_bounded_section_replaces_a_final_table_like_replace_services_section() {
+        let original = "socket = \"/tmp/deckox.sock\"\n\n[software]\nallowed = [\"docker\"]\n";
+
+        let updated = replace_bounded_section(
+            original,
+            "software",
+            &render_software_section(&["docker".to_owned(), "nginx".to_owned()]),
+        );
+
+        assert!(updated.contains("\"docker\""));
+        assert!(updated.contains("\"nginx\""));
+    }
+
+    #[test]
+    fn render_software_section_sorts_and_quotes_ids() {
+        let rendered = render_software_section(&["nginx".to_owned(), "docker".to_owned()]);
+        let docker_index = rendered.find("\"docker\"").expect("docker listed");
+        let nginx_index = rendered.find("\"nginx\"").expect("nginx listed");
+        assert!(docker_index < nginx_index, "allowlist should be sorted");
     }
 }

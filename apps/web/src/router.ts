@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import OverviewView from "./views/OverviewView.vue";
 import ServicesView from "./views/ServicesView.vue";
+import SoftwareView from "./views/SoftwareView.vue";
 import SettingsView from "./views/SettingsView.vue";
 import StorageView from "./views/StorageView.vue";
 import RestartingView from "./views/RestartingView.vue";
@@ -10,6 +11,7 @@ import AuditView from "./views/AuditView.vue";
 export const routes = [
   { path: "/", name: "overview", component: OverviewView, meta: { titleKey: "nav.overview" } },
   { path: "/services", name: "services", component: ServicesView, meta: { titleKey: "nav.services" } },
+  { path: "/software", name: "software", component: SoftwareView, meta: { titleKey: "nav.software" } },
   { path: "/storage", name: "storage", component: StorageView, meta: { titleKey: "nav.storage" } },
   { path: "/diagnostics", name: "diagnostics", component: DiagnosticsView, meta: { titleKey: "nav.diagnostics" } },
   { path: "/audit", name: "audit", component: AuditView, meta: { titleKey: "nav.audit" } },

@@ -97,6 +97,14 @@ export interface ServiceSummary {
   product: string | null;
 }
 
+export interface SoftwarePackage {
+  name: string;
+  installed: boolean;
+  installed_version: string | null;
+  available_version: string | null;
+  upgradable: boolean;
+}
+
 export type ScheduleAction = "start" | "stop" | "restart";
 
 export interface ServiceSchedule {
@@ -399,6 +407,22 @@ export const api = {
       `/api/v1/services/${encodeURIComponent(serviceId)}/${action}`,
       { method: "POST" },
     ),
+  software: () => request<SoftwarePackage[]>("/api/v1/software"),
+  softwareAllowlist: (name: string, action: "allow" | "disallow") =>
+    request<CommandResult>(
+      `/api/v1/software/${encodeURIComponent(name)}/${action}`,
+      { method: "POST" },
+    ),
+  softwareAction: (
+    name: string,
+    action: "install" | "remove" | "upgrade",
+    currentPassword: string,
+  ) =>
+    request<CommandResult>(`/api/v1/software/${encodeURIComponent(name)}/${action}`, {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword }),
+      headers: { "Content-Type": "application/json" },
+    }),
   schedules: () => request<ServiceSchedule[]>("/api/v1/schedules"),
   createSchedule: (payload: CreateScheduleRequest) =>
     request<ServiceSchedule>("/api/v1/schedules", {

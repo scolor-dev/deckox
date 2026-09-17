@@ -130,6 +130,65 @@ describe("service APIs", () => {
   });
 });
 
+describe("software APIs", () => {
+  it("fetches the allow-listed software", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.software();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/software",
+      expect.objectContaining({ credentials: "same-origin" }),
+    );
+  });
+
+  it("encodes the package name and posts allow/disallow without a password", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      command_id: "command-1",
+      status: "completed",
+      message: null,
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.softwareAllowlist("docker.io", "allow");
+    await api.softwareAllowlist("docker.io", "disallow");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/software/docker.io/allow",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/software/docker.io/disallow",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("sends the current password in the body for install, remove, and upgrade", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      command_id: "command-1",
+      status: "completed",
+      message: null,
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.softwareAction("git", "install", "hunter2");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/software/git/install",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ current_password: "hunter2" }),
+      }),
+    );
+  });
+});
+
 describe("extended metric helpers", () => {
   it("keeps only the latest 120 samples", () => {
     const initial = Array.from({ length: 120 }, (_, index) => index);
