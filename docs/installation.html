@@ -25,7 +25,7 @@
         <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.6.1</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.6.2</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -56,9 +56,9 @@
       <section class="section" aria-labelledby="release-title">
         <h2 id="release-title">Releaseの作成</h2>
         <p><code>v*</code>タグのpushでRelease Workflowが起動します。</p>
-        <pre><code>git tag v0.6.1
+        <pre><code>git tag v0.6.2
 git push origin main
-git push origin v0.6.1</code></pre>
+git push origin v0.6.2</code></pre>
         <aside class="note"><strong>実行条件:</strong> インストールコマンドを利用するには、対象タグのGitHub Releaseと4つの配布ファイルが公開済みである必要があります。</aside>
       </section>
 
@@ -67,6 +67,7 @@ git push origin v0.6.1</code></pre>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
   | sudo sh</code></pre>
+        <p>初回インストールで対話端末が使える場合、待受アドレス(ローカルのみ/LAN内のこのホストのアドレス)、ホスト再起動の許可、更新適用の許可を尋ねます(<code>curl | sudo sh</code>の形でも、制御端末があれば入力できます)。無人インストールや対話端末がない場合は質問せず、従来どおりの既定値(ローカルのみ、両許可とも無効)のまま導入します。既定値以外を無人で指定したい場合は<code>DECKOX_LISTEN_ADDR</code>・<code>DECKOX_ALLOW_REBOOT</code>・<code>DECKOX_ALLOW_UPDATE</code>環境変数を使います。これらの質問は初回インストール時だけで、既存導入への更新実行時は尋ねません。</p>
         <p>スクリプトを確認してから実行する場合:</p>
         <pre><code>curl -fsSLO \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh
@@ -75,7 +76,7 @@ sudo sh install.sh</code></pre>
         <p>特定バージョンを選ぶ場合:</p>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.6.1 sh</code></pre>
+  | sudo DECKOX_VERSION=v0.6.2 sh</code></pre>
         <p>ダウンロードや変更を行わずに予定を確認する場合:</p>
         <pre><code>sh install.sh --dry-run
 sh install.sh --version</code></pre>
@@ -94,9 +95,10 @@ sh install.sh --version</code></pre>
           <dt>2. CPU判定</dt><dd><code>uname -m</code>からx86-64またはARM64を選択</dd>
           <dt>3. 検証</dt><dd>アーカイブとSHA-256を照合し、配布物内の<code>VERSION</code>と指定バージョンを比較。不完全な既存導入や未確認ユニットは変更前に拒否</dd>
           <dt>4. ユーザー</dt><dd><code>deckox</code>グループとシステムユーザーを未作成の場合のみ作成</dd>
-          <dt>5. 配置</dt><dd>更新前の管理対象ファイルを<code>/var/lib/deckox/backups</code>へ保存し、2バイナリ、Vue成果物、版情報、systemdユニットを配置。既存設定は維持</dd>
-          <dt>6. 認証</dt><dd>初回だけ管理者パスワードを生成し、Argon2idハッシュを<code>/var/lib/deckox</code>へ配置。旧配置からの更新時は既存値を移行して維持</dd>
-          <dt>7. 起動</dt><dd><code>deckox-agent</code>と<code>deckox-server</code>をenableして起動確認。失敗時は管理対象ファイルを更新前へ戻して旧サービスを再起動</dd>
+          <dt>5. 初期設定</dt><dd>初回導入時だけ、対話端末が使える場合に「待受アドレス(ローカルのみ/LAN内のこのホストのアドレス)」「ホスト再起動をUIから許可するか」「更新の適用をUIから許可するか」を尋ねる。既存導入(更新実行)では一切尋ねず既存の選択を維持。<code>DECKOX_LISTEN_ADDR</code>・<code>DECKOX_ALLOW_REBOOT</code>・<code>DECKOX_ALLOW_UPDATE</code>環境変数で無人インストール時にも指定可能</dd>
+          <dt>6. 配置</dt><dd>更新前の管理対象ファイルを<code>/var/lib/deckox/backups</code>へ保存し、2バイナリ、Vue成果物、版情報、systemdユニットを配置。既存設定は維持</dd>
+          <dt>7. 認証</dt><dd>初回だけ管理者パスワードを生成し、Argon2idハッシュを<code>/var/lib/deckox</code>へ配置。旧配置からの更新時は既存値を移行して維持</dd>
+          <dt>8. 起動</dt><dd><code>deckox-agent</code>と<code>deckox-server</code>をenableして起動確認。失敗時は管理対象ファイルを更新前へ戻して旧サービスを再起動</dd>
         </dl>
       </section>
 
@@ -119,9 +121,9 @@ sudo systemctl restart deckox-server</code></pre>
         <pre><code>sudo -u deckox deckox-server disable-totp
 sudo systemctl restart deckox-server</code></pre>
         <p>どちらの操作も監査ログ(管理画面の「監査ログ」または<code>GET /api/v1/audit</code>)に記録されます。</p>
-        <p>既定ではServerが<code>127.0.0.1:8080</code>で待ち受けます。別端末から一時的に確認する場合は、<code>ssh -L 8080:127.0.0.1:8080 user@server</code>でトンネルを作成します。</p>
+        <p>初回インストール時に対話でLAN内のアドレスを選んでいれば、既にそのアドレスで待ち受けています。既定(ローカルのみ)のままの場合、別端末から一時的に確認するには<code>ssh -L 8080:127.0.0.1:8080 user@server</code>でトンネルを作成します。</p>
         <h3>LAN内の端末から常時アクセスする</h3>
-        <p>サーバーのLANアドレスを確認し、そのアドレスだけへsystemdの待受設定を上書きします。次の例では<code>192.168.1.21</code>を使用します。</p>
+        <p>初回インストール時に対話プロンプトで「LAN内のこのホストのアドレス」を選ぶか、非対話インストールなら<code>DECKOX_LISTEN_ADDR=192.168.1.21:8080</code>のように環境変数を指定すると、この設定込みで導入されます。既にインストール済みのホストで後から変更したい場合は、サーバーのLANアドレスを確認し、そのアドレスだけへsystemdの待受設定を上書きします。次の例では<code>192.168.1.21</code>を使用します。</p>
         <pre><code>sudo systemctl edit deckox-server</code></pre>
         <pre><code>[Service]
 Environment=DECKOX_LISTEN_ADDR=192.168.1.21:8080</code></pre>
@@ -133,13 +135,13 @@ Environment=DECKOX_LISTEN_ADDR=192.168.1.21:8080</code></pre>
       <section class="section" aria-labelledby="agent-config-title">
         <h2 id="agent-config-title">操作を許可するサービス</h2>
         <h3>ホスト再起動を許可する</h3>
-        <p>ホスト再起動は初期状態で無効です。利用する場合だけ、<code>/etc/deckox/agent.toml</code>へ次を設定します。</p>
+        <p>ホスト再起動は初期状態で無効です。初回インストール時の対話プロンプトで許可するか選べます(非対話インストールなら<code>DECKOX_ALLOW_REBOOT=true</code>環境変数)。既にインストール済みのホストで後から変更したい場合は、<code>/etc/deckox/agent.toml</code>へ次を設定します。</p>
         <pre><code>[system]
 allow_reboot = true</code></pre>
         <p>設定画面から実行するときは管理者パスワードの再確認が必要です。要求後は管理画面が新しいServerプロセスを検知し、復帰するとログイン画面へ戻ります。設定変更後はAgentを再起動します。</p>
         <pre><code>sudo systemctl restart deckox-agent</code></pre>
         <h3>管理画面からの更新の適用を許可する</h3>
-        <p>管理画面から更新を実行する機能も初期状態で無効です。利用する場合だけ、<code>/etc/deckox/agent.toml</code>へ次を設定します。</p>
+        <p>管理画面から更新を実行する機能も初期状態で無効です。初回インストール時の対話プロンプトで許可するか選べます(非対話インストールなら<code>DECKOX_ALLOW_UPDATE=true</code>環境変数)。既にインストール済みのホストで後から変更したい場合は、<code>/etc/deckox/agent.toml</code>へ次を設定します。</p>
         <pre><code>[system]
 allow_update = true</code></pre>
         <p>有効化すると、更新確認で新しい版が見つかっている間だけ設定画面に「今すぐ更新」が表示されます。実行時は管理者パスワードの再確認が必要です。確認後、Serverが確認済みバージョンの<code>install.sh</code>をGitHubから取得してAgentへ渡し、Agentは通常のインストーラーと同じバックアップ・起動確認・失敗時ロールバックの手順を、Agent自身の再起動に巻き込まれない独立したsystemdユニットとして実行します。設定変更後はAgentを再起動します。</p>
@@ -155,6 +157,17 @@ allowed = [
         <pre><code>sudo systemctl restart deckox-agent</code></pre>
         <p>初回のみ再起動が必要ですが、その後は管理画面のサービス一覧から許可リストへの追加・削除を直接行えます。追加時はサービスの実在を確認し、削除時は確認ダイアログを挟みます。<code>deckox-agent.service</code>・<code>deckox-server.service</code>自身は許可リストへ追加できません。</p>
         <p>管理画面では許可したサービスのjournalログを最大500行まで表示し、全件・エラー・警告・情報で絞り込め、表示中の内容をJSONファイルとして保存できます。任意の<code>journalctl</code>引数は提供せず、対話操作は通常のSSHを利用します。</p>
+        <h3>ソフトウェアのインストール・削除・更新を許可する</h3>
+        <p>固定のカタログはありません。管理画面の「ソフトウェア」画面からパッケージ名を入力すると、そのホストに<strong>既に設定済み</strong>のリポジトリだけを対象に実在確認したうえで<code>/etc/deckox/agent.toml</code>の<code>[software]</code>許可リストへ追加されます。第三者リポジトリやGPG鍵を新たに追加することはありません。初期値は空で、状態の閲覧はできますが変更操作はすべて拒否されます。</p>
+        <pre><code>[software]
+allowed = [
+  "docker.io",
+  "git",
+]</code></pre>
+        <p>手動で編集した場合はAgentを再起動します。</p>
+        <pre><code>sudo systemctl restart deckox-agent</code></pre>
+        <p>通常は管理画面の「ソフトウェア」画面からパッケージ名を入力するだけで許可リストへの追加・削除が行え、Agentの再起動は不要です。インストール・削除・更新の実行には管理者パスワードの再確認が必要です。</p>
+        <aside class="note">apt(Debian・Ubuntu・Raspberry Pi OSなど)とdnf(Fedora・RHEL・Rocky Linux・AlmaLinuxなど)に対応し、Agent起動時にホストのパッケージマネージャーを自動判定します。pacman(Arch Linux)・zypper(openSUSE)・Alpine Linuxには未対応です。</aside>
       </section>
 
       <section class="section" aria-labelledby="webhook-title">

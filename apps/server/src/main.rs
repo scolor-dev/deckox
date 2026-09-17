@@ -247,6 +247,15 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
             "/services/{service_id}/logs/report",
             get(service_logs_report),
         )
+        .route("/software", get(proxy_software))
+        .route("/software/{software_id}/install", post(install_software))
+        .route("/software/{software_id}/remove", post(remove_software))
+        .route("/software/{software_id}/upgrade", post(upgrade_software))
+        .route("/software/{software_id}/allow", post(proxy_allow_software))
+        .route(
+            "/software/{software_id}/disallow",
+            post(proxy_disallow_software),
+        )
         .route("/schedules", get(proxy_schedules).post(create_schedule))
         .route(
             "/schedules/{schedule_id}",
@@ -813,6 +822,229 @@ async fn proxy_disallow_service(
         Some(&user),
     )
     .await
+}
+
+async fn proxy_software(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/software", &request_id).await
+}
+
+async fn proxy_allow_software(
+    State(state): State<AppState>,
+    Path(software_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    proxy_software_allowlist_request(
+        &state.agent,
+        &state.audit,
+        &software_id,
+        "allow",
+        &request_id,
+        &user,
+    )
+    .await
+}
+
+async fn proxy_disallow_software(
+    State(state): State<AppState>,
+    Path(software_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Response {
+    proxy_software_allowlist_request(
+        &state.agent,
+        &state.audit,
+        &software_id,
+        "disallow",
+        &request_id,
+        &user,
+    )
+    .await
+}
+
+async fn proxy_software_allowlist_request(
+    client: &AgentClient,
+    audit: &AuditLog,
+    software_id: &str,
+    action: &str,
+    request_id: &RequestId,
+    user: &AuthenticatedUser,
+) -> Response {
+    if !valid_software_id(software_id) {
+        return invalid_software_id();
+    }
+
+    let path = format!("/v1/software/{software_id}/{action}");
+    let response = proxy_agent(client, "POST", &path, request_id).await;
+    if response.status().is_success() {
+        audit
+            .log_admin(
+                request_id,
+                user.source_ip,
+                "software_allowlist",
+                "success",
+                Some(format!("software={software_id} action={action}")),
+                "software allowlist changed",
+            )
+            .await;
+    } else {
+        audit
+            .log_admin(
+                request_id,
+                user.source_ip,
+                "software_allowlist",
+                "failure",
+                Some(format!(
+                    "software={software_id} action={action} status={}",
+                    response.status().as_u16()
+                )),
+                "software allowlist change failed",
+            )
+            .await;
+    }
+    response
+}
+
+#[derive(Deserialize)]
+struct SoftwareActionRequest {
+    current_password: String,
+}
+
+async fn install_software(
+    State(state): State<AppState>,
+    Path(software_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(payload): Json<SoftwareActionRequest>,
+) -> Response {
+    software_action(
+        &state,
+        &request_id,
+        &user,
+        payload.current_password,
+        &software_id,
+        "install",
+    )
+    .await
+}
+
+async fn remove_software(
+    State(state): State<AppState>,
+    Path(software_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(payload): Json<SoftwareActionRequest>,
+) -> Response {
+    software_action(
+        &state,
+        &request_id,
+        &user,
+        payload.current_password,
+        &software_id,
+        "remove",
+    )
+    .await
+}
+
+async fn upgrade_software(
+    State(state): State<AppState>,
+    Path(software_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(payload): Json<SoftwareActionRequest>,
+) -> Response {
+    software_action(
+        &state,
+        &request_id,
+        &user,
+        payload.current_password,
+        &software_id,
+        "upgrade",
+    )
+    .await
+}
+
+/// Installing, removing, and upgrading software actually changes the host at
+/// the root level, unlike the allowlist toggles above — so this requires
+/// re-confirming the admin password the same way [`reboot_host`] does,
+/// reusing [`confirm_password_or_respond`].
+async fn software_action(
+    state: &AppState,
+    request_id: &RequestId,
+    user: &AuthenticatedUser,
+    current_password: String,
+    software_id: &str,
+    action: &str,
+) -> Response {
+    if !valid_software_id(software_id) {
+        return invalid_software_id();
+    }
+    if let Err(response) =
+        confirm_password_or_respond(state, request_id, user, current_password, "software_action")
+            .await
+    {
+        return *response;
+    }
+
+    let path = format!("/v1/software/{software_id}/{action}");
+    let response = proxy_agent(&state.agent, "POST", &path, request_id).await;
+    if response.status().is_success() {
+        state
+            .audit
+            .log_admin(
+                request_id,
+                user.source_ip,
+                "software_action",
+                "success",
+                Some(format!("software={software_id} action={action}")),
+                "software action completed",
+            )
+            .await;
+    } else {
+        state
+            .audit
+            .log_admin(
+                request_id,
+                user.source_ip,
+                "software_action",
+                "failure",
+                Some(format!(
+                    "software={software_id} action={action} status={}",
+                    response.status().as_u16()
+                )),
+                "software action failed",
+            )
+            .await;
+    }
+    response
+}
+
+fn invalid_software_id() -> Response {
+    error_response(
+        StatusCode::BAD_REQUEST,
+        "bad_request",
+        "invalid package name",
+    )
+}
+
+/// A loose but bounded character class covering both Debian's and RPM's
+/// package naming rules — this is only a shallow syntax check before
+/// talking to the Agent (which performs the real existence check against
+/// the host's configured repositories), the same role [`valid_service_id`]
+/// plays for systemd unit ids.
+fn valid_software_id(software_id: &str) -> bool {
+    !software_id.is_empty()
+        && software_id.len() <= 100
+        && software_id
+            .as_bytes()
+            .first()
+            .is_some_and(u8::is_ascii_alphanumeric)
+        && software_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"+-._".contains(&byte))
 }
 
 /// Lets an admin verify `DECKOX_WEBHOOK_URL` works without waiting for a

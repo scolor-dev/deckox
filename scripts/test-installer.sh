@@ -77,7 +77,8 @@ make_archive() {
   chmod +x "$stage/bin/deckox-server" "$stage/bin/deckox-agent"
   printf '<!doctype html><title>%s</title>\n' "$label" > "$stage/web/index.html"
   printf 'listen_addr = "127.0.0.1:8080"\n' > "$stage/config/server.toml"
-  printf 'socket = "/run/deckox/agent.sock"\n' > "$stage/config/agent.toml"
+  printf 'socket = "/run/deckox/agent.sock"\n\n[system]\nallow_reboot = false\nallow_update = false\n\n[services]\nallowed = []\n' \
+    > "$stage/config/agent.toml"
   cp "${root_dir}/packaging/systemd/deckox-agent.service" "$stage/systemd/"
   cp "${root_dir}/packaging/systemd/deckox-server.service" "$stage/systemd/"
   tar -czf "$archive" -C "$stage" .
@@ -119,7 +120,7 @@ mkdir -p "$version_root/usr/local/share/deckox"
 printf '1.2.3\n' > "$version_root/usr/local/share/deckox/VERSION"
 PATH="$test_path" TEST_STATE="$state_dir" DECKOX_ROOT="$version_root" DECKOX_VERSION=v2.0.0 \
   sh "$installer" --version > "$test_dir/version.out"
-assert_contains "$test_dir/version.out" "Deckox installer 0.6.1"
+assert_contains "$test_dir/version.out" "Deckox installer 0.6.2"
 assert_contains "$test_dir/version.out" "Requested package: v2.0.0"
 assert_contains "$test_dir/version.out" "Installed package: 1.2.3"
 
@@ -217,5 +218,40 @@ assert_file "$foreign_root/etc/systemd/system/deckox-server.service"
 assert_file "$foreign_root/usr/local/bin/deckox-server"
 assert_file "$foreign_root/usr/local/share/deckox/VERSION"
 assert_contains "$test_dir/foreign.out" "Preserved unconfirmed server"
+
+# A non-interactive initial install with no setup overrides keeps today's
+# defaults: loopback listen override recorded, both permissions left false.
+archive_wizard_v1="$(make_archive 2.0.0 wiz1)"
+wizard_default_root="${test_dir}/wizard-default-root"
+run_installer "$wizard_default_root" "$archive_wizard_v1" 2.0.0 > "$test_dir/wizard-default.out"
+wizard_default_override="$wizard_default_root/etc/systemd/system/deckox-server.service.d/override.conf"
+assert_file "$wizard_default_override"
+assert_contains "$wizard_default_override" "Environment=DECKOX_LISTEN_ADDR=127.0.0.1:8080"
+assert_contains "$wizard_default_root/etc/deckox/agent.toml" "allow_reboot = false"
+assert_contains "$wizard_default_root/etc/deckox/agent.toml" "allow_update = false"
+assert_contains "$test_dir/wizard-default.out" "Deckox is listening on http://127.0.0.1:8080/"
+
+# A non-interactive initial install with setup overrides set via environment
+# variables applies them, without requiring a TTY.
+wizard_root="${test_dir}/wizard-root"
+DECKOX_LISTEN_ADDR="192.168.1.50:8080" DECKOX_ALLOW_REBOOT=true DECKOX_ALLOW_UPDATE=false \
+  run_installer "$wizard_root" "$archive_wizard_v1" 2.0.0 > "$test_dir/wizard-initial.out"
+wizard_override="$wizard_root/etc/systemd/system/deckox-server.service.d/override.conf"
+assert_file "$wizard_override"
+assert_contains "$wizard_override" "Environment=DECKOX_LISTEN_ADDR=192.168.1.50:8080"
+assert_contains "$wizard_root/etc/deckox/agent.toml" "allow_reboot = true"
+assert_contains "$wizard_root/etc/deckox/agent.toml" "allow_update = false"
+assert_contains "$test_dir/wizard-initial.out" "Deckox is listening on http://192.168.1.50:8080/"
+
+# A later update run must not re-run the wizard or change the choices already
+# recorded during the initial install, even if different overrides are given.
+archive_wizard_v2="$(make_archive 2.1.0 wiz2)"
+DECKOX_LISTEN_ADDR="10.0.0.9:8080" DECKOX_ALLOW_REBOOT=false DECKOX_ALLOW_UPDATE=true \
+  run_installer "$wizard_root" "$archive_wizard_v2" 2.1.0 > "$test_dir/wizard-update.out"
+assert_contains "$test_dir/wizard-update.out" "Installation type: update"
+assert_contains "$wizard_override" "Environment=DECKOX_LISTEN_ADDR=192.168.1.50:8080"
+assert_contains "$wizard_root/etc/deckox/agent.toml" "allow_reboot = true"
+assert_contains "$wizard_root/etc/deckox/agent.toml" "allow_update = false"
+assert_contains "$test_dir/wizard-update.out" "Deckox is listening on http://192.168.1.50:8080/"
 
 echo "Installer safety tests passed."

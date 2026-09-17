@@ -116,6 +116,10 @@ function activeStateLabel(state: string) {
   return t(state === "active" ? "services.running" : state === "failed" ? "services.failed" : "services.stopped");
 }
 
+function activeStateClass(state: string) {
+  return state === "active" ? "active" : state === "failed" ? "failed" : "inactive";
+}
+
 function unitStateLabel(state: string | null) {
   if (state === "enabled") return t("services.enabled");
   if (state === "disabled") return t("services.disabled");
@@ -440,6 +444,7 @@ onMounted(() => {
             <tr
               v-for="service in filteredServices"
               :key="service.id"
+              :class="{ 'row-failed': service.active_state === 'failed' }"
             >
               <td>
                 <strong class="service-name">{{ service.id }}</strong>
@@ -456,7 +461,7 @@ onMounted(() => {
                 <small>{{ service.description || t("services.noDescription") }}</small>
               </td>
               <td>
-                <span :class="['state-badge', service.active_state === 'active' ? 'active' : 'inactive']">
+                <span :class="['state-badge', activeStateClass(service.active_state)]">
                   {{ activeStateLabel(service.active_state) }}
                 </span>
                 <small>{{ service.sub_state }}</small>

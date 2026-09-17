@@ -299,6 +299,33 @@ pub struct ServiceDetails {
     pub product: Option<String>,
 }
 
+/// State of one admin-managed package.
+///
+/// There is no fixed software catalog: an admin adds a package by name, the
+/// Agent confirms it resolves from the host's already-configured package
+/// repositories (never a newly added third-party one), and only entries that
+/// passed that check are ever returned here — so every `SoftwarePackage` this
+/// type describes is, by construction, one the admin has vetted and allowed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SoftwarePackage {
+    pub name: String,
+    pub installed: bool,
+    pub installed_version: Option<String>,
+    /// The version the host's package manager would currently install, read
+    /// without refreshing its metadata cache (so it can be stale, matching
+    /// [`DiagnosticHost::upgradable_packages`]'s read-only convention).
+    pub available_version: Option<String>,
+    pub upgradable: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SoftwareAction {
+    Install,
+    Remove,
+    Upgrade,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum AgentCommand {

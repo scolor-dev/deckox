@@ -2,7 +2,7 @@
 set -eu
 
 REPOSITORY="${DECKOX_REPOSITORY:-scolor-dev/deckox}"
-INSTALLER_VERSION="0.6.1"
+INSTALLER_VERSION="0.6.2"
 REQUESTED_VERSION="${DECKOX_VERSION:-latest}"
 LOCAL_ARCHIVE="${DECKOX_ARCHIVE:-}"
 ROOT="${DECKOX_ROOT:-}"
@@ -10,9 +10,45 @@ BASE_URL="https://github.com/${REPOSITORY}/releases"
 initial_password=""
 terminal_cleanup="not_installed"
 mode="install"
+chosen_listen_addr="127.0.0.1:8080"
+chosen_allow_reboot="false"
+chosen_allow_update="false"
+tty_source=""
 
 usage() {
   echo "Usage: install.sh [--version | --dry-run | --uninstall]"
+}
+
+detect_tty_source() {
+  if [ -t 0 ]; then
+    tty_source="stdin"
+  elif (: < /dev/tty) 2>/dev/null; then
+    tty_source="/dev/tty"
+  else
+    tty_source=""
+  fi
+}
+
+ask() {
+  prompt_text="$1"
+  if [ "$tty_source" = "stdin" ]; then
+    printf '%s' "$prompt_text" >&2
+    IFS= read -r reply || reply=""
+  elif [ "$tty_source" = "/dev/tty" ]; then
+    printf '%s' "$prompt_text" >&2
+    IFS= read -r reply < /dev/tty || reply=""
+  else
+    reply=""
+  fi
+  printf '%s' "$reply"
+}
+
+ask_yes_no() {
+  reply="$(ask "$1")"
+  case "$reply" in
+    [Yy]|[Yy][Ee][Ss]) echo "true" ;;
+    *) echo "false" ;;
+  esac
 }
 
 case "${1:-}" in
@@ -288,6 +324,71 @@ if [ "$install_kind" = "partial" ]; then
   exit 1
 fi
 
+if [ "$install_kind" = "initial" ]; then
+  detect_tty_source
+  if [ -n "$tty_source" ] || [ -n "${DECKOX_LISTEN_ADDR:-}" ] \
+    || [ -n "${DECKOX_ALLOW_REBOOT:-}" ] || [ -n "${DECKOX_ALLOW_UPDATE:-}" ]; then
+    echo
+    echo "== Deckox setup =="
+  fi
+
+  if [ -n "${DECKOX_LISTEN_ADDR:-}" ]; then
+    chosen_listen_addr="$DECKOX_LISTEN_ADDR"
+  elif [ -n "$tty_source" ]; then
+    echo "Network access:"
+    echo "  1) Localhost only (default) - reach it via an SSH tunnel"
+    echo "  2) A LAN address on this machine - reachable from other devices"
+    network_choice="$(ask "Selection [1]: ")"
+    if [ "$network_choice" = "2" ]; then
+      lan_candidates=""
+      if command -v ip >/dev/null 2>&1; then
+        lan_candidates="$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
+      fi
+      if [ -z "$lan_candidates" ] && command -v hostname >/dev/null 2>&1; then
+        lan_candidates="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^127\.' | grep -v '^$' || true)"
+      fi
+      picked_addr=""
+      if [ -n "$lan_candidates" ]; then
+        echo "Detected LAN addresses:"
+        candidate_index=0
+        for lan_candidate in $lan_candidates; do
+          candidate_index=$((candidate_index + 1))
+          echo "  ${candidate_index}) ${lan_candidate}"
+        done
+        address_choice="$(ask "Selection (or type an address) [1]: ")"
+        if [ -z "$address_choice" ]; then address_choice=1; fi
+        case "$address_choice" in
+          *[!0-9]*) picked_addr="$address_choice" ;;
+          *)
+            candidate_index=0
+            for lan_candidate in $lan_candidates; do
+              candidate_index=$((candidate_index + 1))
+              if [ "$candidate_index" = "$address_choice" ]; then picked_addr="$lan_candidate"; fi
+            done
+            ;;
+        esac
+      else
+        picked_addr="$(ask "Enter this host's LAN IPv4 address: ")"
+      fi
+      if [ -n "$picked_addr" ]; then
+        chosen_listen_addr="${picked_addr}:8080"
+      fi
+    fi
+  fi
+
+  if [ -n "${DECKOX_ALLOW_REBOOT:-}" ]; then
+    chosen_allow_reboot="$DECKOX_ALLOW_REBOOT"
+  elif [ -n "$tty_source" ]; then
+    chosen_allow_reboot="$(ask_yes_no "Allow the admin UI to reboot this host? [y/N]: ")"
+  fi
+
+  if [ -n "${DECKOX_ALLOW_UPDATE:-}" ]; then
+    chosen_allow_update="$DECKOX_ALLOW_UPDATE"
+  elif [ -n "$tty_source" ]; then
+    chosen_allow_update="$(ask_yes_no "Allow the admin UI to apply Deckox updates? [y/N]: ")"
+  fi
+fi
+
 backup_dir=""
 if [ "$install_kind" != "initial" ]; then
   old_version="$(installed_version)"
@@ -380,7 +481,16 @@ if [ ! -f "${config_dir}/server.toml" ]; then
   install_file 0640 root deckox "${release_dir}/config/server.toml" "${config_dir}/server.toml"
 fi
 if [ ! -f "${config_dir}/agent.toml" ]; then
-  install_file 0640 root deckox "${release_dir}/config/agent.toml" "${config_dir}/agent.toml"
+  agent_toml_source="${release_dir}/config/agent.toml"
+  if [ "$chosen_allow_reboot" = "true" ] || [ "$chosen_allow_update" = "true" ]; then
+    agent_toml_source="${work_dir}/agent.toml"
+    awk -v allow_reboot="$chosen_allow_reboot" -v allow_update="$chosen_allow_update" '
+      /^allow_reboot = / { print "allow_reboot = " allow_reboot; next }
+      /^allow_update = / { print "allow_update = " allow_update; next }
+      { print }
+    ' "${release_dir}/config/agent.toml" > "$agent_toml_source"
+  fi
+  install_file 0640 root deckox "$agent_toml_source" "${config_dir}/agent.toml"
 fi
 if [ -f "${config_dir}/admin-password.hash" ] && [ ! -f "${data_dir}/admin-password.hash" ]; then
   install_file 0600 deckox deckox "${config_dir}/admin-password.hash" "${data_dir}/admin-password.hash"
@@ -396,6 +506,15 @@ fi
 install_directory 0755 root root "$systemd_dir"
 install_file 0644 root root "${release_dir}/systemd/deckox-agent.service" "$agent_unit"
 install_file 0644 root root "${release_dir}/systemd/deckox-server.service" "$server_unit"
+
+if [ "$install_kind" = "initial" ]; then
+  install_directory 0755 root root "${systemd_dir}/deckox-server.service.d"
+  {
+    echo "[Service]"
+    echo "Environment=DECKOX_LISTEN_ADDR=${chosen_listen_addr}"
+  } > "${work_dir}/override.conf"
+  install_file 0644 root root "${work_dir}/override.conf" "${systemd_dir}/deckox-server.service.d/override.conf"
+fi
 
 if ! systemctl daemon-reload \
   || ! systemctl enable deckox-agent.service deckox-server.service \
@@ -436,16 +555,27 @@ if [ -f "$legacy_terminal_unit" ] && awk '
   systemctl daemon-reload || echo "Warning: systemd reload failed after legacy cleanup." >&2
 fi
 
+effective_listen_addr="$chosen_listen_addr"
+override_conf="${systemd_dir}/deckox-server.service.d/override.conf"
+if [ "$install_kind" != "initial" ] && [ -f "$override_conf" ]; then
+  detected_listen_addr="$(awk '
+    /^Environment=DECKOX_LISTEN_ADDR=/ { sub(/^Environment=DECKOX_LISTEN_ADDR=/, ""); print; exit }
+  ' "$override_conf")"
+  if [ -n "$detected_listen_addr" ]; then effective_listen_addr="$detected_listen_addr"; fi
+fi
+
 echo
 echo "Deckox ${package_version} has been installed (${install_kind})."
-echo "Deckox is listening on http://127.0.0.1:8080/"
+echo "Deckox is listening on http://${effective_listen_addr}/"
 if [ -n "$initial_password" ]; then
   echo "Initial administrator password: ${initial_password}"
   echo "Store this password now. It is not shown again."
 else
   echo "The existing administrator password was preserved."
 fi
-echo "For remote access, use an SSH tunnel or a trusted LAN."
+if [ "$effective_listen_addr" = "127.0.0.1:8080" ]; then
+  echo "For remote access, use an SSH tunnel or a trusted LAN."
+fi
 if [ "$terminal_cleanup" != "not_installed" ]; then
   echo "The obsolete web terminal was removed (${terminal_cleanup})."
 fi
