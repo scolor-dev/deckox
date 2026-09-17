@@ -51,6 +51,10 @@ function handlePasswordChanged() {
   handleUnauthorized();
 }
 
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape" && menuOpen.value) menuOpen.value = false;
+}
+
 async function logout() {
   try {
     await api.logout();
@@ -67,11 +71,13 @@ watch([() => route.fullPath, locale], () => {
 
 onMounted(() => {
   window.addEventListener("deckox:unauthorized", handleUnauthorized);
+  window.addEventListener("keydown", handleKeydown);
   void checkAuthentication();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("deckox:unauthorized", handleUnauthorized);
+  window.removeEventListener("keydown", handleKeydown);
 });
 </script>
 
@@ -109,6 +115,12 @@ onBeforeUnmount(() => {
         {{ menuOpen ? t("common.close") : t("app.menu") }}
       </button>
     </header>
+
+    <div
+      v-if="menuOpen"
+      class="sidebar-backdrop"
+      @click="menuOpen = false"
+    />
 
     <aside :class="['sidebar', { open: menuOpen }]">
       <div class="brand">

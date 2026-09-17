@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { api, type SoftwarePackage } from "../api/client";
 import { apiErrorKey } from "../api/errors";
+import PasswordConfirmDialog from "../components/PasswordConfirmDialog.vue";
 import { notify } from "../notifications";
 
 const { t } = useI18n();
@@ -31,7 +32,6 @@ const PENDING_LABEL_KEYS: Record<ManageAction, string> = {
 };
 
 const armed = ref<{ pkg: SoftwarePackage; action: ManageAction } | null>(null);
-const actionPassword = ref("");
 const actionError = ref<string | null>(null);
 const submitting = ref(false);
 
@@ -84,30 +84,23 @@ async function disallow(pkg: SoftwarePackage) {
 
 function openAction(pkg: SoftwarePackage, action: ManageAction) {
   armed.value = { pkg, action };
-  actionPassword.value = "";
   actionError.value = null;
 }
 
 function closeAction() {
   armed.value = null;
-  actionPassword.value = "";
   actionError.value = null;
 }
 
-async function confirmAction() {
+async function confirmAction(password: string) {
   if (!armed.value || submitting.value) return;
   const { pkg, action } = armed.value;
-  if (!actionPassword.value) {
-    actionError.value = t("software.passwordRequired");
-    return;
-  }
-  if (!window.confirm(t(CONFIRM_KEYS[action], { name: pkg.name }))) return;
 
   submitting.value = true;
   pending.value = `${pkg.name}:${action}`;
   actionError.value = null;
   try {
-    await api.softwareAction(pkg.name, action, actionPassword.value);
+    await api.softwareAction(pkg.name, action, password);
     notify("success", t("software.completed", { name: pkg.name }));
     closeAction();
     await refresh();
@@ -281,56 +274,16 @@ onMounted(() => {
       {{ t("software.platformNote") }}
     </aside>
 
-    <div
-      v-if="armed"
-      class="dialog-backdrop"
-      @click.self="closeAction"
-    >
-      <section
-        class="confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t(CONFIRM_KEYS[armed.action], { name: armed.pkg.name })"
-      >
-        <h2>{{ t(`software.${armed.action}`) }}: {{ armed.pkg.name }}</h2>
-        <form
-          class="settings-form"
-          @submit.prevent="confirmAction"
-        >
-          <label for="software-action-password">{{ t("software.password") }}</label>
-          <input
-            id="software-action-password"
-            v-model="actionPassword"
-            type="password"
-            autocomplete="current-password"
-            required
-          >
-          <p
-            v-if="actionError"
-            class="notice error"
-            role="alert"
-          >
-            {{ actionError }}
-          </p>
-          <div class="dialog-actions">
-            <button
-              class="button"
-              type="button"
-              :disabled="submitting"
-              @click="closeAction"
-            >
-              {{ t("common.close") }}
-            </button>
-            <button
-              class="primary-button danger-button"
-              type="submit"
-              :disabled="submitting"
-            >
-              {{ submitting ? t(PENDING_LABEL_KEYS[armed.action]) : t(`software.${armed.action}`) }}
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
+    <PasswordConfirmDialog
+      :open="armed !== null"
+      :title="armed ? `${t(`software.${armed.action}`)}: ${armed.pkg.name}` : ''"
+      :description="armed ? t(CONFIRM_KEYS[armed.action], { name: armed.pkg.name }) : null"
+      :confirm-label="armed ? t(`software.${armed.action}`) : ''"
+      :pending-label="armed ? t(PENDING_LABEL_KEYS[armed.action]) : ''"
+      :submitting="submitting"
+      :error-message="actionError"
+      @confirm="confirmAction"
+      @close="closeAction"
+    />
   </div>
 </template>

@@ -196,6 +196,7 @@ onMounted(refresh);
             <tr
               v-for="(entry, index) in filteredEvents"
               :key="`${entry.timestamp_ms}-${index}`"
+              :class="{ 'row-failed': entry.result !== 'success' && entry.result !== 'accepted' }"
             >
               <td>{{ formatTime(entry.timestamp_ms) }}</td>
               <td class="mono">
@@ -208,7 +209,7 @@ onMounted(refresh);
               <td>
                 <span
                   class="state-badge"
-                  :class="entry.result === 'success' || entry.result === 'accepted' ? 'active' : 'inactive'"
+                  :class="entry.result === 'success' || entry.result === 'accepted' ? 'active' : 'failed'"
                 >{{ entry.result }}</span>
               </td>
               <td>{{ entry.detail ?? t("common.none") }}</td>
