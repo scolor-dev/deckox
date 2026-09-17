@@ -1,141 +1,27 @@
 # Deckox
 
-Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基盤です。
+Deckoxは、Linuxをブラウザから安全に管理するためのWeb管理基盤です。SSHの代わりに
+任意のコマンドを実行するWebコンソールは提供せず、あらかじめ許可した操作だけを
+ブラウザから行えるようにする設計です。
 
-現在は次の最小構成と、Agentによるシステム情報・リソース・ストレージ取得、
-許可リスト付きsystemdサービス管理とjournalログ閲覧、管理者パスワード変更、
-任意のTOTP二要素認証、パスワード再確認付きのホスト再起動を提供します。
-SSHコンソールからの`reset-password`・`disable-totp`サブコマンドによる
-認証情報の復旧、`access-url`サブコマンドによるLAN内アクセスURLの確認、
-ログイン・設定変更・サービス操作などを記録し管理画面から閲覧・保存できる
-監査ログも実装済みです。SSEによるCPU・メモリ・Swap・
-ネットワーク送受信速度・ディスクI/O速度のリアルタイムメトリクス、任意取得のCPU温度、
-概要画面でのディスク使用率、軽量SVGグラフ、日本語・英語の表示切替、
-再起動後の自動再接続、画面ごとのURLとブラウザ別表示設定、最終更新時刻、
-Agent復旧時の状態再取得、JSONで保存できる安全なシステム診断、設定画面からの
-更新確認も実装済みです。任意コマンドを実行するWebコンソールは提供しません。
-更新の適用は既定で無効で、`agent.toml`で明示的に許可した場合だけ設定画面から
-実行できます（詳細は[更新の適用](#更新の適用)を参照）。
-`DECKOX_WEBHOOK_URL`を設定すると、管理画面を開いていなくても許可済み
-サービスの障害・Swap/ディスク使用率の高騰・Agentへの接続断・新しい
-Deckoxバージョンの公開を状態が変化した瞬間だけWebhookへ通知します
-（既定は無効）。設定画面からテスト通知を送信して疎通確認できます。
+## できること
 
-```text
-Vue管理画面
-    ↕ REST / SSE
-deckox-server（Axum API + Vue配信）
-    ↓ HTTP over Unix socket
-deckox-agent（Linux操作）
-    ↓
-Linux
-```
+- CPU・メモリ・Swap・ネットワーク送受信速度・ディスクI/O速度・ディスク使用率を
+  リアルタイム表示（SVGグラフ、日本語・英語の表示切替）
+- 許可リスト付きのsystemdサービス管理（起動・停止・再起動・有効化・無効化、
+  journalログ閲覧、曜日・時刻を指定したスケジュール実行）
+- 管理者パスワード変更、任意のTOTP二要素認証、パスワード再確認付きのホスト再起動
+- ログイン・設定変更・サービス操作などを記録する監査ログ（閲覧・JSON保存）
+- 安全な固定項目だけを含むシステム診断（JSON保存対応）、更新の確認、
+  Webhookによる異常通知
 
-概要画面を開いている間は、既存のCPU・メモリ・負荷平均に加え、Swap使用率、
-ネットワーク送受信速度、ディスク読み書き速度をSSEで更新します。CPU温度は
-ホストから取得できる場合だけ表示します。Swap使用率が80%以上になると警告表示へ
-切り替わります。取得できない追加メトリクスは`—`または非表示となり、CPUやメモリなど
-取得可能な値の更新は継続します。管理画面の購読者が0件になるとAgentからの採取も停止します。
+実装済み機能の詳しい一覧は[`docs/features.html`](docs/features.html)、
+設計・アーキテクチャは[`docs/architecture.html`](docs/architecture.html)を
+参照してください。
 
-診断画面では、Deckox Server・Agentの稼働状態とバージョン、Agentとの接続状態、
-公開可能なホスト情報、Deckoxのsystemdユニット状態、権限を持つ機能の要約を確認し、
-同じ固定スキーマをJSONファイルとして保存できます。Agentに接続できない場合も
-Server側の診断結果は表示・保存され、Agent側の項目だけが取得不能として示されます。
+## インストール
 
-診断結果には、生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、
-セッション、Cookie、boot IDを含めません。
-
-設計・実装済み機能・導入方法のHTMLドキュメントは
-[`docs/index.html`](docs/index.html)から参照できます。
-
-## リポジトリ構成
-
-```text
-apps/
-├── server/          Axum Web APIサーバー
-├── agent/           Linux管理Agent
-└── web/             Vue + TypeScript
-crates/
-└── protocol/        Server・Agent間の共有型
-packaging/
-├── config/          Linux向け設定
-├── scripts/         インストーラー
-└── systemd/         systemdユニット
-scripts/
-└── package-release.sh
-```
-
-## ローカル開発
-
-Rust側はAgent用のUnixソケットと、Server用の管理者パスワードハッシュが
-必要です。通常のLinuxではAgentが`/run/deckox/agent.sock`を使用します。
-一般ユーザーで試す場合は、両方に同じ一時ソケットを指定します。
-
-```bash
-printf '%s' '開発用パスワード' \
-  | cargo run --quiet --package deckox-server -- hash-password \
-  > /tmp/deckox-admin-password.hash
-
-DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock cargo run --package deckox-agent
-DECKOX_AGENT_SOCKET=/tmp/deckox-agent.sock \
-DECKOX_WEB_DIR="$PWD/apps/web/dist" \
-DECKOX_ADMIN_PASSWORD_HASH_FILE=/tmp/deckox-admin-password.hash \
-cargo run --package deckox-server
-```
-
-Vue側:
-
-```bash
-cd apps/web
-npm install
-npm run dev
-```
-
-Vite開発サーバーは`/api`を`http://127.0.0.1:8080`へ転送します。
-
-本番用フロントエンド:
-
-```bash
-cd apps/web
-npm ci
-npm run build
-```
-
-## 検証
-
-```bash
-cargo fmt --all --check
-cargo test --workspace
-cargo clippy --workspace --all-targets --all-features --locked -- \
-  -D warnings -W clippy::pedantic -W clippy::nursery
-
-cd apps/web
-npm ci
-npm run lint
-npm run typecheck
-npm run test
-npm run build
-```
-
-## CI
-
-`main`・`develop`へのpushとPull RequestでGitHub Actionsの通常CIが動きます。
-
-- Rust: `fmt`、厳格なClippy、ワークスペーステスト
-- Vue: 依存関係の固定インストール、ESLint、型チェック、単体テスト、本番ビルド
-- Packaging: インストール・リリース用シェルの構文確認と、疑似Linux環境での導入・更新・ロールバック・削除テスト
-
-## GitHubからインストール
-
-`v0.6.1`のようなタグをpushすると、GitHub ActionsがLinux x86-64・ARM64向け
-バイナリ、Vue、設定、systemdユニットをまとめ、GitHub Releaseへ公開します。
-
-```bash
-git tag v0.6.1
-git push origin v0.6.1
-```
-
-Release公開後、Linuxサーバーでは次のコマンドでインストールできます。
+対応OSはLinux（x86_64・ARM64、`uname -m`から自動判定）です。
 
 ```bash
 curl -fsSL \
@@ -143,232 +29,72 @@ curl -fsSL \
   | sudo sh
 ```
 
-スクリプトを確認してから実行する場合:
+初回インストールでは、対話端末が使える場合に待受アドレス（ローカルのみ/
+LAN内のこのホストのアドレス）・ホスト再起動の許可・更新適用の許可を尋ねます。
+無人インストール時は質問せず、従来どおりの既定値（ローカルのみ、両許可とも
+無効）のまま導入されます。初回だけランダムな管理者パスワードがターミナルへ
+一度だけ表示されるので、必ず控えてください。
 
-```bash
-curl -fsSLO \
-  https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh
-less install.sh
-sudo sh install.sh
-```
+バージョン指定・dry-run・アンインストール・ローカル配布物の検証など、
+インストーラーの詳しい使い方は
+[`docs/installation.html`](docs/installation.html)を参照してください。
 
-特定バージョンをインストールする場合:
+## 使い始める
 
-```bash
-curl -fsSL \
-  https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.6.1 sh
-```
-
-ダウンロードや変更を行わず、対象アーキテクチャ・取得先・現在の導入状態を確認できます。
-
-```bash
-sh install.sh --dry-run
-sh install.sh --version
-```
-
-管理対象のバイナリ・Web成果物・systemdユニットだけを削除する場合は
-`sudo sh install.sh --uninstall`を使用します。設定、認証データ、バックアップ、
-`deckox`ユーザーとグループは保持されます。
-
-ローカルで作成した配布物を検証する場合は、アーカイブと同じ場所に
-`.sha256`ファイルを置いて指定できます。
-
-```bash
-sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
-  sh install.sh
-```
-
-インストール後:
-
-```bash
-systemctl status deckox-server deckox-agent
-journalctl -u deckox-server -u deckox-agent -f
-```
-
-初回インストール時には、ランダムな管理者パスワードがターミナルへ一度だけ
-表示されます。更新時は既存のパスワードが維持されます。ログイン後の
-「設定」画面から、現在のパスワードを確認して12文字以上の新しいパスワードへ
-変更できます。現在のパスワード確認に5分間で5回失敗すると一時的に制限され、
-変更後はすべてのセッションが失効します。ログイン画面には変更完了が表示されます。
-
-更新時は既存の管理対象ファイルを`/var/lib/deckox/backups/`へ保存し、新しい
-Server・Agentが起動確認できなければ元のファイルへ戻します。不完全な導入状態や、
-Deckox管理と確認できないsystemdユニットは上書きしません。配布物内の`VERSION`と
-指定バージョンも照合します。
-
-管理画面へ入れない場合は、SSH接続したコンソールから`reset-password`
-サブコマンドでパスワードだけを再設定できます。二要素認証の設定は変更
-されません。
-
-```bash
-printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password
-sudo systemctl restart deckox-server
-```
-
-二要素認証(TOTP)を有効にしたまま認証アプリとリカバリーコードを両方
-失った場合は、`disable-totp`で二要素認証だけを無効化できます。
-
-```bash
-sudo -u deckox deckox-server disable-totp
-sudo systemctl restart deckox-server
-```
-
-どちらの操作も監査ログ(管理画面の「監査ログ」または
-`GET /api/v1/audit`)に記録されます。監査ログは最大5000件を保持し、
-超過分は古いものから切り詰められます。
-
-ホスト再起動は初期状態では無効です。利用する場合は
-`/etc/deckox/agent.toml`で明示的に許可し、Agentを再起動します。
-
-```toml
-[system]
-allow_reboot = true
-```
-
-```bash
-sudo systemctl restart deckox-agent
-```
-
-設定画面から再起動するときは管理者パスワードを再入力します。要求後は専用画面が
-Webサーバーの新しいプロセス識別子を確認し、復帰後にログイン画面へ戻ります。
-パスワード確認の試行制限はパスワード変更と共通です。
-
-## 更新の適用
-
-設定画面からの更新確認はGitHub Releaseに新しいバージョンがあるかを確認する
-だけで、初期状態では確認結果に応じた更新コマンドを表示するのみです。
-管理画面から更新を実行する場合は、ホスト再起動と同様に初期状態では無効です。
-利用する場合は`/etc/deckox/agent.toml`で明示的に許可し、Agentを再起動します。
-
-```toml
-[system]
-allow_update = true
-```
-
-```bash
-sudo systemctl restart deckox-agent
-```
-
-有効化すると、設定画面で更新が利用可能と表示されている間だけ「今すぐ更新」
-ボタンが表示されます。実行時は管理者パスワードを再入力します。確認後、
-Serverが確認済みのバージョンに対応する`install.sh`をGitHubから取得してAgentへ
-渡し、Agentがそれを独立したsystemdユニットとして実行します。この
-インストーラーは通常のアップグレード手順（`/var/lib/deckox/backups/`への
-バックアップ、新しいServer・Agentの起動確認、失敗時のロールバック）をそのまま
-利用します。更新中はServer・Agentが再起動するため管理画面から一時的に
-切断されますが、再起動後に自動で再接続します。この操作も監査ログに記録されます。
-`allow_update = false`のままでも、更新確認の結果からコピーできる手動更新
-コマンドは従来どおり利用できます。
-
-systemdサービスは、一覧と状態を確認したうえで、Agent設定の完全一致許可リストに
-登録した対象だけを起動・停止・再起動・有効化・無効化できます。同じ許可対象について
-journalログを最大500行まで表示し、全件・エラー・警告・情報のpriorityで絞り込め、
-表示中の内容をJSONファイルとして保存できます。任意のjournalctl引数指定には対応していません。
-許可リストへの追加・削除も管理画面のサービス一覧から行え、SSHで`agent.toml`を
-手動編集する必要はありません(`deckox-agent.service`・`deckox-server.service`自身は対象外です)。
-許可リスト内のサービスは、起動・停止・再起動を曜日・時刻を指定してスケジュール実行
-することもでき、Agentが20秒間隔でホストのローカル時刻を確認して実行します。
-
-v0.3.3ではWebコンソールを削除しました。Linuxの対話操作には通常のSSHを利用し、
-Deckoxからは許可された管理APIだけを実行します。v0.3.2から更新すると、旧Terminal
-サービスとバイナリを撤去し、Deckox管理と確認できた専用ユーザー・グループも削除します。
-`/var/lib/deckox-terminal`にファイルがある場合、そのディレクトリは保存されます。
-
-Serverは既定で`127.0.0.1:8080`だけに待ち受けます。別端末から一時的に
-確認する場合は、SSHトンネルを利用します。
+既定ではServerは`127.0.0.1:8080`だけに待ち受けます（インストール時にLAN内の
+アドレスを選んでいれば、そのアドレスで待ち受けます）。別端末から一時的に
+確認する場合はSSHトンネルを使います。
 
 ```bash
 ssh -L 8080:127.0.0.1:8080 user@server
 ```
 
-サーバーのLANアドレスが分からない場合は、SSH接続したコンソールから
-`access-url`サブコマンドで確認できます(管理画面の「概要」からも同じ
-情報をコピーできます)。
+ブラウザで`http://127.0.0.1:8080/`を開き、インストール時に表示された
+パスワードでログインします。ログイン後は「設定」画面からパスワード変更・
+TOTP二要素認証の有効化ができます。管理画面へ入れなくなった場合は、SSH接続
+したコンソールから次のサブコマンドで復旧できます。
 
 ```bash
-deckox-server access-url
-```
-
-LAN内の端末から常時アクセスする場合は、サーバーのLANアドレスだけへ
-待受先を上書きします。次の例ではサーバーのアドレスを`192.168.1.21`と
-しています。
-
-```bash
-sudo systemctl edit deckox-server
-```
-
-```ini
-[Service]
-Environment=DECKOX_LISTEN_ADDR=192.168.1.21:8080
-```
-
-保存後に反映します。
-
-```bash
+printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password
+sudo -u deckox deckox-server disable-totp   # TOTPだけを無効化する場合
 sudo systemctl restart deckox-server
 ```
 
-同じLANの端末から`http://192.168.1.21:8080/`を開き、管理者パスワードで
-ログインできます。TLS終端は未実装なので、信頼できるLANまたはSSHトンネル
-内だけで利用し、ルーターのポート転送や外部公開には使用しないでください。
+ホスト再起動・管理画面からの更新適用は、初期状態ではいずれも無効です。
+インストール時の対話プロンプト（または無人インストールなら
+`DECKOX_ALLOW_REBOOT`・`DECKOX_ALLOW_UPDATE`環境変数）で有効化するか選べます。
+既にインストール済みのホストで後から変更する場合や、LAN内から常時アクセス
+できるようにする場合の手順は
+[`docs/installation.html`](docs/installation.html#agent-config-title)を
+参照してください。
 
-配置先:
+## セキュリティに関する注意
 
-```text
-/usr/local/bin/deckox-server
-/usr/local/bin/deckox-agent
-/usr/local/share/deckox/web/
-/etc/deckox/
-/var/lib/deckox/
-/run/deckox/agent.sock
-```
+`deckox-server`は専用の`deckox`ユーザーで動作し、強い権限が必要な
+`deckox-agent`とは別プロセスに分離されています。外部TCPポートは公開せず、
+両者はUnixソケットだけで通信します。認証はArgon2idパスワード（任意で
+TOTP二要素認証）、CookieはHttpOnly・SameSite=Strict、ログインとパスワード
+再確認には試行制限があります。Agentは任意のシェルコマンドを受け付けず、
+許可済みの型付き操作だけを実行します。
 
-対応アーキテクチャ:
+**TLS終端は実装していません。** 信頼できるLANまたはSSHトンネル内だけで
+利用し、ルーターのポート転送や外部公開には使用しないでください。
 
-```text
-x86_64 / amd64  → x86_64-unknown-linux-musl
-aarch64 / arm64 → aarch64-unknown-linux-musl
-```
+## ドキュメント
 
-インストーラーが`uname -m`から自動判定するため、どちらも同じインストール
-コマンドを利用できます。
+| ページ | 内容 |
+| --- | --- |
+| [`docs/index.html`](docs/index.html) | ドキュメント全体の入口、実装範囲の状況 |
+| [`docs/architecture.html`](docs/architecture.html) | 実行時アーキテクチャ、Server–Agent通信、セキュリティ境界 |
+| [`docs/features.html`](docs/features.html) | 実装済み機能の詳細一覧（API・画面・共有型） |
+| [`docs/installation.html`](docs/installation.html) | インストーラーの詳しい使い方、運用手順 |
+| [`docs/development.html`](docs/development.html) | リポジトリ構成、ローカル開発、検証コマンド、CI |
 
-## Docker
+## 開発に参加する
 
-Docker Composeは開発・UI確認用にも利用できます。
-
-```bash
-docker compose up --build
-```
-
-`http://127.0.0.1:8080/`を開き、開発用パスワード`deckox`でログインします。
-これはローカル開発専用の固定値です。
-Composeはハッシュを環境変数で直接渡すため、設定画面からのパスワード変更は
-利用できません。
-
-コンテナ内のAgentはLinuxホストのsystemdなどを管理できません。Linux全体を
-管理する本番用途では、systemdサービスとしてインストールしてください。
-対話操作はコンテナ内にも提供しません。
-
-## セキュリティ
-
-`deckox-server`は専用の`deckox`ユーザーで動作します。強い権限が必要になる
-`deckox-agent`は別プロセスとし、外部TCPポートを公開せずUnixソケットだけで
-Serverと通信します。
-
-Serverは単一管理者のArgon2idパスワード認証と、12時間のメモリ内セッション
-を提供します。CookieはHttpOnly・SameSite=Strictです。ログインとパスワード
-再確認には送信元IP単位の試行制限があります。設定画面からTOTPによる
-二要素認証を任意で有効化でき、有効時はログインがパスワード確認後の
-コード入力を含む2段階になります。認証、パスワード変更、TOTP設定変更、
-サービス操作、ホスト再起動、SSHコンソールからのパスワードリセットは
-リクエストID付きでjournalへ記録するとともに、監査ログ専用ファイルにも
-記録し、管理画面の「監査ログ」から閲覧・JSONダウンロードできます。
-Agentは任意のシェルコマンドを受け付けず、許可済みの型付き操作だけを
-実行します。サービスログ閲覧も完全一致許可リスト、500行の上限、全件・
-エラー・警告・情報のpriority選択肢に制限されます。任意コマンドや対話シェルを
-受け付けるWebコンソールは提供しません。
+Rust（Cargo Workspace）とVue（Vite）で構成されています。リポジトリ構成、
+ローカルでのAgent/Server起動方法、Vue開発サーバー、検証コマンド、CIの内容は
+[`docs/development.html`](docs/development.html)にまとめています。
 
 ## ライセンス
 
