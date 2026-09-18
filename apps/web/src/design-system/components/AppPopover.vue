@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from "vue";
+import { useEscapeToClose } from "../composables/useEscapeToClose";
 
 const props = withDefaults(
   defineProps<{
@@ -22,30 +23,20 @@ function handleOutsideClick(event: MouseEvent) {
   if (rootRef.value && !rootRef.value.contains(event.target as Node)) emit("close");
 }
 
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape") emit("close");
-}
+useEscapeToClose(() => props.open, () => { emit("close"); });
 
 watch(
   () => props.open,
   (isOpen) => {
-    if (isOpen) {
-      // Capture phase + next tick would be ideal to skip the opening click,
-      // but a plain listener registered after the current click has
-      // already finished dispatching is enough in practice here.
-      window.addEventListener("click", handleOutsideClick);
-      window.addEventListener("keydown", handleKeydown);
-    } else {
-      window.removeEventListener("click", handleOutsideClick);
-      window.removeEventListener("keydown", handleKeydown);
-    }
+    // Capture phase + next tick would be ideal to skip the opening click,
+    // but a plain listener registered after the current click has already
+    // finished dispatching is enough in practice here.
+    if (isOpen) window.addEventListener("click", handleOutsideClick);
+    else window.removeEventListener("click", handleOutsideClick);
   },
 );
 
-onBeforeUnmount(() => {
-  window.removeEventListener("click", handleOutsideClick);
-  window.removeEventListener("keydown", handleKeydown);
-});
+onBeforeUnmount(() => { window.removeEventListener("click", handleOutsideClick); });
 </script>
 
 <template>

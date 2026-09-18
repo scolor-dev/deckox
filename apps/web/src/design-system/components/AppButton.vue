@@ -52,7 +52,12 @@ withDefaults(
 .ds-button--action { padding: 5px 8px; font-size: 11px; }
 .ds-button--action:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-hover); }
 .ds-button--action.ds-button--danger { border-color: var(--danger-border); color: var(--danger-strong-border); }
-.ds-button--action.ds-button--danger:hover:not(:disabled) { background: var(--danger-bg); }
+/* The non-danger action hover leans on a border-color jump (border-strong
+ * -> border-hover) for its contrast, not the background tint alone — danger
+ * needs the same two-part cue, or the hover reads as almost no change at
+ * all (surface-elevated -> danger-bg is a very close pale tint, especially
+ * in light mode: #fff -> #fff5f5). */
+.ds-button--action.ds-button--danger:hover:not(:disabled) { border-color: var(--danger-strong-border); background: var(--danger-bg); }
 
 /* primary: the single filled call-to-action in a confirm dialog. */
 .ds-button--primary {

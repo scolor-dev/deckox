@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, watch } from "vue";
+import { useEscapeToClose } from "../composables/useEscapeToClose";
 
 const props = withDefaults(
   defineProps<{
@@ -24,19 +24,7 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape" && props.closeOnEscape) emit("close");
-}
-
-watch(
-  () => props.open,
-  (isOpen) => {
-    if (isOpen) window.addEventListener("keydown", handleKeydown);
-    else window.removeEventListener("keydown", handleKeydown);
-  },
-);
-
-onBeforeUnmount(() => { window.removeEventListener("keydown", handleKeydown); });
+useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOnEscape);
 </script>
 
 <template>
