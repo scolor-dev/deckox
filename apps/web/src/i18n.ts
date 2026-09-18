@@ -73,7 +73,7 @@ export const messages = {
       confirmUpgrade: "{name} を最新版へ更新しますか？", confirmDisallow: "{name} を管理許可リストから外しますか？",
       installing: "インストールしています…", removing: "削除しています…", upgrading: "更新しています…",
       completed: "{name} の操作が完了しました。", count: "{count}件",
-      platformNote: "apt(Debian・Ubuntuなど)・dnf(Fedora・RHEL・Rocky Linux・AlmaLinuxなど)に対応しています。pacman(Arch Linux)・zypper(openSUSE)・Alpine Linuxには未対応です。",
+      platformNote: "apt(Debian・Ubuntuなど)・dnf(Fedora・RHEL・Rocky Linux・AlmaLinuxなど)・pacman(Arch Linuxなど)・zypper(openSUSEなど)に対応しています。pacmanホストではインストール・更新のたびにホスト全体のパッケージも同時に最新化されます。Alpine Linuxには未対応です。",
     },
     storage: {
       title: "ストレージ", summary: "{count}件のマウント", mount: "マウント先", filesystem: "ファイルシステム", capacity: "容量", usage: "使用状況",
@@ -226,7 +226,7 @@ export const messages = {
       confirmUpgrade: "Upgrade {name} to the latest version?", confirmDisallow: "Remove {name} from the management allowlist?",
       installing: "Installing…", removing: "Removing…", upgrading: "Upgrading…",
       completed: "Completed the operation for {name}.", count: "{count}",
-      platformNote: "Supports apt (Debian, Ubuntu, ...) and dnf (Fedora, RHEL, Rocky Linux, AlmaLinux, ...). Not yet supported on pacman (Arch Linux), zypper (openSUSE), or Alpine Linux.",
+      platformNote: "Supports apt (Debian, Ubuntu, ...), dnf (Fedora, RHEL, Rocky Linux, AlmaLinux, ...), pacman (Arch Linux, ...), and zypper (openSUSE, ...). On pacman hosts, installing or upgrading also upgrades every other package on the host. Not supported on Alpine Linux.",
     },
     storage: {
       title: "Storage", summary: "{count} mounts", mount: "Mount point", filesystem: "File system", capacity: "Capacity", usage: "Usage",

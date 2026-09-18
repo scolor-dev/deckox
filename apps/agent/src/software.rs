@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
     path::PathBuf,
+    process::Output,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -20,13 +21,16 @@ static COMMAND_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 /// the only gate is that [`SoftwareManager::allow`] must first confirm the
 /// name resolves from the host's own already-configured package
 /// repositories — Deckox never adds a new (e.g. third-party) repository or
-/// signing key to make a name resolve. Support for other package managers
-/// (pacman, zypper, ...) can be added as further variants without changing
-/// [`SoftwareManager`]'s public shape.
+/// signing key to make a name resolve. Covers every package manager used by
+/// a systemd-based Linux distribution that Deckox's core (Agent) already
+/// targets; Alpine is out of scope regardless, since it runs `OpenRC` rather
+/// than systemd.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackageManager {
     Apt,
     Dnf,
+    Pacman,
+    Zypper,
 }
 
 impl PackageManager {
@@ -34,6 +38,8 @@ impl PackageManager {
         match self {
             Self::Apt => apt_installed_version(name).await,
             Self::Dnf => dnf_installed_version(name).await,
+            Self::Pacman => pacman_installed_version(name).await,
+            Self::Zypper => zypper_installed_version(name).await,
         }
     }
 
@@ -45,6 +51,29 @@ impl PackageManager {
         match self {
             Self::Apt => apt_candidate_version(name).await,
             Self::Dnf => dnf_candidate_version(name).await,
+            Self::Pacman => pacman_candidate_version(name).await,
+            Self::Zypper => zypper_candidate_version(name).await,
+        }
+    }
+
+    /// Combined installed+available query for [`SoftwareManager::list`]'s
+    /// per-package hot path. For dnf and zypper this is backed by a single
+    /// command whose output already carries both fields, so fetching them
+    /// through [`Self::installed_version`]/[`Self::candidate_version`]
+    /// separately (as those two still do, for callers that only need one)
+    /// would needlessly run that command twice per package.
+    async fn status(self, name: &str) -> (Option<String>, Option<String>) {
+        match self {
+            Self::Apt => (
+                apt_installed_version(name).await,
+                apt_candidate_version(name).await,
+            ),
+            Self::Dnf => dnf_list(name).await,
+            Self::Pacman => (
+                pacman_installed_version(name).await,
+                pacman_candidate_version(name).await,
+            ),
+            Self::Zypper => zypper_status(name).await,
         }
     }
 
@@ -52,17 +81,21 @@ impl PackageManager {
         match self {
             Self::Apt => apt_install(name).await,
             Self::Dnf => dnf_install(name).await,
+            Self::Pacman => pacman_install(name).await,
+            Self::Zypper => zypper_install(name).await,
         }
     }
 
     /// Deliberately a plain removal, never a purge: configuration and data
     /// are left in place wherever the backend distinguishes the two (e.g.
-    /// apt's `remove` vs `purge`). dnf has no such distinction — removing a
-    /// package there can also remove its configuration.
+    /// apt's `remove` vs `purge`). dnf and zypper have no such distinction —
+    /// removing a package there can also remove its configuration.
     async fn remove(self, name: &str) -> Result<(), AgentError> {
         match self {
             Self::Apt => apt_remove(name).await,
             Self::Dnf => dnf_remove(name).await,
+            Self::Pacman => pacman_remove(name).await,
+            Self::Zypper => zypper_remove(name).await,
         }
     }
 
@@ -70,6 +103,8 @@ impl PackageManager {
         match self {
             Self::Apt => apt_upgrade(name).await,
             Self::Dnf => dnf_upgrade(name).await,
+            Self::Pacman => pacman_upgrade(name).await,
+            Self::Zypper => zypper_upgrade(name).await,
         }
     }
 }
@@ -78,7 +113,8 @@ impl PackageManager {
 /// candidate's `--version`. [`Command::output`] fails with `NotFound` when
 /// the binary isn't on `PATH` (no shell is involved, so this never risks
 /// running anything other than exactly `<binary> --version`), which is all
-/// that's needed to tell the two apart.
+/// that's needed to tell them apart — the four are mutually exclusive in
+/// practice, so detection order does not matter.
 pub async fn detect_package_manager() -> Option<PackageManager> {
     if Command::new("apt-get")
         .arg("--version")
@@ -90,6 +126,22 @@ pub async fn detect_package_manager() -> Option<PackageManager> {
     }
     if Command::new("dnf").arg("--version").output().await.is_ok() {
         return Some(PackageManager::Dnf);
+    }
+    if Command::new("pacman")
+        .arg("--version")
+        .output()
+        .await
+        .is_ok()
+    {
+        return Some(PackageManager::Pacman);
+    }
+    if Command::new("zypper")
+        .arg("--version")
+        .output()
+        .await
+        .is_ok()
+    {
+        return Some(PackageManager::Zypper);
     }
     None
 }
@@ -188,9 +240,8 @@ impl SoftwareManager {
 
         let mut packages = Vec::with_capacity(names.len());
         for name in names {
-            let installed_version = backend.installed_version(&name).await;
+            let (installed_version, available_version) = backend.status(&name).await;
             let installed = installed_version.is_some();
-            let available_version = backend.candidate_version(&name).await;
             let upgradable =
                 installed && available_version.is_some() && available_version != installed_version;
 
@@ -244,7 +295,7 @@ impl SoftwareManager {
     fn backend(&self) -> Result<PackageManager, AgentError> {
         self.package_manager.ok_or_else(|| {
             AgentError::unavailable(
-                "no supported package manager (apt or dnf) was found on this host",
+                "no supported package manager (apt, dnf, pacman, or zypper) was found on this host",
             )
         })
     }
@@ -270,13 +321,14 @@ fn ensure_linux() -> Result<(), AgentError> {
     }
 }
 
-/// A conservative character class covering both Debian's and RPM's package
-/// naming rules (Debian: lowercase alphanumerics plus `+-.`; RPM names are
-/// looser and occasionally mixed-case). Not a security boundary by itself —
-/// [`std::process::Command`] never invokes a shell, so there is no
-/// injection risk from any string reaching it as a single argument — but it
-/// rejects obviously-wrong input (spaces, path separators, empty strings)
-/// with a clear error before anything is shelled out to.
+/// A conservative character class covering Debian's, RPM's (Fedora/openSUSE),
+/// and Arch's package naming rules alike (lowercase alphanumerics plus
+/// `+-._`; RPM and Arch names are looser and occasionally mixed-case). Not a
+/// security boundary by itself — [`std::process::Command`] never invokes a
+/// shell, so there is no injection risk from any string reaching it as a
+/// single argument — but it rejects obviously-wrong input (spaces, path
+/// separators, empty strings) with a clear error before anything is shelled
+/// out to.
 fn validate_package_name(name: &str) -> Result<(), AgentError> {
     let valid = !name.is_empty()
         && name.len() <= 100
@@ -304,6 +356,93 @@ fn command_id() -> String {
     format!("cmd-{timestamp}-{sequence}")
 }
 
+// --- shared process helpers ---------------------------------------------
+
+/// Runs `binary(args)` with a 5-second timeout, returning the process
+/// output only on a successful (zero) exit. A non-zero exit is treated the
+/// same as "no information" without logging — every backend's read-only
+/// probes hit this routinely for "package not found" or "not installed",
+/// which is an expected, frequent outcome, not an error. An execution
+/// failure or a timeout is logged, since either would be a genuine surprise
+/// once a backend has already been selected for this host by
+/// [`detect_package_manager`].
+async fn run_query(binary: &str, args: &[&str]) -> Option<Output> {
+    let result = tokio::time::timeout(
+        Duration::from_secs(5),
+        Command::new(binary).args(args).output(),
+    )
+    .await;
+    match result {
+        Ok(Ok(output)) if output.status.success() => Some(output),
+        Ok(Ok(_)) => None,
+        Ok(Err(error)) => {
+            warn!(%error, package_manager = binary, "failed to execute package manager query");
+            None
+        }
+        Err(_) => {
+            warn!(package_manager = binary, "package manager query timed out");
+            None
+        }
+    }
+}
+
+/// Runs `binary(args)` non-interactively, returning stdout on success. On
+/// failure (non-zero exit, execution error, or timeout) returns stderr
+/// trimmed, or a generic `"<binary> command failed/timed out"` message when
+/// there is nothing to show — shared by every backend's install/remove/
+/// upgrade actions, which differ only in binary, arguments, and any
+/// environment variables the binary needs (apt-get's `DEBIAN_FRONTEND`).
+async fn run_mutation(
+    binary: &str,
+    args: &[&str],
+    env: &[(&str, &str)],
+    timeout_seconds: u64,
+) -> Result<String, AgentError> {
+    let mut command = Command::new(binary);
+    command.args(args);
+    for (key, value) in env {
+        command.env(key, value);
+    }
+
+    let output = tokio::time::timeout(Duration::from_secs(timeout_seconds), command.output())
+        .await
+        .map_err(|_| AgentError::internal(format!("{binary} command timed out")))?
+        .map_err(|error| AgentError::internal(format!("failed to execute {binary}: {error}")))?;
+
+    if !output.status.success() {
+        let message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return Err(AgentError::internal(if message.is_empty() {
+            format!("{binary} command failed")
+        } else {
+            message
+        }));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Finds a `<label>:`-prefixed line (arbitrary whitespace between the label
+/// and the colon, as package managers commonly pad for column alignment)
+/// and returns its trimmed value, treating an empty value or the literal
+/// `(none)` as absent. Shared shape behind apt-cache policy's `Candidate:`,
+/// pacman's `-Si` `Version`, and zypper's `info` `Version` field.
+fn parse_labeled_version(output: &str, label: &str) -> Option<String> {
+    for line in output.lines() {
+        let Some(rest) = line.trim().strip_prefix(label) else {
+            continue;
+        };
+        let Some(value) = rest.trim_start().strip_prefix(':') else {
+            continue;
+        };
+        let version = value.trim();
+        return if version.is_empty() || version == "(none)" {
+            None
+        } else {
+            Some(version.to_owned())
+        };
+    }
+    None
+}
+
 // --- apt / dpkg backend -----------------------------------------------
 
 /// `dpkg`'s three-word `Status` field (want/flag/status, e.g.
@@ -319,28 +458,7 @@ fn is_installed_status(status: &str) -> bool {
 /// installed) and any command failure — this is a read-only status probe,
 /// so it degrades instead of failing the whole listing.
 async fn dpkg_status(package: &str) -> Option<(String, String)> {
-    let result = tokio::time::timeout(
-        Duration::from_secs(5),
-        Command::new("dpkg-query")
-            .args(["-W", "-f=${Status}\t${Version}\n", package])
-            .output(),
-    )
-    .await;
-
-    let output = match result {
-        Ok(Ok(output)) => output,
-        Ok(Err(error)) => {
-            warn!(%error, "failed to execute dpkg-query");
-            return None;
-        }
-        Err(_) => {
-            warn!("dpkg-query timed out");
-            return None;
-        }
-    };
-    if !output.status.success() {
-        return None;
-    }
+    let output = run_query("dpkg-query", &["-W", "-f=${Status}\t${Version}\n", package]).await?;
     let text = String::from_utf8_lossy(&output.stdout);
     let line = text.lines().next()?;
     let (status, version) = line.split_once('\t')?;
@@ -356,42 +474,12 @@ async fn apt_installed_version(package: &str) -> Option<String> {
 /// local cache — deliberately never runs `apt update`, matching
 /// `diagnostics::read_upgradable_package_count`'s read-only convention.
 async fn apt_candidate_version(package: &str) -> Option<String> {
-    let result = tokio::time::timeout(
-        Duration::from_secs(5),
-        Command::new("apt-cache").args(["policy", package]).output(),
-    )
-    .await;
-
-    let output = match result {
-        Ok(Ok(output)) if output.status.success() => output,
-        Ok(Ok(_)) => {
-            warn!("apt-cache policy failed");
-            return None;
-        }
-        Ok(Err(error)) => {
-            warn!(%error, "failed to execute apt-cache");
-            return None;
-        }
-        Err(_) => {
-            warn!("apt-cache policy timed out");
-            return None;
-        }
-    };
+    let output = run_query("apt-cache", &["policy", package]).await?;
     parse_candidate_version(&String::from_utf8_lossy(&output.stdout))
 }
 
 fn parse_candidate_version(output: &str) -> Option<String> {
-    for line in output.lines() {
-        if let Some(rest) = line.trim_start().strip_prefix("Candidate:") {
-            let version = rest.trim();
-            return if version.is_empty() || version == "(none)" {
-                None
-            } else {
-                Some(version.to_owned())
-            };
-        }
-    }
-    None
+    parse_labeled_version(output, "Candidate")
 }
 
 async fn apt_install(package: &str) -> Result<(), AgentError> {
@@ -415,26 +503,13 @@ async fn apt_upgrade(package: &str) -> Result<(), AgentError> {
 /// short-lived `systemctl`/`journalctl` calls in `services.rs` — package
 /// installs can legitimately take tens of seconds.
 async fn apt_get(args: &[&str], timeout_seconds: u64) -> Result<String, AgentError> {
-    let output = tokio::time::timeout(
-        Duration::from_secs(timeout_seconds),
-        Command::new("apt-get")
-            .env("DEBIAN_FRONTEND", "noninteractive")
-            .args(args)
-            .output(),
+    run_mutation(
+        "apt-get",
+        args,
+        &[("DEBIAN_FRONTEND", "noninteractive")],
+        timeout_seconds,
     )
     .await
-    .map_err(|_| AgentError::internal("apt-get command timed out"))?
-    .map_err(|error| AgentError::internal(format!("failed to execute apt-get: {error}")))?;
-
-    if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        return Err(AgentError::internal(if message.is_empty() {
-            "apt-get command failed".to_owned()
-        } else {
-            message
-        }));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 // --- dnf / rpm backend --------------------------------------------------
@@ -455,25 +530,8 @@ async fn dnf_candidate_version(package: &str) -> Option<String> {
 /// configured repo. Returns `(installed_version, available_version)`; both
 /// `None` means dnf does not know this package at all.
 async fn dnf_list(package: &str) -> (Option<String>, Option<String>) {
-    let result = tokio::time::timeout(
-        Duration::from_secs(5),
-        Command::new("dnf")
-            .args(["--quiet", "list", package])
-            .output(),
-    )
-    .await;
-
-    let output = match result {
-        Ok(Ok(output)) if output.status.success() => output,
-        Ok(Ok(_)) => return (None, None),
-        Ok(Err(error)) => {
-            warn!(%error, "failed to execute dnf");
-            return (None, None);
-        }
-        Err(_) => {
-            warn!("dnf list timed out");
-            return (None, None);
-        }
+    let Some(output) = run_query("dnf", &["--quiet", "list", package]).await else {
+        return (None, None);
     };
     parse_dnf_list(&String::from_utf8_lossy(&output.stdout))
 }
@@ -531,30 +589,166 @@ async fn dnf_upgrade(package: &str) -> Result<(), AgentError> {
 }
 
 async fn dnf(args: &[&str], timeout_seconds: u64) -> Result<String, AgentError> {
-    let output = tokio::time::timeout(
-        Duration::from_secs(timeout_seconds),
-        Command::new("dnf").args(args).output(),
-    )
-    .await
-    .map_err(|_| AgentError::internal("dnf command timed out"))?
-    .map_err(|error| AgentError::internal(format!("failed to execute dnf: {error}")))?;
+    run_mutation("dnf", args, &[], timeout_seconds).await
+}
 
-    if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        return Err(AgentError::internal(if message.is_empty() {
-            "dnf command failed".to_owned()
-        } else {
-            message
-        }));
+// --- pacman backend (Arch Linux and derivatives) ------------------------
+
+/// `pacman -Q <package>` prints a single `"<name> <version>"` line on
+/// success (local package database only, no root needed) and exits
+/// non-zero with nothing useful when the package is not installed.
+async fn pacman_installed_version(package: &str) -> Option<String> {
+    let output = run_query("pacman", &["-Q", package]).await?;
+    let line = String::from_utf8_lossy(&output.stdout);
+    let mut fields = line.lines().next()?.split_whitespace();
+    let _name = fields.next()?;
+    fields.next().map(str::to_owned)
+}
+
+/// `pacman -Si <package>` reads the local sync database (populated by a
+/// previous `-Sy`) without refreshing it — deliberately read-only, matching
+/// `apt_candidate_version`'s "never runs the refresh itself" convention.
+/// Exits non-zero when the name is unknown to every configured repo.
+async fn pacman_candidate_version(package: &str) -> Option<String> {
+    let output = run_query("pacman", &["-Si", package]).await?;
+    parse_labeled_version(&String::from_utf8_lossy(&output.stdout), "Version")
+}
+
+/// pacman intentionally never splits "sync the package database" from
+/// "apply pending upgrades" into two steps the way apt/dnf split
+/// update-then-install: running `-Sy` without `-u` is a well-known pacman
+/// footgun that can leave a system in an unsupported "partial upgrade"
+/// state, where some packages are refreshed against newer dependencies than
+/// others. `-Syu <package>` syncs, upgrades every already-installed
+/// package, and ensures `package` is installed/updated, all in one
+/// invocation — chosen deliberately over a narrower per-package sync, at
+/// the cost of a wider blast radius than the apt/dnf backends: a single
+/// "install" or "upgrade" call on a pacman host upgrades the whole system,
+/// not just the named package. The longer timeout reflects that a full
+/// system upgrade can legitimately take much longer than a single-package
+/// apt/dnf install.
+async fn pacman_install(package: &str) -> Result<(), AgentError> {
+    pacman(&["-Syu", "--noconfirm", package], 600).await?;
+    Ok(())
+}
+
+/// A plain `-R`, never `-Rn`/`-Rns`: pacman's default removal already skips
+/// deleting configuration files it considers user-modified, matching the
+/// same "leave data in place where possible" philosophy as `apt_remove`.
+async fn pacman_remove(package: &str) -> Result<(), AgentError> {
+    pacman(&["-R", "--noconfirm", package], 180).await?;
+    Ok(())
+}
+
+/// Identical to [`pacman_install`]: pacman has no narrower "upgrade just
+/// this one package" operation that avoids the partial-upgrade risk
+/// explained there, so upgrading and installing issue the same command.
+async fn pacman_upgrade(package: &str) -> Result<(), AgentError> {
+    pacman_install(package).await
+}
+
+async fn pacman(args: &[&str], timeout_seconds: u64) -> Result<String, AgentError> {
+    run_mutation("pacman", args, &[], timeout_seconds).await
+}
+
+// --- zypper / rpm backend (openSUSE and derivatives) ---------------------
+
+/// Reads the installed version straight from `rpm` rather than parsing
+/// `zypper info`'s output for it: zypper's own `info` field for an
+/// installed package is not reliably distinguishable from its "available"
+/// counterpart across zypper releases (see [`zypper_status`]), whereas
+/// `rpm -q` is an unambiguous, direct read of the local package database —
+/// the same reasoning behind the apt backend reading `dpkg-query` instead
+/// of `apt` itself for local state.
+async fn zypper_installed_version(package: &str) -> Option<String> {
+    let output = run_query(
+        "rpm",
+        &["-q", "--queryformat", "%{VERSION}-%{RELEASE}", package],
+    )
+    .await?;
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    (!version.is_empty()).then_some(version)
+}
+
+/// `zypper info <package>` succeeds (with a `Version:` field) whenever the
+/// name is known to any configured repository, whether or not it is
+/// installed, and exits non-zero when it is unknown to all of them — the
+/// existence check `SoftwareManager::allow` relies on.
+async fn zypper_candidate_version(package: &str) -> Option<String> {
+    let output = run_query("zypper", &["--non-interactive", "info", package]).await?;
+    parse_labeled_version(&String::from_utf8_lossy(&output.stdout), "Version")
+}
+
+/// Combined installed+available query used by [`PackageManager::status`].
+/// When the package is not installed, `zypper info`'s `Version:` field is
+/// unambiguously the candidate. When it is installed, that same field's
+/// meaning is not reliable enough across zypper versions to also stand in
+/// for "is a newer version available" — so the available version instead
+/// comes from `zypper list-updates`, the command whose entire purpose is
+/// exactly that question.
+async fn zypper_status(package: &str) -> (Option<String>, Option<String>) {
+    let installed = zypper_installed_version(package).await;
+    let available = if installed.is_some() {
+        zypper_update_candidate(package).await
+    } else {
+        zypper_candidate_version(package).await
+    };
+    (installed, available)
+}
+
+/// Reads the pending-upgrade version for an already-installed package from
+/// `zypper list-updates`'s table. No matching row means the package is
+/// already at its newest available version, mirroring dnf's convention
+/// (`parse_dnf_list`) of `None` rather than repeating the installed
+/// version.
+async fn zypper_update_candidate(package: &str) -> Option<String> {
+    let output = run_query("zypper", &["--non-interactive", "list-updates"]).await?;
+    parse_zypper_list_updates(&String::from_utf8_lossy(&output.stdout), package)
+}
+
+/// `zypper list-updates`' table is pipe-delimited with a fixed column
+/// order: `S | Repository | Name | Current Version | Available Version |
+/// Arch`. Matches on the `Name` column (index 2) and returns the
+/// `Available Version` column (index 4) of the first matching row.
+fn parse_zypper_list_updates(output: &str, package: &str) -> Option<String> {
+    for line in output.lines() {
+        let columns: Vec<&str> = line.split('|').map(str::trim).collect();
+        if columns.len() >= 5 && columns[2] == package {
+            return Some(columns[4].to_owned());
+        }
     }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    None
+}
+
+async fn zypper_install(package: &str) -> Result<(), AgentError> {
+    zypper(&["--non-interactive", "refresh"], 120).await?;
+    zypper(&["--non-interactive", "install", package], 180).await?;
+    Ok(())
+}
+
+/// A plain `remove`, no `--clean-deps`: leaves now-unneeded dependencies
+/// and configuration in place, matching `apt_remove`'s conservative
+/// removal.
+async fn zypper_remove(package: &str) -> Result<(), AgentError> {
+    zypper(&["--non-interactive", "remove", package], 180).await?;
+    Ok(())
+}
+
+async fn zypper_upgrade(package: &str) -> Result<(), AgentError> {
+    zypper(&["--non-interactive", "refresh"], 120).await?;
+    zypper(&["--non-interactive", "update", package], 180).await?;
+    Ok(())
+}
+
+async fn zypper(args: &[&str], timeout_seconds: u64) -> Result<String, AgentError> {
+    run_mutation("zypper", args, &[], timeout_seconds).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         PackageManager, SoftwareManager, is_installed_status, parse_candidate_version,
-        parse_dnf_list, validate_package_name,
+        parse_dnf_list, parse_labeled_version, parse_zypper_list_updates, validate_package_name,
     };
 
     fn test_manager(allowed: Vec<String>) -> Result<SoftwareManager, crate::error::AgentError> {
@@ -654,5 +848,63 @@ mod tests {
     #[test]
     fn parses_dnf_list_for_an_unknown_package_as_empty() {
         assert_eq!(parse_dnf_list(""), (None, None));
+    }
+
+    #[test]
+    fn parses_the_pacman_si_version_field() {
+        let output = "Repository      : core\n\
+             Name            : git\n\
+             Version         : 2.43.0-1\n\
+             Description     : the fast distributed version control system\n\
+             Architecture    : x86_64\n";
+        assert_eq!(
+            parse_labeled_version(output, "Version").as_deref(),
+            Some("2.43.0-1")
+        );
+    }
+
+    #[test]
+    fn treats_a_none_pacman_candidate_as_unavailable() {
+        let output = "Version         : (none)\n";
+        assert_eq!(parse_labeled_version(output, "Version"), None);
+    }
+
+    #[test]
+    fn does_not_match_a_label_appearing_only_inside_a_value() {
+        let output = "Summary         : Fast Version Control System\n";
+        assert_eq!(parse_labeled_version(output, "Version"), None);
+    }
+
+    #[test]
+    fn parses_the_zypper_info_version_field() {
+        let output = "Information for package git:\n\
+             -----------------------------\n\
+             Repository     : Main Repository\n\
+             Name           : git\n\
+             Version        : 2.43.0-1.2\n\
+             Installed      : Yes\n\
+             Status         : up-to-date\n";
+        assert_eq!(
+            parse_labeled_version(output, "Version").as_deref(),
+            Some("2.43.0-1.2")
+        );
+    }
+
+    #[test]
+    fn parses_zypper_list_updates_for_a_matching_package() {
+        let output = "S | Repository          | Name | Current Version | Available Version | Arch\n\
+             --+---------------------+------+------------------+--------------------+-------\n\
+             v | Main Repository     | git  | 2.39.0-1.1       | 2.43.0-1.2         | x86_64\n";
+        assert_eq!(
+            parse_zypper_list_updates(output, "git").as_deref(),
+            Some("2.43.0-1.2")
+        );
+    }
+
+    #[test]
+    fn parses_zypper_list_updates_as_absent_when_package_is_not_listed() {
+        let output = "S | Repository          | Name | Current Version | Available Version | Arch\n\
+             --+---------------------+------+------------------+--------------------+-------\n";
+        assert_eq!(parse_zypper_list_updates(output, "git"), None);
     }
 }
