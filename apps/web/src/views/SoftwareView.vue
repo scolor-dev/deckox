@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { api, type SoftwarePackage } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import PasswordConfirmDialog from "../components/PasswordConfirmDialog.vue";
 import { notify } from "../notifications";
+import { preferences, type SoftwareTagFilterKey } from "../preferences";
 
 const { t } = useI18n();
+
+const TAG_FILTER_KEYS: SoftwareTagFilterKey[] = ["installed", "not_installed"];
 
 const packages = ref<SoftwarePackage[]>([]);
 const loading = ref(true);
@@ -34,6 +37,28 @@ const PENDING_LABEL_KEYS: Record<ManageAction, string> = {
 const armed = ref<{ pkg: SoftwarePackage; action: ManageAction } | null>(null);
 const actionError = ref<string | null>(null);
 const submitting = ref(false);
+
+function packageTag(pkg: SoftwarePackage): SoftwareTagFilterKey {
+  return pkg.installed ? "installed" : "not_installed";
+}
+
+function tagLabel(tag: SoftwareTagFilterKey) {
+  return tag === "installed" ? t("software.installed") : t("software.notInstalled");
+}
+
+function isTagHidden(tag: SoftwareTagFilterKey) {
+  return preferences.hiddenSoftwareTags.includes(tag);
+}
+
+function toggleTag(tag: SoftwareTagFilterKey) {
+  preferences.hiddenSoftwareTags = isTagHidden(tag)
+    ? preferences.hiddenSoftwareTags.filter((hidden) => hidden !== tag)
+    : [...preferences.hiddenSoftwareTags, tag];
+}
+
+const filteredPackages = computed(() =>
+  packages.value.filter((pkg) => !isTagHidden(packageTag(pkg))),
+);
 
 async function refresh() {
   loading.value = true;
@@ -146,40 +171,25 @@ onMounted(() => {
 
     <section class="table-panel">
       <div class="table-toolbar">
-        <form
-          class="add-software-form"
-          @submit.prevent="addPackage"
-        >
-          <label class="search">
-            <span class="sr-only">{{ t("software.addLabel") }}</span>
-            <input
-              v-model="newPackageName"
-              type="text"
-              :placeholder="t('software.addPlaceholder')"
-              required
-            >
-          </label>
-          <button
-            class="button"
-            type="submit"
-            :disabled="adding"
+        <fieldset class="tag-toggles">
+          <legend class="sr-only">
+            {{ t("software.tagVisibility") }}
+          </legend>
+          <label
+            v-for="tag in TAG_FILTER_KEYS"
+            :key="tag"
+            :class="['tag-toggle', tag === 'installed' ? 'standard' : 'other', { off: isTagHidden(tag) }]"
           >
-            {{ adding ? t("software.adding") : t("software.add") }}
-          </button>
-        </form>
-        <span class="table-count">{{ t("software.count", { count: packages.length }) }}</span>
+            <input
+              type="checkbox"
+              :checked="!isTagHidden(tag)"
+              @change="toggleTag(tag)"
+            >
+            {{ tagLabel(tag) }}
+          </label>
+        </fieldset>
+        <span class="table-count">{{ t("software.count", { count: filteredPackages.length }) }}</span>
       </div>
-
-      <div
-        v-if="addError"
-        class="notice error"
-        role="alert"
-      >
-        {{ addError }}
-      </div>
-      <p class="inline-note">
-        {{ t("software.addHelp") }}
-      </p>
 
       <div class="table-scroll">
         <table>
@@ -201,7 +211,7 @@ onMounted(() => {
                 {{ t("software.loading") }}
               </td>
             </tr>
-            <tr v-else-if="packages.length === 0">
+            <tr v-else-if="filteredPackages.length === 0">
               <td
                 colspan="5"
                 class="empty"
@@ -210,7 +220,7 @@ onMounted(() => {
               </td>
             </tr>
             <tr
-              v-for="pkg in packages"
+              v-for="pkg in filteredPackages"
               :key="pkg.name"
             >
               <td>
@@ -268,6 +278,47 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
+    </section>
+
+    <section class="table-panel">
+      <div class="table-toolbar">
+        <h2 class="panel-title">
+          {{ t("software.addTitle") }}
+        </h2>
+      </div>
+
+      <div
+        v-if="addError"
+        class="notice error"
+        role="alert"
+      >
+        {{ addError }}
+      </div>
+
+      <form
+        class="add-software-form"
+        @submit.prevent="addPackage"
+      >
+        <label class="search">
+          <span class="sr-only">{{ t("software.addLabel") }}</span>
+          <input
+            v-model="newPackageName"
+            type="text"
+            :placeholder="t('software.addPlaceholder')"
+            required
+          >
+        </label>
+        <button
+          class="button"
+          type="submit"
+          :disabled="adding"
+        >
+          {{ adding ? t("software.adding") : t("software.add") }}
+        </button>
+      </form>
+      <aside class="inline-note">
+        {{ t("software.addHelp") }}
+      </aside>
     </section>
 
     <aside class="inline-note">

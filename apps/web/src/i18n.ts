@@ -62,6 +62,7 @@ export const messages = {
     },
     software: {
       title: "ソフトウェア", subtitle: "パッケージ名を指定してインストール・削除・更新を管理します。対象はそのホストに設定済みのリポジトリで実在確認できたものだけです。",
+      tagVisibility: "表示するタグ", addTitle: "ソフトウェアを追加",
       addLabel: "パッケージ名", addPlaceholder: "例: docker.io、nginx、git",
       add: "許可リストに追加", adding: "確認しています…",
       addHelp: "入力したパッケージ名を、このホストに設定済みのリポジトリだけを対象に実在確認してから追加します。第三者リポジトリの追加は行いません。",
@@ -73,7 +74,7 @@ export const messages = {
       confirmUpgrade: "{name} を最新版へ更新しますか？", confirmDisallow: "{name} を管理許可リストから外しますか？",
       installing: "インストールしています…", removing: "削除しています…", upgrading: "更新しています…",
       completed: "{name} の操作が完了しました。", count: "{count}件",
-      platformNote: "apt(Debian・Ubuntuなど)・dnf(Fedora・RHEL・Rocky Linux・AlmaLinuxなど)に対応しています。pacman(Arch Linux)・zypper(openSUSE)・Alpine Linuxには未対応です。",
+      platformNote: "apt(Debian・Ubuntuなど)・dnf(Fedora・RHEL・Rocky Linux・AlmaLinuxなど)・pacman(Arch Linuxなど)・zypper(openSUSEなど)に対応しています。pacmanホストではインストール・更新のたびにホスト全体のパッケージも同時に最新化されます。Alpine Linuxには未対応です。",
     },
     storage: {
       title: "ストレージ", summary: "{count}件のマウント", mount: "マウント先", filesystem: "ファイルシステム", capacity: "容量", usage: "使用状況",
@@ -215,6 +216,7 @@ export const messages = {
     },
     software: {
       title: "Software", subtitle: "Manage install, removal, and upgrades by package name. Only packages confirmed to exist in this host's already-configured repositories can be added.",
+      tagVisibility: "Visible tags", addTitle: "Add software",
       addLabel: "Package name", addPlaceholder: "e.g. docker.io, nginx, git",
       add: "Add to allowlist", adding: "Checking…",
       addHelp: "The name you enter is checked against this host's already-configured repositories before being added. No third-party repository is ever added.",
@@ -226,7 +228,7 @@ export const messages = {
       confirmUpgrade: "Upgrade {name} to the latest version?", confirmDisallow: "Remove {name} from the management allowlist?",
       installing: "Installing…", removing: "Removing…", upgrading: "Upgrading…",
       completed: "Completed the operation for {name}.", count: "{count}",
-      platformNote: "Supports apt (Debian, Ubuntu, ...) and dnf (Fedora, RHEL, Rocky Linux, AlmaLinux, ...). Not yet supported on pacman (Arch Linux), zypper (openSUSE), or Alpine Linux.",
+      platformNote: "Supports apt (Debian, Ubuntu, ...), dnf (Fedora, RHEL, Rocky Linux, AlmaLinux, ...), pacman (Arch Linux, ...), and zypper (openSUSE, ...). On pacman hosts, installing or upgrading also upgrades every other package on the host. Not supported on Alpine Linux.",
     },
     storage: {
       title: "Storage", summary: "{count} mounts", mount: "Mount point", filesystem: "File system", capacity: "Capacity", usage: "Usage",
