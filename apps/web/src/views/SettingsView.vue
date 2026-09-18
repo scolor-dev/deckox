@@ -357,6 +357,23 @@ onMounted(() => {
             </option>
           </select>
 
+          <label for="theme">{{ t("settings.theme") }}</label>
+          <select
+            id="theme"
+            v-model="preferences.theme"
+            @change="displaySettingsChanged"
+          >
+            <option value="auto">
+              {{ t("settings.themeAuto") }}
+            </option>
+            <option value="light">
+              {{ t("settings.themeLight") }}
+            </option>
+            <option value="dark">
+              {{ t("settings.themeDark") }}
+            </option>
+          </select>
+
           <label class="checkbox-field">
             <input
               v-model="preferences.realtimeEnabled"

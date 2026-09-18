@@ -1,6 +1,7 @@
 import { reactive, watch } from "vue";
 
 export type LocalePreference = "auto" | "ja" | "en";
+export type ThemePreference = "auto" | "light" | "dark";
 export type MetricsInterval = 1 | 2 | 5;
 // "standard" and "deckox"/"other" are fixed categories; any other string is
 // a recognized product name (e.g. "Docker"), which is open-ended, so this
@@ -13,6 +14,7 @@ export type SoftwareTagFilterKey = "installed" | "not_installed";
 
 export interface Preferences {
   locale: LocalePreference;
+  theme: ThemePreference;
   realtimeEnabled: boolean;
   metricsInterval: MetricsInterval;
   hiddenServiceTags: ServiceTagFilterKey[];
@@ -23,6 +25,7 @@ export interface Preferences {
 const STORAGE_KEY = "deckox:preferences";
 const DEFAULT_PREFERENCES: Preferences = {
   locale: "auto",
+  theme: "auto",
   realtimeEnabled: true,
   metricsInterval: 1,
   hiddenServiceTags: [],
@@ -37,6 +40,9 @@ export function normalizePreferences(value: unknown): Preferences {
     locale: candidate.locale === "ja" || candidate.locale === "en" || candidate.locale === "auto"
       ? candidate.locale
       : DEFAULT_PREFERENCES.locale,
+    theme: candidate.theme === "light" || candidate.theme === "dark" || candidate.theme === "auto"
+      ? candidate.theme
+      : DEFAULT_PREFERENCES.theme,
     realtimeEnabled: typeof candidate.realtimeEnabled === "boolean"
       ? candidate.realtimeEnabled
       : DEFAULT_PREFERENCES.realtimeEnabled,
@@ -69,6 +75,14 @@ export function resolveLocale(
 ): "ja" | "en" {
   if (preference !== "auto") return preference;
   return browserLanguage.toLowerCase().startsWith("ja") ? "ja" : "en";
+}
+
+export function resolveTheme(
+  preference: ThemePreference,
+  prefersDark: boolean,
+): "light" | "dark" {
+  if (preference !== "auto") return preference;
+  return prefersDark ? "dark" : "light";
 }
 
 function loadPreferences(): Preferences {
