@@ -62,6 +62,7 @@ export const messages = {
     },
     software: {
       title: "ソフトウェア", subtitle: "パッケージ名を指定してインストール・削除・更新を管理します。対象はそのホストに設定済みのリポジトリで実在確認できたものだけです。",
+      tagVisibility: "表示するタグ", addTitle: "ソフトウェアを追加",
       addLabel: "パッケージ名", addPlaceholder: "例: docker.io、nginx、git",
       add: "許可リストに追加", adding: "確認しています…",
       addHelp: "入力したパッケージ名を、このホストに設定済みのリポジトリだけを対象に実在確認してから追加します。第三者リポジトリの追加は行いません。",
@@ -215,6 +216,7 @@ export const messages = {
     },
     software: {
       title: "Software", subtitle: "Manage install, removal, and upgrades by package name. Only packages confirmed to exist in this host's already-configured repositories can be added.",
+      tagVisibility: "Visible tags", addTitle: "Add software",
       addLabel: "Package name", addPlaceholder: "e.g. docker.io, nginx, git",
       add: "Add to allowlist", adding: "Checking…",
       addHelp: "The name you enter is checked against this host's already-configured repositories before being added. No third-party repository is ever added.",

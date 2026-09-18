@@ -7,6 +7,9 @@ export type MetricsInterval = 1 | 2 | 5;
 // stays a plain string rather than a literal union.
 export type ServiceTagFilterKey = string;
 export type StorageTagFilterKey = string;
+// A package is always exactly one of these two, unlike the open-ended
+// service/storage tag sets above.
+export type SoftwareTagFilterKey = "installed" | "not_installed";
 
 export interface Preferences {
   locale: LocalePreference;
@@ -14,6 +17,7 @@ export interface Preferences {
   metricsInterval: MetricsInterval;
   hiddenServiceTags: ServiceTagFilterKey[];
   hiddenStorageTags: StorageTagFilterKey[];
+  hiddenSoftwareTags: SoftwareTagFilterKey[];
 }
 
 const STORAGE_KEY = "deckox:preferences";
@@ -23,6 +27,7 @@ const DEFAULT_PREFERENCES: Preferences = {
   metricsInterval: 1,
   hiddenServiceTags: [],
   hiddenStorageTags: [],
+  hiddenSoftwareTags: [],
 };
 
 export function normalizePreferences(value: unknown): Preferences {
@@ -44,11 +49,18 @@ export function normalizePreferences(value: unknown): Preferences {
     hiddenStorageTags: Array.isArray(candidate.hiddenStorageTags)
       ? candidate.hiddenStorageTags.filter(isTagString)
       : [...DEFAULT_PREFERENCES.hiddenStorageTags],
+    hiddenSoftwareTags: Array.isArray(candidate.hiddenSoftwareTags)
+      ? candidate.hiddenSoftwareTags.filter(isSoftwareTag)
+      : [...DEFAULT_PREFERENCES.hiddenSoftwareTags],
   };
 }
 
 function isTagString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 64;
+}
+
+function isSoftwareTag(value: unknown): value is SoftwareTagFilterKey {
+  return value === "installed" || value === "not_installed";
 }
 
 export function resolveLocale(

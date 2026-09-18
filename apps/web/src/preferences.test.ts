@@ -9,12 +9,14 @@ describe("preferences", () => {
       metricsInterval: 5,
       hiddenServiceTags: ["standard", "Docker", 42, ""],
       hiddenStorageTags: ["standard", 42],
+      hiddenSoftwareTags: ["installed", "bogus", 42],
     })).toEqual({
       locale: "en",
       realtimeEnabled: false,
       metricsInterval: 5,
       hiddenServiceTags: ["standard", "Docker"],
       hiddenStorageTags: ["standard"],
+      hiddenSoftwareTags: ["installed"],
     });
     expect(normalizePreferences({
       locale: "fr",
@@ -26,6 +28,7 @@ describe("preferences", () => {
       metricsInterval: 1,
       hiddenServiceTags: [],
       hiddenStorageTags: [],
+      hiddenSoftwareTags: [],
     });
   });
 

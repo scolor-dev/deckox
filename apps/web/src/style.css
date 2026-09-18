@@ -451,6 +451,20 @@ h1 { margin: 0; color: var(--text-heading); font-size: 26px; line-height: 1.35; 
 h2 { margin: 0; color: #2b3037; font-size: 17px; line-height: 1.4; }
 .subtitle { margin: 4px 0 0; color: var(--text-muted); font-size: 12px; }
 
+/* Button taxonomy — which class to use where:
+ * .button          default-weight action (refresh, close, cancel, submit
+ *                   a form that isn't a confirm dialog).
+ * .action-button    small inline action inside a table row (start/stop,
+ *                   open logs); add .danger for a destructive one (stop,
+ *                   disable, remove) — outlined red, not filled.
+ * .menu-button      the mobile hamburger toggle only; not for general use.
+ * .primary-button   the single filled call-to-action in a confirm dialog
+ *                   (PasswordConfirmDialog); add .danger-button for a
+ *                   destructive confirm (reboot, remove) — filled red,
+ *                   the dialog counterpart of .action-button.danger.
+ * .logout-button    bare-text link-style button; unique to the sidebar
+ *                   footer, not reused elsewhere.
+ */
 .button, .action-button, .menu-button {
   border: 1px solid var(--border-strong);
   border-radius: 4px;
