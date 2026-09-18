@@ -1,0 +1,89 @@
+<script setup lang="ts">
+import { onBeforeUnmount, ref, watch } from "vue";
+
+const props = withDefaults(
+  defineProps<{
+    open: boolean;
+    /** Which side of the trigger the panel hangs from. */
+    align?: "start" | "end";
+  }>(),
+  {
+    align: "start",
+  },
+);
+
+const emit = defineEmits<{
+  close: [];
+}>();
+
+const rootRef = ref<HTMLElement | null>(null);
+
+function handleOutsideClick(event: MouseEvent) {
+  if (rootRef.value && !rootRef.value.contains(event.target as Node)) emit("close");
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") emit("close");
+}
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      // Capture phase + next tick would be ideal to skip the opening click,
+      // but a plain listener registered after the current click has
+      // already finished dispatching is enough in practice here.
+      window.addEventListener("click", handleOutsideClick);
+      window.addEventListener("keydown", handleKeydown);
+    } else {
+      window.removeEventListener("click", handleOutsideClick);
+      window.removeEventListener("keydown", handleKeydown);
+    }
+  },
+);
+
+onBeforeUnmount(() => {
+  window.removeEventListener("click", handleOutsideClick);
+  window.removeEventListener("keydown", handleKeydown);
+});
+</script>
+
+<template>
+  <div
+    ref="rootRef"
+    class="ds-popover-anchor"
+  >
+    <slot name="trigger" />
+    <Transition name="ds-popover-fade">
+      <div
+        v-if="open"
+        :class="['ds-popover-panel', `ds-popover-panel--${align}`]"
+        role="menu"
+      >
+        <slot />
+      </div>
+    </Transition>
+  </div>
+</template>
+
+<style scoped>
+.ds-popover-anchor { position: relative; display: inline-block; }
+.ds-popover-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  min-width: 160px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-elevated);
+  box-shadow: 0 14px 40px var(--shadow-color);
+}
+.ds-popover-panel--start { left: 0; }
+.ds-popover-panel--end { right: 0; }
+
+.ds-popover-fade-enter-active,
+.ds-popover-fade-leave-active { transition: opacity .12s ease, transform .12s ease; }
+.ds-popover-fade-enter-from,
+.ds-popover-fade-leave-to { opacity: 0; transform: translateY(-4px); }
+</style>

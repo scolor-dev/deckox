@@ -2,9 +2,13 @@
 import { ref } from "vue";
 import { preferences } from "../../preferences";
 import AppButton from "../components/AppButton.vue";
+import AppChip from "../components/AppChip.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import InfoNote from "../components/InfoNote.vue";
+import AppModal from "../components/AppModal.vue";
 import NoticeBanner from "../components/NoticeBanner.vue";
+import AppPopover from "../components/AppPopover.vue";
+import AppPopoverItem from "../components/AppPopoverItem.vue";
 import StateBadge from "../components/StateBadge.vue";
 import TabBar from "../components/TabBar.vue";
 import TableToolbar from "../components/TableToolbar.vue";
@@ -12,8 +16,12 @@ import TablePanel from "../components/TablePanel.vue";
 import TagBadge from "../components/TagBadge.vue";
 import TagToggle from "../components/TagToggle.vue";
 import TagToggleGroup from "../components/TagToggleGroup.vue";
+import AppTooltip from "../components/AppTooltip.vue";
 
 const dialogOpen = ref(false);
+const modalOpen = ref(false);
+const popoverOpen = ref(false);
+const chips = ref(["docker.io", "nginx", "git"]);
 const activeTab = ref("first");
 const tabs = [
   { key: "first", label: "One" },
@@ -235,6 +243,94 @@ const colorGroups: { name: string; tokens: string[] }[] = [
     </section>
 
     <section class="catalog-section">
+      <h2>Modal</h2>
+      <AppButton
+        variant="primary"
+        @click="modalOpen = true"
+      >
+        Open modal
+      </AppButton>
+      <AppModal
+        :open="modalOpen"
+        title="Service log: docker.service"
+        size="large"
+        @close="modalOpen = false"
+      >
+        <p>Larger, freely-scrolling content goes here (e.g. a log viewer).</p>
+        <p>Unlike ConfirmDialog, Modal has its own close (×) button and no fixed narrow width.</p>
+        <template #footer>
+          <AppButton @click="modalOpen = false">
+            Close
+          </AppButton>
+        </template>
+      </AppModal>
+    </section>
+
+    <section class="catalog-section">
+      <h2>Chip</h2>
+      <div class="row">
+        <AppChip
+          v-for="(chip, index) in chips"
+          :key="chip"
+          removable
+          @remove="chips.splice(index, 1)"
+        >
+          {{ chip }}
+        </AppChip>
+        <span
+          v-if="chips.length === 0"
+          class="hint"
+        >(all removed — reload to reset)</span>
+      </div>
+    </section>
+
+    <section class="catalog-section">
+      <h2>Popover / PopoverItem</h2>
+      <AppPopover
+        :open="popoverOpen"
+        align="start"
+        @close="popoverOpen = false"
+      >
+        <template #trigger>
+          <AppButton @click="popoverOpen = !popoverOpen">
+            Actions ▾
+          </AppButton>
+        </template>
+        <AppPopoverItem @click="popoverOpen = false">
+          Restart
+        </AppPopoverItem>
+        <AppPopoverItem @click="popoverOpen = false">
+          View logs
+        </AppPopoverItem>
+        <AppPopoverItem
+          danger
+          @click="popoverOpen = false"
+        >
+          Remove
+        </AppPopoverItem>
+      </AppPopover>
+    </section>
+
+    <section class="catalog-section">
+      <h2>Tooltip</h2>
+      <div class="row">
+        <AppTooltip text="Restart this service">
+          <AppButton variant="action">
+            Restart
+          </AppButton>
+        </AppTooltip>
+        <AppTooltip
+          text="Shown below the trigger"
+          placement="bottom"
+        >
+          <AppButton variant="action">
+            Hover me (bottom)
+          </AppButton>
+        </AppTooltip>
+      </div>
+    </section>
+
+    <section class="catalog-section">
       <h2>TablePanel / TableToolbar</h2>
       <TablePanel>
         <template #toolbar>
@@ -326,6 +422,7 @@ const colorGroups: { name: string; tokens: string[] }[] = [
 }
 .catalog-section h2 { margin: 0 0 14px; color: var(--text-heading); font-size: 18px; }
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+.hint { color: var(--text-faint); font-size: 12px; }
 .token-group { margin-bottom: 16px; }
 .token-group h3 { margin: 0 0 8px; color: var(--text-label); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .token-swatches { display: flex; flex-wrap: wrap; gap: 12px; }
