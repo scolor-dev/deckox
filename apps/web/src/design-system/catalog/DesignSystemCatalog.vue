@@ -2,20 +2,34 @@
 import { ref } from "vue";
 import { preferences } from "../../preferences";
 import AppButton from "../components/AppButton.vue";
+import AppCard from "../components/AppCard.vue";
+import AppCheckbox from "../components/AppCheckbox.vue";
 import AppChip from "../components/AppChip.vue";
+import AppDivider from "../components/AppDivider.vue";
+import AppEmptyState from "../components/AppEmptyState.vue";
+import AppIconButton from "../components/AppIconButton.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import DetailList from "../components/DetailList.vue";
+import DetailRow from "../components/DetailRow.vue";
 import InfoNote from "../components/InfoNote.vue";
+import MetricCard from "../components/MetricCard.vue";
 import AppModal from "../components/AppModal.vue";
 import NoticeBanner from "../components/NoticeBanner.vue";
 import AppPopover from "../components/AppPopover.vue";
 import AppPopoverItem from "../components/AppPopoverItem.vue";
+import ProgressBar from "../components/ProgressBar.vue";
+import RadioGroup from "../components/RadioGroup.vue";
+import SelectField from "../components/SelectField.vue";
+import AppSpinner from "../components/AppSpinner.vue";
 import StateBadge from "../components/StateBadge.vue";
+import AppSwitch from "../components/AppSwitch.vue";
 import TabBar from "../components/TabBar.vue";
 import TableToolbar from "../components/TableToolbar.vue";
 import TablePanel from "../components/TablePanel.vue";
 import TagBadge from "../components/TagBadge.vue";
 import TagToggle from "../components/TagToggle.vue";
 import TagToggleGroup from "../components/TagToggleGroup.vue";
+import TextField from "../components/TextField.vue";
 import AppTooltip from "../components/AppTooltip.vue";
 
 const dialogOpen = ref(false);
@@ -30,6 +44,17 @@ const tabs = [
 ];
 
 const tagState = ref({ standard: true, deckox: true, product: false });
+
+const textValue = ref("docker.io");
+const selectValue = ref("auto");
+const checkboxValue = ref(true);
+const switchValue = ref(true);
+const radioValue = ref("auto");
+const themeOptions = [
+  { value: "auto", label: "Use device setting" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
 
 const colorGroups: { name: string; tokens: string[] }[] = [
   { name: "surface", tokens: ["surface-page", "surface-elevated", "surface-subtle", "surface-muted", "surface-hover"] },
@@ -201,6 +226,45 @@ const colorGroups: { name: string; tokens: string[] }[] = [
           Product
         </TagToggle>
       </TagToggleGroup>
+    </section>
+
+    <section class="catalog-section">
+      <h2>TextField / SelectField</h2>
+      <div class="row">
+        <TextField
+          id="catalog-text-field"
+          v-model="textValue"
+          label="Package name"
+          help="Checked against this host's configured repositories."
+        />
+        <SelectField
+          id="catalog-select-field"
+          v-model="selectValue"
+          label="Color theme"
+          :options="themeOptions"
+        />
+      </div>
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppCheckbox / AppSwitch / RadioGroup</h2>
+      <div class="row">
+        <AppCheckbox
+          v-model="checkboxValue"
+          label="Live updates"
+          help="Connects only while this page is visible."
+        />
+        <AppSwitch
+          v-model="switchValue"
+          label="Allow host restart"
+        />
+      </div>
+      <RadioGroup
+        v-model="radioValue"
+        name="catalog-radio-example"
+        label="Color theme"
+        :options="themeOptions"
+      />
     </section>
 
     <section class="catalog-section">
@@ -384,6 +448,82 @@ const colorGroups: { name: string; tokens: string[] }[] = [
           </tbody>
         </table>
       </TablePanel>
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppCard</h2>
+      <AppCard>
+        <p>A bare bordered panel — TablePanel is this same shell plus a toolbar and table.</p>
+      </AppCard>
+    </section>
+
+    <section class="catalog-section">
+      <h2>DetailList / DetailRow</h2>
+      <DetailList>
+        <DetailRow term="Hostname">
+          deckox-pi
+        </DetailRow>
+        <DetailRow term="OS">
+          Debian 12
+        </DetailRow>
+        <DetailRow term="Kernel">
+          6.1.0-rpi
+        </DetailRow>
+        <DetailRow term="Uptime">
+          14d 3h
+        </DetailRow>
+      </DetailList>
+    </section>
+
+    <section class="catalog-section">
+      <h2>ProgressBar / MetricCard</h2>
+      <div class="row">
+        <MetricCard
+          label="Memory"
+          meta="7.6 GiB total"
+          value="41%"
+          footer="3.1 GiB used"
+        >
+          <ProgressBar :value="41" />
+        </MetricCard>
+        <MetricCard
+          label="Swap"
+          meta="2.0 GiB total"
+          value="86%"
+          warning
+          warning-text="Swap usage is high"
+        >
+          <ProgressBar
+            :value="86"
+            critical
+          />
+        </MetricCard>
+      </div>
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppSpinner / AppIconButton</h2>
+      <div class="row">
+        <AppSpinner />
+        <AppIconButton label="Close">
+          ×
+        </AppIconButton>
+        <AppIconButton
+          label="Remove"
+          size="sm"
+          danger
+        >
+          ×
+        </AppIconButton>
+      </div>
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppDivider / AppEmptyState</h2>
+      <p>Content above</p>
+      <AppDivider />
+      <p>Content below</p>
+      <AppEmptyState message="No schedules configured." />
     </section>
   </div>
 </template>

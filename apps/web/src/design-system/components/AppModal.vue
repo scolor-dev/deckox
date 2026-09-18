@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useEscapeToClose } from "../composables/useEscapeToClose";
+import AppIconButton from "./AppIconButton.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -43,14 +44,12 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
         <h2>{{ title }}</h2>
         <div class="ds-modal-header-actions">
           <slot name="header-actions" />
-          <button
-            type="button"
-            class="ds-modal-close"
-            aria-label="Close"
+          <AppIconButton
+            label="Close"
             @click="emit('close')"
           >
             ×
-          </button>
+          </AppIconButton>
         </div>
       </header>
       <div class="ds-modal-body">
@@ -100,22 +99,6 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
 }
 .ds-modal-header h2 { margin: 0; color: var(--text-heading); font-size: 15px; }
 .ds-modal-header-actions { display: flex; flex-shrink: 0; align-items: center; gap: 8px; }
-.ds-modal-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  color: var(--text-muted);
-  background: transparent;
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-}
-.ds-modal-close:hover { color: var(--text-primary); background: var(--surface-hover); }
 .ds-modal-body { overflow: auto; padding: 16px 18px; }
 .ds-modal-footer {
   display: flex;
