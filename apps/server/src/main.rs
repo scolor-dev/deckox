@@ -248,6 +248,7 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
             get(service_logs_report),
         )
         .route("/software", get(proxy_software))
+        .route("/software/installed", get(proxy_installed_software))
         .route("/software/{software_id}/install", post(install_software))
         .route("/software/{software_id}/remove", post(remove_software))
         .route("/software/{software_id}/upgrade", post(upgrade_software))
@@ -829,6 +830,13 @@ async fn proxy_software(
     Extension(request_id): Extension<RequestId>,
 ) -> Response {
     proxy_agent(&state.agent, "GET", "/v1/software", &request_id).await
+}
+
+async fn proxy_installed_software(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/software/installed", &request_id).await
 }
 
 async fn proxy_allow_software(

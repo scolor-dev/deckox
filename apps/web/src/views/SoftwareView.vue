@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { api, type SoftwarePackage } from "../api/client";
+import { api, type InstalledSoftware, type SoftwarePackage } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import PasswordConfirmDialog from "../components/PasswordConfirmDialog.vue";
 import {
@@ -79,10 +79,60 @@ async function refresh() {
   error.value = null;
   try {
     packages.value = await api.software();
+    const managedNames = new Set(packages.value.map((pkg) => pkg.name));
+    for (const pkg of installedPackages.value) pkg.managed = managedNames.has(pkg.name);
   } catch (cause) {
     error.value = t(apiErrorKey(cause, "errors.software"));
   } finally {
     loading.value = false;
+  }
+}
+
+const INSTALLED_LIMIT = 100;
+const installedOpen = ref(false);
+const installedLoading = ref(false);
+const installedError = ref<string | null>(null);
+const installedPackages = ref<InstalledSoftware[]>([]);
+const installedQuery = ref("");
+const managing = ref<string | null>(null);
+
+const installedMatches = computed(() => {
+  const query = installedQuery.value.trim().toLowerCase();
+  return query === ""
+    ? installedPackages.value
+    : installedPackages.value.filter((pkg) => pkg.name.toLowerCase().includes(query));
+});
+const installedShown = computed(() => installedMatches.value.slice(0, INSTALLED_LIMIT));
+
+async function loadInstalled() {
+  installedLoading.value = true;
+  installedError.value = null;
+  try {
+    installedPackages.value = await api.installedSoftware();
+  } catch (cause) {
+    installedError.value = t(apiErrorKey(cause, "errors.software"));
+  } finally {
+    installedLoading.value = false;
+  }
+}
+
+async function toggleInstalled() {
+  installedOpen.value = !installedOpen.value;
+  if (installedOpen.value && installedPackages.value.length === 0) await loadInstalled();
+}
+
+async function manageInstalled(pkg: InstalledSoftware) {
+  managing.value = pkg.name;
+  installedError.value = null;
+  try {
+    await api.softwareAllowlist(pkg.name, "allow");
+    pkg.managed = true;
+    notify("success", t("software.completed", { name: pkg.name }));
+    await refresh();
+  } catch (cause) {
+    installedError.value = t(apiErrorKey(cause, "errors.softwareAction"));
+  } finally {
+    managing.value = null;
   }
 }
 
@@ -313,6 +363,92 @@ onMounted(() => {
         <InfoNote>{{ t("software.addHelp") }}</InfoNote>
       </AppStack>
     </AppCard>
+
+    <AppStack gap="3">
+      <h2>{{ t("software.installedTitle") }}</h2>
+      <InfoNote>{{ t("software.installedHelp") }}</InfoNote>
+      <AppStack
+        direction="row"
+        gap="2"
+      >
+        <AppButton
+          :disabled="installedLoading"
+          @click="toggleInstalled"
+        >
+          {{ installedOpen ? t("software.installedHide") : t("software.installedShow") }}
+        </AppButton>
+      </AppStack>
+      <NoticeBanner
+        v-if="installedError"
+        tone="error"
+      >
+        {{ installedError }}
+      </NoticeBanner>
+      <TablePanel
+        v-if="installedOpen"
+        :loading="installedLoading"
+        :empty="installedShown.length === 0"
+        :empty-message="t('software.installedEmpty')"
+      >
+        <template #toolbar>
+          <TableToolbar :count="t('software.installedCount', { shown: installedShown.length, total: installedMatches.length })">
+            <template #search>
+              <TextField
+                id="software-installed-search"
+                v-model="installedQuery"
+                :label="t('software.installedSearch')"
+                type="search"
+                :placeholder="t('software.installedSearchPlaceholder')"
+                label-hidden
+              />
+            </template>
+          </TableToolbar>
+        </template>
+        <template #loading>
+          {{ t("software.installedLoading") }}
+        </template>
+        <table>
+          <thead>
+            <tr>
+              <th>{{ t("software.name") }}</th>
+              <th>{{ t("software.installedVersion") }}</th>
+              <th>{{ t("software.actions") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="pkg in installedShown"
+              :key="pkg.name"
+            >
+              <td><strong class="service-name">{{ pkg.name }}</strong></td>
+              <td>{{ pkg.version }}</td>
+              <td>
+                <StateBadge
+                  v-if="pkg.managed"
+                  state="active"
+                >
+                  {{ t("software.managed") }}
+                </StateBadge>
+                <AppButton
+                  v-else
+                  variant="action"
+                  :disabled="managing !== null"
+                  @click="manageInstalled(pkg)"
+                >
+                  {{ t("software.manage") }}
+                </AppButton>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <template
+          v-if="installedMatches.length > INSTALLED_LIMIT"
+          #footer
+        >
+          <InfoNote>{{ t("software.installedLimited", { limit: INSTALLED_LIMIT }) }}</InfoNote>
+        </template>
+      </TablePanel>
+    </AppStack>
 
     <InfoNote>{{ t("software.platformNote") }}</InfoNote>
 

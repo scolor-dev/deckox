@@ -9,7 +9,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use deckox_protocol::{CommandResult, CommandStatus, SoftwarePackage};
+use deckox_protocol::{CommandResult, CommandStatus, InstalledSoftware, SoftwarePackage};
 use tokio::{process::Command, sync::RwLock};
 use tracing::warn;
 
@@ -75,6 +75,31 @@ impl PackageManager {
             ),
             Self::Zypper => zypper_status(name).await,
         }
+    }
+
+    /// Every installed package as `(name, version)`, straight from the
+    /// package manager's local database — no repository access, no index
+    /// refresh. `None` means the query failed or timed out.
+    async fn list_installed(self) -> Option<Vec<(String, String)>> {
+        let output = match self {
+            Self::Apt => {
+                run_query(
+                    "dpkg-query",
+                    &["-W", "-f=${Package}\t${Version}\t${Status}\n"],
+                )
+                .await?
+            }
+            Self::Dnf | Self::Zypper => {
+                run_query("rpm", &["-qa", "--qf", "%{NAME}\t%{VERSION}-%{RELEASE}\n"]).await?
+            }
+            Self::Pacman => run_query("pacman", &["-Q"]).await?,
+        };
+        let text = String::from_utf8_lossy(&output.stdout);
+        Some(match self {
+            Self::Apt => parse_dpkg_installed(&text),
+            Self::Dnf | Self::Zypper => parse_tab_pairs(&text),
+            Self::Pacman => parse_space_pairs(&text),
+        })
     }
 
     async fn install(self, name: &str) -> Result<(), AgentError> {
@@ -172,16 +197,20 @@ impl SoftwareManager {
     }
 
     /// Adds `name` to the management allowlist, but only after confirming
-    /// it resolves from the host's already-configured repositories — the
+    /// it resolves from the host's already-configured repositories or is
+    /// already installed on this host (a manually installed package no
+    /// repository knows about can still be managed) — the
     /// dynamic equivalent of a catalog membership check. Persists the same
     /// way [`crate::services::ServiceManager::allow`] does for services.
     pub async fn allow(&self, name: &str) -> Result<CommandResult, AgentError> {
         ensure_linux()?;
         validate_package_name(name)?;
         let backend = self.backend()?;
-        if backend.candidate_version(name).await.is_none() {
+        if backend.candidate_version(name).await.is_none()
+            && backend.installed_version(name).await.is_none()
+        {
             return Err(AgentError::not_found(format!(
-                "{name} was not found in the configured package repositories"
+                "{name} was not found in the configured package repositories or among the installed packages"
             )));
         }
 
@@ -253,6 +282,34 @@ impl SoftwareManager {
                 upgradable,
             });
         }
+        Ok(packages)
+    }
+
+    /// Every package installed on the host, flagged with whether Deckox
+    /// already manages it. Read-only and independent of the allowlist, so an
+    /// admin can find what is installed (for example under an unexpected
+    /// package name) and add it. Names that could never pass
+    /// [`validate_package_name`] are left out, since they could not be added.
+    pub async fn list_installed(&self) -> Result<Vec<InstalledSoftware>, AgentError> {
+        ensure_linux()?;
+        let backend = self.backend()?;
+        let installed = backend
+            .list_installed()
+            .await
+            .ok_or_else(|| AgentError::internal("failed to read the installed package list"))?;
+        let allowed = self.allowed.read().await;
+
+        let mut packages: Vec<InstalledSoftware> = installed
+            .into_iter()
+            .filter(|(name, _)| validate_package_name(name).is_ok())
+            .map(|(name, version)| InstalledSoftware {
+                managed: allowed.contains(&name),
+                name,
+                version,
+            })
+            .collect();
+        packages.sort_by(|a, b| a.name.cmp(&b.name));
+        packages.dedup_by(|a, b| a.name == b.name);
         Ok(packages)
     }
 
@@ -449,6 +506,47 @@ fn parse_labeled_version(output: &str, label: &str) -> Option<String> {
 /// `"install ok installed"`) ends in `"installed"` only when the package is
 /// actually present — `"unknown ok not-installed"` ends in the single word
 /// `"not-installed"`, which does not equal `"installed"`.
+/// Parses `dpkg-query -W -f='${Package}\t${Version}\t${Status}\n'`, keeping
+/// only packages whose status ends in `installed` (so removed-but-configured
+/// `deinstall ok config-files` entries are dropped).
+fn parse_dpkg_installed(output: &str) -> Vec<(String, String)> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(3, '\t');
+            let name = fields.next()?;
+            let version = fields.next()?;
+            let status = fields.next()?;
+            (!name.is_empty() && is_installed_status(status))
+                .then(|| (name.to_owned(), version.to_owned()))
+        })
+        .collect()
+}
+
+/// Parses `name<TAB>version` lines (`rpm -qa --qf`), skipping the
+/// `gpg-pubkey` pseudo-packages rpm records for imported signing keys.
+fn parse_tab_pairs(output: &str) -> Vec<(String, String)> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let (name, version) = line.split_once('\t')?;
+            (!name.is_empty() && name != "gpg-pubkey")
+                .then(|| (name.to_owned(), version.trim().to_owned()))
+        })
+        .collect()
+}
+
+/// Parses `name version` lines (`pacman -Q`).
+fn parse_space_pairs(output: &str) -> Vec<(String, String)> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let (name, version) = line.split_once(' ')?;
+            (!name.is_empty()).then(|| (name.to_owned(), version.trim().to_owned()))
+        })
+        .collect()
+}
+
 fn is_installed_status(status: &str) -> bool {
     status.split_whitespace().last() == Some("installed")
 }
@@ -748,7 +846,8 @@ async fn zypper(args: &[&str], timeout_seconds: u64) -> Result<String, AgentErro
 mod tests {
     use super::{
         PackageManager, SoftwareManager, is_installed_status, parse_candidate_version,
-        parse_dnf_list, parse_labeled_version, parse_zypper_list_updates, validate_package_name,
+        parse_dnf_list, parse_dpkg_installed, parse_labeled_version, parse_space_pairs,
+        parse_tab_pairs, parse_zypper_list_updates, validate_package_name,
     };
 
     fn test_manager(allowed: Vec<String>) -> Result<SoftwareManager, crate::error::AgentError> {
@@ -757,6 +856,44 @@ mod tests {
             std::path::PathBuf::from("/tmp/deckox-agent-software-test.toml"),
             Some(PackageManager::Apt),
         )
+    }
+
+    #[test]
+    fn parses_dpkg_installed_packages_only() {
+        let output = "docker-ce\t5:27.0.1-1\tinstall ok installed\n\
+                      old-tool\t1.0\tdeinstall ok config-files\n\
+                      git\t1:2.43.0\tinstall ok installed\n\
+                      broken line\n";
+        assert_eq!(
+            parse_dpkg_installed(output),
+            vec![
+                ("docker-ce".to_owned(), "5:27.0.1-1".to_owned()),
+                ("git".to_owned(), "1:2.43.0".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_rpm_pairs_and_skips_gpg_keys() {
+        let output = "bash\t5.2.26-3.fc40\ngpg-pubkey\t105ef944-65ca83d1\nnginx\t1.24.0-1\n";
+        assert_eq!(
+            parse_tab_pairs(output),
+            vec![
+                ("bash".to_owned(), "5.2.26-3.fc40".to_owned()),
+                ("nginx".to_owned(), "1.24.0-1".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_pacman_pairs() {
+        assert_eq!(
+            parse_space_pairs("base 3-2\nlinux 6.9.1.arch1-1\n\n"),
+            vec![
+                ("base".to_owned(), "3-2".to_owned()),
+                ("linux".to_owned(), "6.9.1.arch1-1".to_owned()),
+            ]
+        );
     }
 
     #[test]

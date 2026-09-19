@@ -13,6 +13,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("software APIs", () => {
+  it("fetches the read-only installed package list", async () => {
+    const installed = [{ name: "docker-ce", version: "5:27.0.1-1", managed: false }];
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(installed), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api.installedSoftware()).resolves.toEqual(installed);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/software/installed",
+      expect.objectContaining({ credentials: "same-origin" }),
+    );
+  });
+});
+
 describe("update APIs", () => {
   it("fetches update status", async () => {
     const status = {

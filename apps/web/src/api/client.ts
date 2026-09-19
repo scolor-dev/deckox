@@ -105,6 +105,12 @@ export interface SoftwarePackage {
   upgradable: boolean;
 }
 
+export interface InstalledSoftware {
+  name: string;
+  version: string;
+  managed: boolean;
+}
+
 export type ScheduleAction = "start" | "stop" | "restart";
 
 export interface ServiceSchedule {
@@ -408,6 +414,7 @@ export const api = {
       { method: "POST" },
     ),
   software: () => request<SoftwarePackage[]>("/api/v1/software"),
+  installedSoftware: () => request<InstalledSoftware[]>("/api/v1/software/installed"),
   softwareAllowlist: (name: string, action: "allow" | "disallow") =>
     request<CommandResult>(
       `/api/v1/software/${encodeURIComponent(name)}/${action}`,

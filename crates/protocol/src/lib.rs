@@ -318,6 +318,17 @@ pub struct SoftwarePackage {
     pub upgradable: bool,
 }
 
+/// One package the host's package manager reports as installed, whether or
+/// not Deckox manages it. Read-only: seeing a package here grants no
+/// permission to act on it — `managed` says whether it is already on the
+/// management allowlist.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstalledSoftware {
+    pub name: String,
+    pub version: String,
+    pub managed: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SoftwareAction {
