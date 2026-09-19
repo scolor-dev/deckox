@@ -52,7 +52,7 @@ None.
 
 ## Gotchas
 
-- It has a 12px top margin and no bottom margin.
+- It sets no outer margin; space it with a flex or grid parent using `gap` (for example AppStack).
 
 ## Migration
 

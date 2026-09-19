@@ -9,7 +9,6 @@
 
 <style scoped>
 .ds-info-note {
-  margin-top: var(--space-3);
   padding: var(--space-3) var(--space-3);
   border: 1px solid var(--info-border);
   border-radius: var(--radius-sm);

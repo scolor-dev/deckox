@@ -19,7 +19,6 @@ const role = computed(() => (props.tone === "error" ? "alert" : "status"));
 
 <style scoped>
 .ds-notice {
-  margin-bottom: var(--space-4);
   padding: var(--space-3) var(--space-3);
   border: 1px solid;
   border-radius: var(--radius-sm);

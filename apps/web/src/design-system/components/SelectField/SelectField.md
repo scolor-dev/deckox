@@ -33,6 +33,7 @@ Labeled dropdown for choosing one option from a list.
 | `options` | `{ value: string; label: string }[]` | required | Options as `{ value, label }` pairs, in display order. |
 | `help` | `string \| null` | `null` | Small helper text under the select. |
 | `disabled` | `boolean` | `false` | Disables the select. |
+| `labelHidden` | `boolean` | `false` | Hide the label visually but keep it for screen readers, for example on a toolbar filter. |
 
 **Events**
 

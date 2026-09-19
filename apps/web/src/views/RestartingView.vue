@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { api } from "../api/client";
+import { AppButton, AppCard, AppIcon, AppSpinner, InfoNote } from "../design-system/components";
 import { hasServerRestarted } from "../restart";
 
 const { t } = useI18n();
@@ -53,8 +54,18 @@ onBeforeUnmount(() => {
     class="restart-page"
     aria-live="polite"
   >
-    <div class="restart-panel">
-      <span :class="['restart-indicator', { ready: phase === 'ready' }]" />
+    <AppCard class="restart-panel">
+      <AppIcon
+        v-if="phase === 'ready'"
+        class="restart-ready"
+        name="check"
+        size="lg"
+        :label="t('restart.ready')"
+      />
+      <AppSpinner
+        v-else
+        :label="t('restart.title')"
+      />
       <h1>{{ t("restart.title") }}</h1>
       <p v-if="phase === 'waiting'">
         {{ t("restart.waiting") }}
@@ -67,15 +78,11 @@ onBeforeUnmount(() => {
       </p>
       <template v-else>
         <p>{{ t("restart.timeout") }}</p>
-        <button
-          class="button"
-          type="button"
-          @click="retry"
-        >
+        <AppButton @click="retry">
           {{ t("restart.retry") }}
-        </button>
+        </AppButton>
       </template>
-      <small>{{ t("restart.keepOpen") }}</small>
-    </div>
+      <InfoNote>{{ t("restart.keepOpen") }}</InfoNote>
+    </AppCard>
   </section>
 </template>

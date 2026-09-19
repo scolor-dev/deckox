@@ -15,8 +15,21 @@ import {
 import { apiErrorKey } from "../api/errors";
 import ForgotPasswordHelp from "../components/ForgotPasswordHelp.vue";
 import PasswordConfirmDialog from "../components/PasswordConfirmDialog.vue";
+import {
+  AppButton,
+  AppCheckbox,
+  AppStack,
+  DetailList,
+  DetailRow,
+  InfoNote,
+  NoticeBanner,
+  PageHeader,
+  SelectField,
+  TabBar,
+  TextField,
+} from "../design-system/components";
 import { notify } from "../notifications";
-import { preferences } from "../preferences";
+import { preferences, type LocalePreference, type MetricsInterval, type ThemePreference } from "../preferences";
 
 const emit = defineEmits<{ passwordChanged: [] }>();
 const { t, locale } = useI18n();
@@ -79,6 +92,55 @@ const updateCheckedAt = computed(() => {
 function displaySettingsChanged() {
   notify("success", t("settings.saved"));
 }
+
+const tabs = computed(() => TAB_KEYS.map((key) => ({ key, label: t(`settings.tab.${key}`) })));
+
+function handleTabChange(key: string) {
+  if (isSettingsTab(key)) selectTab(key);
+}
+
+const localeValue = computed({
+  get: () => preferences.locale,
+  set: (value: string) => {
+    preferences.locale = value as LocalePreference;
+    displaySettingsChanged();
+  },
+});
+const themeValue = computed({
+  get: () => preferences.theme,
+  set: (value: string) => {
+    preferences.theme = value as ThemePreference;
+    displaySettingsChanged();
+  },
+});
+const realtimeValue = computed({
+  get: () => preferences.realtimeEnabled,
+  set: (value: boolean) => {
+    preferences.realtimeEnabled = value;
+    displaySettingsChanged();
+  },
+});
+const intervalValue = computed({
+  get: () => String(preferences.metricsInterval),
+  set: (value: string) => {
+    preferences.metricsInterval = Number(value) as MetricsInterval;
+    displaySettingsChanged();
+  },
+});
+
+const localeOptions = computed(() => [
+  { value: "auto", label: t("settings.languageAuto") },
+  { value: "ja", label: t("settings.japanese") },
+  { value: "en", label: t("settings.english") },
+]);
+const themeOptions = computed(() => [
+  { value: "auto", label: t("settings.themeAuto") },
+  { value: "light", label: t("settings.themeLight") },
+  { value: "dark", label: t("settings.themeDark") },
+]);
+const intervalOptions = computed(() =>
+  [1, 2, 5].map((seconds) => ({ value: String(seconds), label: t("settings.intervalValue", { seconds }) })),
+);
 
 async function changePassword() {
   error.value = null;
@@ -298,32 +360,17 @@ onMounted(() => {
 
 <template>
   <section class="view settings-view">
-    <header class="view-header">
-      <div>
-        <h1>{{ t("settings.title") }}</h1>
-        <p class="subtitle">
-          {{ t("settings.subtitle") }}
-        </p>
-      </div>
-    </header>
+    <PageHeader
+      :title="t('settings.title')"
+      :subtitle="t('settings.subtitle')"
+    />
 
-    <div
-      class="settings-tabs"
-      role="tablist"
-      :aria-label="t('settings.tabsLabel')"
-    >
-      <button
-        v-for="tab in TAB_KEYS"
-        :key="tab"
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === tab"
-        :class="['settings-tab', { active: activeTab === tab }]"
-        @click="selectTab(tab)"
-      >
-        {{ t(`settings.tab.${tab}`) }}
-      </button>
-    </div>
+    <TabBar
+      :tabs="tabs"
+      :model-value="activeTab"
+      :label="t('settings.tabsLabel')"
+      @update:model-value="handleTabChange"
+    />
 
     <div
       v-show="activeTab === 'display'"
@@ -339,67 +386,32 @@ onMounted(() => {
           </h2>
           <p>{{ t("settings.displayDescription") }}</p>
         </div>
-        <div class="settings-form">
-          <label for="language">{{ t("settings.language") }}</label>
-          <select
+        <AppStack gap="3">
+          <SelectField
             id="language"
-            v-model="preferences.locale"
-            @change="displaySettingsChanged"
-          >
-            <option value="auto">
-              {{ t("settings.languageAuto") }}
-            </option>
-            <option value="ja">
-              {{ t("settings.japanese") }}
-            </option>
-            <option value="en">
-              {{ t("settings.english") }}
-            </option>
-          </select>
-
-          <label for="theme">{{ t("settings.theme") }}</label>
-          <select
+            v-model="localeValue"
+            :label="t('settings.language')"
+            :options="localeOptions"
+          />
+          <SelectField
             id="theme"
-            v-model="preferences.theme"
-            @change="displaySettingsChanged"
-          >
-            <option value="auto">
-              {{ t("settings.themeAuto") }}
-            </option>
-            <option value="light">
-              {{ t("settings.themeLight") }}
-            </option>
-            <option value="dark">
-              {{ t("settings.themeDark") }}
-            </option>
-          </select>
-
-          <label class="checkbox-field">
-            <input
-              v-model="preferences.realtimeEnabled"
-              type="checkbox"
-              @change="displaySettingsChanged"
-            >
-            <span>{{ t("settings.realtime") }}</span>
-          </label>
-          <small>{{ t("settings.realtimeHelp") }}</small>
-
-          <label for="metrics-interval">{{ t("settings.interval") }}</label>
-          <select
+            v-model="themeValue"
+            :label="t('settings.theme')"
+            :options="themeOptions"
+          />
+          <AppCheckbox
+            v-model="realtimeValue"
+            :label="t('settings.realtime')"
+            :help="t('settings.realtimeHelp')"
+          />
+          <SelectField
             id="metrics-interval"
-            v-model.number="preferences.metricsInterval"
+            v-model="intervalValue"
+            :label="t('settings.interval')"
+            :options="intervalOptions"
             :disabled="!preferences.realtimeEnabled"
-            @change="displaySettingsChanged"
-          >
-            <option
-              v-for="seconds in [1, 2, 5]"
-              :key="seconds"
-              :value="seconds"
-            >
-              {{ t("settings.intervalValue", { seconds }) }}
-            </option>
-          </select>
-        </div>
+          />
+        </AppStack>
       </section>
     </div>
 
@@ -417,59 +429,59 @@ onMounted(() => {
           </h2>
           <p>{{ t("settings.passwordDescription") }}</p>
         </div>
-        <form
-          class="settings-form"
+        <AppStack
+          as="form"
+          gap="3"
           @submit.prevent="changePassword"
         >
-          <label for="current-password">{{ t("settings.currentPassword") }}</label>
-          <input
+          <TextField
             id="current-password"
             v-model="currentPassword"
+            :label="t('settings.currentPassword')"
             type="password"
             autocomplete="current-password"
             required
-          >
+          />
           <ForgotPasswordHelp />
-
-          <label for="new-password">{{ t("settings.newPassword") }}</label>
-          <input
+          <TextField
             id="new-password"
             v-model="newPassword"
+            :label="t('settings.newPassword')"
+            :help="t('settings.passwordRule')"
             type="password"
             autocomplete="new-password"
             minlength="12"
             required
-          >
-          <small>{{ t("settings.passwordRule") }}</small>
-
-          <label for="password-confirmation">{{ t("settings.passwordConfirmation") }}</label>
-          <input
+          />
+          <TextField
             id="password-confirmation"
             v-model="passwordConfirmation"
+            :label="t('settings.passwordConfirmation')"
             type="password"
             autocomplete="new-password"
             minlength="12"
             required
-          >
-
-          <p
+          />
+          <NoticeBanner
             v-if="error"
-            class="notice error"
-            role="alert"
+            tone="error"
           >
             {{ error }}
-          </p>
-          <button
-            class="primary-button settings-submit"
-            type="submit"
-            :disabled="submitting"
+          </NoticeBanner>
+          <AppStack
+            align="start"
+            gap="2"
           >
-            {{ submitting ? t("settings.changing") : t("settings.changePassword") }}
-          </button>
-          <p class="settings-help">
-            {{ t("settings.relogin") }}
-          </p>
-        </form>
+            <AppButton
+              variant="primary"
+              type="submit"
+              :disabled="submitting"
+            >
+              {{ submitting ? t("settings.changing") : t("settings.changePassword") }}
+            </AppButton>
+            <InfoNote>{{ t("settings.relogin") }}</InfoNote>
+          </AppStack>
+        </AppStack>
       </section>
 
       <section
@@ -482,125 +494,124 @@ onMounted(() => {
           </h2>
           <p>{{ t("settings.totpDescription") }}</p>
         </div>
-        <div class="settings-form">
-          <p
+        <AppStack
+          gap="3"
+          align="start"
+        >
+          <NoticeBanner
             v-if="totpErrorKey"
-            class="notice error"
-            role="alert"
+            tone="error"
           >
             {{ t(totpErrorKey) }}
-          </p>
-          <p
-            v-if="totpLoading"
-            class="settings-help"
-          >
+          </NoticeBanner>
+          <InfoNote v-if="totpLoading">
             {{ t("settings.totpChecking") }}
-          </p>
+          </InfoNote>
 
           <template v-else-if="totpRecoveryCodes">
-            <div class="notice warning">
+            <NoticeBanner tone="warning">
               <p>{{ t("settings.totpRecoveryCodesIntro") }}</p>
               <pre class="recovery-codes"><code>{{ totpRecoveryCodes.join("\n") }}</code></pre>
-            </div>
-            <button
-              class="primary-button settings-submit"
-              type="button"
+            </NoticeBanner>
+            <AppButton
+              variant="primary"
               @click="acknowledgeRecoveryCodes"
             >
               {{ t("settings.totpRecoveryCodesAck") }}
-            </button>
+            </AppButton>
           </template>
 
           <template v-else-if="totpSetupSecret">
             <p>{{ t("settings.totpSetupIntro") }}</p>
-            <dl class="totp-secret">
-              <div>
-                <dt>{{ t("settings.totpSecret") }}</dt><dd class="mono">
-                  {{ totpSetupSecret }}
-                </dd>
-              </div>
-            </dl>
-            <button
-              class="action-button"
-              type="button"
+            <p class="totp-secret">
+              <small>{{ t("settings.totpSecret") }}</small>
+              <code>{{ totpSetupSecret }}</code>
+            </p>
+            <AppButton
+              variant="action"
               @click="copyTotpSecret"
             >
               {{ t("settings.totpCopySecret") }}
-            </button>
-            <form
-              class="totp-confirm-form"
+            </AppButton>
+            <AppStack
+              as="form"
+              gap="3"
               @submit.prevent="confirmTotpSetup"
             >
-              <label for="totp-confirm-code">{{ t("settings.totpConfirmCode") }}</label>
-              <input
+              <TextField
                 id="totp-confirm-code"
                 v-model="totpConfirmCode"
-                type="text"
+                :label="t('settings.totpConfirmCode')"
                 inputmode="numeric"
                 autocomplete="one-time-code"
                 required
+              />
+              <AppStack
+                direction="row"
+                gap="2"
+                wrap
               >
-              <button
-                class="primary-button settings-submit"
-                type="submit"
-                :disabled="totpConfirming || totpConfirmCode.length === 0"
-              >
-                {{ totpConfirming ? t("settings.totpConfirming") : t("settings.totpConfirmSubmit") }}
-              </button>
-              <button
-                class="action-button"
-                type="button"
-                @click="cancelTotpSetup"
-              >
-                {{ t("settings.cancel") }}
-              </button>
-            </form>
+                <AppButton
+                  variant="primary"
+                  type="submit"
+                  :disabled="totpConfirming || totpConfirmCode.length === 0"
+                >
+                  {{ totpConfirming ? t("settings.totpConfirming") : t("settings.totpConfirmSubmit") }}
+                </AppButton>
+                <AppButton
+                  variant="action"
+                  @click="cancelTotpSetup"
+                >
+                  {{ t("settings.cancel") }}
+                </AppButton>
+              </AppStack>
+            </AppStack>
           </template>
 
           <template v-else-if="totpStatus?.enabled">
-            <p class="settings-help">
+            <InfoNote>
               {{ t("settings.totpEnabledStatus", { count: totpStatus.recovery_codes_remaining }) }}
-            </p>
-            <form
-              class="settings-form"
+            </InfoNote>
+            <AppStack
+              as="form"
+              gap="3"
               @submit.prevent="disableTotp"
             >
-              <label for="totp-disable-password">{{ t("settings.currentPassword") }}</label>
-              <input
+              <TextField
                 id="totp-disable-password"
                 v-model="totpDisablePassword"
+                :label="t('settings.currentPassword')"
                 type="password"
                 autocomplete="current-password"
                 required
-              >
-              <label for="totp-disable-code">{{ t("login.totpCode") }}</label>
-              <input
+              />
+              <TextField
                 id="totp-disable-code"
                 v-model="totpDisableCode"
-                type="text"
+                :label="t('login.totpCode')"
                 inputmode="numeric"
                 autocomplete="one-time-code"
                 required
-              >
-              <button
-                class="primary-button danger-button settings-submit"
+              />
+              <AppButton
+                variant="primary"
                 type="submit"
+                danger
                 :disabled="totpDisabling"
               >
                 {{ totpDisabling ? t("settings.totpDisabling") : t("settings.totpDisable") }}
-              </button>
-            </form>
+              </AppButton>
+            </AppStack>
           </template>
 
-          <button
+          <AppButton
             v-else
-            class="primary-button settings-submit"
-            type="button"
+            variant="primary"
             @click="startTotpSetup"
           >
             {{ t("settings.totpEnable") }}
-          </button>
-        </div>
+          </AppButton>
+        </AppStack>
       </section>
     </div>
 
@@ -618,36 +629,36 @@ onMounted(() => {
           </h2>
           <p>{{ t("settings.webhookDescription") }}</p>
         </div>
-        <div class="settings-form">
+        <AppStack
+          gap="3"
+          align="start"
+        >
           <template v-if="serverStatus">
-            <div
+            <NoticeBanner
               v-if="!serverStatus.webhook_configured"
-              class="notice warning"
+              tone="warning"
             >
               {{ t("settings.webhookNotConfigured") }}
-            </div>
+            </NoticeBanner>
             <template v-else>
-              <div class="notice success">
+              <NoticeBanner tone="success">
                 {{ t("settings.webhookConfigured") }}
-              </div>
-              <p
+              </NoticeBanner>
+              <NoticeBanner
                 v-if="webhookErrorKey"
-                class="notice error"
-                role="alert"
+                tone="error"
               >
                 {{ t(webhookErrorKey) }}
-              </p>
-              <button
-                class="button"
-                type="button"
+              </NoticeBanner>
+              <AppButton
                 :disabled="webhookTesting"
                 @click="testWebhook"
               >
                 {{ webhookTesting ? t("settings.webhookTesting") : t("settings.webhookTest") }}
-              </button>
+              </AppButton>
             </template>
           </template>
-        </div>
+        </AppStack>
       </section>
     </div>
 
@@ -665,38 +676,47 @@ onMounted(() => {
           </h2>
           <p>{{ t("settings.updateDescription") }}</p>
         </div>
-        <div class="settings-form update-settings">
-          <p
+        <AppStack
+          class="update-settings"
+          gap="3"
+          align="start"
+        >
+          <NoticeBanner
             v-if="updateErrorKey"
-            class="notice error"
-            role="alert"
+            tone="error"
           >
             {{ t(updateErrorKey) }}
-          </p>
+          </NoticeBanner>
           <template v-if="updateStatus">
-            <dl class="update-versions">
-              <div><dt>{{ t("settings.currentVersion") }}</dt><dd>{{ updateStatus.current_version }}</dd></div>
-              <div><dt>{{ t("settings.latestVersion") }}</dt><dd>{{ updateStatus.latest_version ?? t("common.none") }}</dd></div>
-            </dl>
-            <div
+            <DetailList>
+              <DetailRow :term="t('settings.currentVersion')">
+                {{ updateStatus.current_version }}
+              </DetailRow>
+              <DetailRow :term="t('settings.latestVersion')">
+                {{ updateStatus.latest_version ?? t("common.none") }}
+              </DetailRow>
+            </DetailList>
+            <NoticeBanner
               v-if="updateStatus.status === 'available' && updateStatus.update_available"
-              class="notice success update-notice"
+              tone="success"
             >
               {{ t("settings.updateAvailable") }}
-            </div>
-            <div
+            </NoticeBanner>
+            <NoticeBanner
               v-else-if="updateStatus.status === 'up_to_date'"
-              class="notice success update-notice"
+              tone="success"
             >
               {{ t("settings.upToDate") }}
-            </div>
-            <div
+            </NoticeBanner>
+            <NoticeBanner
               v-else
-              class="notice warning update-notice"
+              tone="warning"
             >
               {{ t("settings.updateUnavailable") }}
-            </div>
-            <small v-if="updateCheckedAt">{{ t("settings.updateCheckedAt", { time: updateCheckedAt }) }}</small>
+            </NoticeBanner>
+            <InfoNote v-if="updateCheckedAt">
+              {{ t("settings.updateCheckedAt", { time: updateCheckedAt }) }}
+            </InfoNote>
             <a
               v-if="releaseUrl"
               class="release-link"
@@ -705,45 +725,40 @@ onMounted(() => {
               rel="noopener noreferrer"
             >{{ t("settings.openRelease") }}</a>
             <template v-if="updateStatus.update_available && systemCapabilities?.update_allowed">
-              <small>{{ t("settings.updateHelp") }}</small>
-              <button
-                class="primary-button danger-button settings-submit"
-                type="button"
+              <InfoNote>{{ t("settings.updateHelp") }}</InfoNote>
+              <AppButton
+                variant="primary"
+                danger
                 @click="openUpdateDialog"
               >
                 {{ t("settings.updateNow") }}
-              </button>
+              </AppButton>
             </template>
-            <div
+            <AppStack
               v-else-if="updateStatus.update_available && updateCommand"
-              class="update-command"
+              gap="2"
+              align="start"
             >
               <code>{{ updateCommand }}</code>
-              <button
-                class="action-button"
-                type="button"
+              <AppButton
+                variant="action"
                 @click="copyUpdateCommand"
               >
                 {{ t("settings.copyCommand") }}
-              </button>
-              <small>{{ t("settings.manualUpdateOnly") }}</small>
-            </div>
+              </AppButton>
+              <InfoNote>{{ t("settings.manualUpdateOnly") }}</InfoNote>
+            </AppStack>
           </template>
-          <p
-            v-else-if="!updateChecking"
-            class="settings-help"
-          >
+          <InfoNote v-else-if="!updateChecking">
             {{ t("settings.updateNotChecked") }}
-          </p>
-          <button
-            class="button update-check-button"
-            type="button"
+          </InfoNote>
+          <AppButton
             :disabled="updateChecking"
             @click="checkForUpdate"
           >
             {{ updateChecking ? t("settings.checkingUpdate") : t("settings.checkUpdate") }}
-          </button>
-        </div>
+          </AppButton>
+        </AppStack>
       </section>
 
       <section
@@ -756,25 +771,28 @@ onMounted(() => {
           </h2>
           <p>{{ t("settings.systemOperationsDescription") }}</p>
         </div>
-        <div class="settings-form">
-          <div
+        <AppStack
+          gap="3"
+          align="start"
+        >
+          <NoticeBanner
             v-if="systemCapabilities && !systemCapabilities.reboot_allowed"
-            class="notice warning"
+            tone="warning"
           >
             {{ t("settings.rebootDisabled") }}
-          </div>
+          </NoticeBanner>
           <template v-else>
-            <small>{{ t("settings.rebootHelp") }}</small>
-            <button
-              class="primary-button danger-button settings-submit"
-              type="button"
+            <InfoNote>{{ t("settings.rebootHelp") }}</InfoNote>
+            <AppButton
+              variant="primary"
+              danger
               :disabled="!systemCapabilities?.reboot_allowed"
               @click="openRebootDialog"
             >
               {{ t("settings.reboot") }}
-            </button>
+            </AppButton>
           </template>
-        </div>
+        </AppStack>
       </section>
     </div>
 

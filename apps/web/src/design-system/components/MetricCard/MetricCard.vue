@@ -3,13 +3,16 @@ withDefaults(
   defineProps<{
     label: string;
     meta?: string | null;
-    value: string;
+    value?: string | null;
+    pairs?: { label: string; value: string }[] | null;
     footer?: string | null;
     warning?: boolean;
     warningText?: string | null;
   }>(),
   {
     meta: null,
+    value: null,
+    pairs: null,
     footer: null,
     warning: false,
     warningText: null,
@@ -23,7 +26,19 @@ withDefaults(
       <span>{{ label }}</span>
       <small v-if="meta">{{ meta }}</small>
     </div>
-    <strong>{{ value }}</strong>
+    <strong v-if="value !== null">{{ value }}</strong>
+    <dl
+      v-if="pairs"
+      class="ds-metric-pairs"
+    >
+      <div
+        v-for="pair in pairs"
+        :key="pair.label"
+      >
+        <dt>{{ pair.label }}</dt>
+        <dd>{{ pair.value }}</dd>
+      </div>
+    </dl>
     <slot />
     <p
       v-if="warning && warningText"
@@ -61,4 +76,7 @@ withDefaults(
 }
 .ds-metric-foot { margin: var(--space-2) 0 0; color: var(--text-faint-alt); font-size: var(--font-2xs); }
 .ds-metric-warning { margin: var(--space-2) 0 0; color: var(--metric-warning-text); font-size: var(--font-2xs); }
+.ds-metric-pairs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-2) 0; }
+.ds-metric-pairs dt { color: var(--text-faint-alt); font-size: var(--font-2xs); }
+.ds-metric-pairs dd { margin: var(--space-0-5) 0 0; color: var(--text-emphasis); font-size: var(--font-lg); font-weight: 600; overflow-wrap: anywhere; }
 </style>

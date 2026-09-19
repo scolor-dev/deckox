@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { AppButton, AppStack, ConfirmDialog, InfoNote, NoticeBanner, TextField } from "../design-system/components";
 
 const { t } = useI18n();
 
@@ -41,61 +42,54 @@ function submit() {
 </script>
 
 <template>
-  <div
-    v-if="open"
-    class="dialog-backdrop"
-    @click.self="emit('close')"
+  <ConfirmDialog
+    :open="open"
+    :title="title"
+    @close="emit('close')"
   >
-    <section
-      class="confirm-dialog"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="title"
-    >
-      <h2>{{ title }}</h2>
-      <p
-        v-if="description"
-        class="settings-help"
-      >
+    <AppStack gap="3">
+      <InfoNote v-if="description">
         {{ description }}
-      </p>
-      <form
-        class="settings-form"
+      </InfoNote>
+      <AppStack
+        id="password-confirm-form"
+        as="form"
+        gap="3"
         @submit.prevent="submit"
       >
-        <label for="password-confirm-dialog-input">{{ t("common.adminPasswordLabel") }}</label>
-        <input
+        <TextField
           id="password-confirm-dialog-input"
           v-model="password"
+          :label="t('common.adminPasswordLabel')"
           type="password"
           autocomplete="current-password"
           required
-        >
-        <p
+          data-autofocus
+        />
+        <NoticeBanner
           v-if="errorMessage"
-          class="notice error"
-          role="alert"
+          tone="error"
         >
           {{ errorMessage }}
-        </p>
-        <div class="dialog-actions">
-          <button
-            class="button"
-            type="button"
-            :disabled="submitting"
-            @click="emit('close')"
-          >
-            {{ t("common.close") }}
-          </button>
-          <button
-            :class="['primary-button', { 'danger-button': danger }]"
-            type="submit"
-            :disabled="submitting"
-          >
-            {{ submitting ? pendingLabel : confirmLabel }}
-          </button>
-        </div>
-      </form>
-    </section>
-  </div>
+        </NoticeBanner>
+      </AppStack>
+    </AppStack>
+    <template #actions>
+      <AppButton
+        :disabled="submitting"
+        @click="emit('close')"
+      >
+        {{ t("common.close") }}
+      </AppButton>
+      <AppButton
+        variant="primary"
+        type="submit"
+        form="password-confirm-form"
+        :danger="danger"
+        :disabled="submitting"
+      >
+        {{ submitting ? pendingLabel : confirmLabel }}
+      </AppButton>
+    </template>
+  </ConfirmDialog>
 </template>

@@ -4,7 +4,7 @@ import vue from "@vitejs/plugin-vue";
 export default defineConfig({
   plugins: [vue()],
   test: {
-    css: { include: [/design-system\/tokens\.css/] },
+    css: { include: [/design-system\/tokens\.css/, /src\/style\.css/] },
   },
   server: {
     port: 5173,

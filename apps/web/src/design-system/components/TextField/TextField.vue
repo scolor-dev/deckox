@@ -1,14 +1,17 @@
 <script setup lang="ts">
+defineOptions({ inheritAttrs: false });
+
 withDefaults(
   defineProps<{
     modelValue: string;
     label: string;
     id: string;
-    type?: "text" | "search" | "password" | "email" | "url";
+    type?: "text" | "search" | "password" | "email" | "url" | "time";
     placeholder?: string | null;
     help?: string | null;
     disabled?: boolean;
     required?: boolean;
+    labelHidden?: boolean;
   }>(),
   {
     type: "text",
@@ -16,6 +19,7 @@ withDefaults(
     help: null,
     disabled: false,
     required: false,
+    labelHidden: false,
   },
 );
 
@@ -26,8 +30,12 @@ defineEmits<{
 
 <template>
   <div class="ds-field">
-    <label :for="id">{{ label }}</label>
+    <label
+      :for="id"
+      :class="{ 'ds-field-label--hidden': labelHidden }"
+    >{{ label }}</label>
     <input
+      v-bind="$attrs"
       :id="id"
       :type="type"
       :value="modelValue"
@@ -56,4 +64,12 @@ defineEmits<{
 .ds-field input:focus { border-color: var(--brand-focus); box-shadow: var(--shadow-focus); }
 .ds-field input:disabled { opacity: .6; cursor: not-allowed; }
 .ds-field small { color: var(--text-muted); font-size: var(--font-xs); }
+.ds-field .ds-field-label--hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 </style>

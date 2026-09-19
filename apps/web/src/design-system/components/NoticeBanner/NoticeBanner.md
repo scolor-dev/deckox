@@ -51,11 +51,11 @@ None.
 
 ## Tokens
 
-`--danger-bg`, `--danger-border`, `--danger-text`, `--font-md`, `--radius-sm`, `--space-3`, `--space-4`, `--success-bg`, `--success-border`, `--success-text`, `--warning-bg`, `--warning-border`, `--warning-text`
+`--danger-bg`, `--danger-border`, `--danger-text`, `--font-md`, `--radius-sm`, `--space-3`, `--success-bg`, `--success-border`, `--success-text`, `--warning-bg`, `--warning-border`, `--warning-text`
 
 ## Gotchas
 
-- It has a 16px bottom margin. Stack several banners and they space themselves.
+- It sets no outer margin; space banners with a flex or grid parent using `gap` (for example AppStack).
 
 ## Migration
 

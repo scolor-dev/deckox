@@ -4,6 +4,20 @@ import { useI18n } from "vue-i18n";
 import { api, type SoftwarePackage } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import PasswordConfirmDialog from "../components/PasswordConfirmDialog.vue";
+import {
+  AppButton,
+  AppCard,
+  AppStack,
+  InfoNote,
+  NoticeBanner,
+  PageHeader,
+  StateBadge,
+  TableToolbar,
+  TablePanel,
+  TagToggle,
+  TagToggleGroup,
+  TextField,
+} from "../design-system/components";
 import { notify } from "../notifications";
 import { preferences, type SoftwareTagFilterKey } from "../preferences";
 
@@ -144,186 +158,163 @@ onMounted(() => {
 
 <template>
   <div class="view">
-    <header class="view-header">
-      <div>
-        <h1>{{ t("software.title") }}</h1>
-        <p class="subtitle">
-          {{ t("software.subtitle") }}
-        </p>
-      </div>
-      <button
-        class="button"
-        type="button"
-        :disabled="loading"
-        @click="refresh"
-      >
-        {{ loading ? t("common.loading") : t("common.refresh") }}
-      </button>
-    </header>
+    <PageHeader
+      :title="t('software.title')"
+      :subtitle="t('software.subtitle')"
+    >
+      <template #actions>
+        <AppButton
+          :disabled="loading"
+          @click="refresh"
+        >
+          {{ loading ? t("common.loading") : t("common.refresh") }}
+        </AppButton>
+      </template>
+    </PageHeader>
 
-    <div
+    <NoticeBanner
       v-if="error"
-      class="notice error"
-      role="alert"
+      tone="error"
     >
       {{ error }}
-    </div>
+    </NoticeBanner>
 
-    <section class="table-panel">
-      <div class="table-toolbar">
-        <fieldset class="tag-toggles">
-          <legend class="sr-only">
-            {{ t("software.tagVisibility") }}
-          </legend>
-          <label
-            v-for="tag in TAG_FILTER_KEYS"
-            :key="tag"
-            :class="['tag-toggle', tag === 'installed' ? 'standard' : 'other', { off: isTagHidden(tag) }]"
+    <TablePanel
+      :loading="loading && packages.length === 0"
+      :empty="filteredPackages.length === 0"
+      :empty-message="t('software.empty')"
+    >
+      <template #toolbar>
+        <TableToolbar :count="t('software.count', { count: filteredPackages.length })">
+          <template #filters>
+            <TagToggleGroup :label="t('software.tagVisibility')">
+              <TagToggle
+                v-for="tag in TAG_FILTER_KEYS"
+                :key="tag"
+                :category="tag === 'installed' ? 'standard' : 'other'"
+                :checked="!isTagHidden(tag)"
+                @update:checked="toggleTag(tag)"
+              >
+                {{ tagLabel(tag) }}
+              </TagToggle>
+            </TagToggleGroup>
+          </template>
+        </TableToolbar>
+      </template>
+      <template #loading>
+        {{ t("software.loading") }}
+      </template>
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t("software.name") }}</th>
+            <th>{{ t("software.status") }}</th>
+            <th>{{ t("software.installedVersion") }}</th>
+            <th>{{ t("software.availableVersion") }}</th>
+            <th>{{ t("software.actions") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="pkg in filteredPackages"
+            :key="pkg.name"
           >
-            <input
-              type="checkbox"
-              :checked="!isTagHidden(tag)"
-              @change="toggleTag(tag)"
-            >
-            {{ tagLabel(tag) }}
-          </label>
-        </fieldset>
-        <span class="table-count">{{ t("software.count", { count: filteredPackages.length }) }}</span>
-      </div>
-
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>{{ t("software.name") }}</th>
-              <th>{{ t("software.status") }}</th>
-              <th>{{ t("software.installedVersion") }}</th>
-              <th>{{ t("software.availableVersion") }}</th>
-              <th>{{ t("software.actions") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading && packages.length === 0">
-              <td
-                colspan="5"
-                class="empty"
+            <td>
+              <strong class="service-name">{{ pkg.name }}</strong>
+            </td>
+            <td>
+              <StateBadge :state="pkg.installed ? 'active' : 'inactive'">
+                {{ pkg.installed ? t("software.installed") : t("software.notInstalled") }}
+              </StateBadge>
+              <small v-if="pkg.upgradable">{{ t("software.upgradable") }}</small>
+            </td>
+            <td>{{ pkg.installed_version ?? t("common.none") }}</td>
+            <td>{{ pkg.available_version ?? t("common.none") }}</td>
+            <td>
+              <AppStack
+                class="row-actions"
+                direction="row"
+                gap="2"
               >
-                {{ t("software.loading") }}
-              </td>
-            </tr>
-            <tr v-else-if="filteredPackages.length === 0">
-              <td
-                colspan="5"
-                class="empty"
-              >
-                {{ t("software.empty") }}
-              </td>
-            </tr>
-            <tr
-              v-for="pkg in filteredPackages"
-              :key="pkg.name"
-            >
-              <td>
-                <strong class="service-name">{{ pkg.name }}</strong>
-              </td>
-              <td>
-                <span :class="['state-badge', pkg.installed ? 'active' : 'inactive']">
-                  {{ pkg.installed ? t("software.installed") : t("software.notInstalled") }}
-                </span>
-                <small v-if="pkg.upgradable">{{ t("software.upgradable") }}</small>
-              </td>
-              <td>{{ pkg.installed_version ?? t("common.none") }}</td>
-              <td>{{ pkg.available_version ?? t("common.none") }}</td>
-              <td>
-                <div class="actions">
-                  <button
-                    v-if="!pkg.installed"
-                    class="action-button"
-                    type="button"
+                <AppButton
+                  v-if="!pkg.installed"
+                  variant="action"
+                  :disabled="pending !== null"
+                  @click="openAction(pkg, 'install')"
+                >
+                  {{ t("software.install") }}
+                </AppButton>
+                <template v-else>
+                  <AppButton
+                    v-if="pkg.upgradable"
+                    variant="action"
                     :disabled="pending !== null"
-                    @click="openAction(pkg, 'install')"
+                    @click="openAction(pkg, 'upgrade')"
                   >
-                    {{ t("software.install") }}
-                  </button>
-                  <template v-else>
-                    <button
-                      v-if="pkg.upgradable"
-                      class="action-button"
-                      type="button"
-                      :disabled="pending !== null"
-                      @click="openAction(pkg, 'upgrade')"
-                    >
-                      {{ t("software.upgrade") }}
-                    </button>
-                    <button
-                      class="action-button danger"
-                      type="button"
-                      :disabled="pending !== null"
-                      @click="openAction(pkg, 'remove')"
-                    >
-                      {{ t("software.remove") }}
-                    </button>
-                  </template>
-                  <button
-                    class="action-button danger"
-                    type="button"
+                    {{ t("software.upgrade") }}
+                  </AppButton>
+                  <AppButton
+                    variant="action"
+                    danger
                     :disabled="pending !== null"
-                    @click="disallow(pkg)"
+                    @click="openAction(pkg, 'remove')"
                   >
-                    {{ t("software.disallow") }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+                    {{ t("software.remove") }}
+                  </AppButton>
+                </template>
+                <AppButton
+                  variant="action"
+                  danger
+                  :disabled="pending !== null"
+                  @click="disallow(pkg)"
+                >
+                  {{ t("software.disallow") }}
+                </AppButton>
+              </AppStack>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </TablePanel>
 
-    <section class="table-panel">
-      <div class="table-toolbar">
-        <h2 class="panel-title">
+    <AppCard>
+      <AppStack gap="3">
+        <h2>
           {{ t("software.addTitle") }}
         </h2>
-      </div>
-
-      <div
-        v-if="addError"
-        class="notice error"
-        role="alert"
-      >
-        {{ addError }}
-      </div>
-
-      <form
-        class="add-software-form"
-        @submit.prevent="addPackage"
-      >
-        <label class="search">
-          <span class="sr-only">{{ t("software.addLabel") }}</span>
-          <input
+        <NoticeBanner
+          v-if="addError"
+          tone="error"
+        >
+          {{ addError }}
+        </NoticeBanner>
+        <AppStack
+          as="form"
+          direction="row"
+          gap="2"
+          align="end"
+          wrap
+          @submit.prevent="addPackage"
+        >
+          <TextField
+            id="software-package-name"
             v-model="newPackageName"
-            type="text"
+            :label="t('software.addLabel')"
             :placeholder="t('software.addPlaceholder')"
             required
+          />
+          <AppButton
+            type="submit"
+            :disabled="adding"
           >
-        </label>
-        <button
-          class="button"
-          type="submit"
-          :disabled="adding"
-        >
-          {{ adding ? t("software.adding") : t("software.add") }}
-        </button>
-      </form>
-      <aside class="inline-note">
-        {{ t("software.addHelp") }}
-      </aside>
-    </section>
+            {{ adding ? t("software.adding") : t("software.add") }}
+          </AppButton>
+        </AppStack>
+        <InfoNote>{{ t("software.addHelp") }}</InfoNote>
+      </AppStack>
+    </AppCard>
 
-    <aside class="inline-note">
-      {{ t("software.platformNote") }}
-    </aside>
+    <InfoNote>{{ t("software.platformNote") }}</InfoNote>
 
     <PasswordConfirmDialog
       :open="armed !== null"

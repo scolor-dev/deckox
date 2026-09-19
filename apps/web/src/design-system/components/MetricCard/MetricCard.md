@@ -28,7 +28,8 @@ Tile shell for a single metric: header, value, optional chart or bar, footer and
 |---|---|---|---|
 | `label` | `string` | required | Metric name in the header. |
 | `meta` | `string \| null` | `null` | Small right-aligned header text, for example "4 cores". |
-| `value` | `string` | required | The headline value, already formatted. |
+| `value` | `string \| null` | `null` | The headline value, already formatted. Omit it when showing `pairs` instead. |
+| `pairs` | `{ label: string; value: string }[] \| null` | `null` | Two or more labelled values side by side, for example RX and TX, shown instead of a single headline value. |
 | `footer` | `string \| null` | `null` | Small text under the content. |
 | `warning` | `boolean` | `false` | Warm border and background, and shows `warningText`. |
 | `warningText` | `string \| null` | `null` | Warning line, shown only while `warning` is true. |
@@ -57,7 +58,7 @@ None.
 
 ## Tokens
 
-`--border-default`, `--font-2xl`, `--font-2xs`, `--font-xs`, `--metric-warning-border`, `--metric-warning-text`, `--radius-md`, `--space-2`, `--space-4`, `--space-5`, `--surface-elevated`, `--text-emphasis`, `--text-faint-alt`, `--text-label`, `--warning-bg`
+`--border-default`, `--font-2xl`, `--font-2xs`, `--font-lg`, `--font-xs`, `--metric-warning-border`, `--metric-warning-text`, `--radius-md`, `--space-0-5`, `--space-2`, `--space-3`, `--space-4`, `--space-5`, `--surface-elevated`, `--text-emphasis`, `--text-faint-alt`, `--text-label`, `--warning-bg`
 
 ## Gotchas
 

@@ -33,12 +33,17 @@ defineProps<{
         />
       </p>
     </div>
+    <div
+      v-if="$slots.footer"
+      class="ds-table-footer"
+    >
+      <slot name="footer" />
+    </div>
   </section>
 </template>
 
 <style scoped>
 .ds-table-panel {
-  margin-top: var(--space-5);
   overflow: hidden;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -55,6 +60,7 @@ defineProps<{
   background: var(--surface-subtle);
 }
 .ds-table-note { padding: var(--space-3) var(--space-4) 0; }
+.ds-table-footer { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border-subtle); }
 .ds-table-scroll { max-width: 100%; overflow-x: auto; }
 .ds-table-empty { padding: var(--space-10) var(--space-5); color: var(--text-faint); text-align: center; }
 

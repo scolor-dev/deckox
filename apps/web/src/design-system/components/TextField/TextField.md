@@ -30,11 +30,12 @@ Labeled single-line text input with optional help text.
 | `modelValue` | `string` | required | Current value. Use with `v-model`. |
 | `label` | `string` | required | Visible label text. |
 | `id` | `string` | required | Required. Links the label to the input and must be unique on the page. |
-| `type` | `"text" \| "search" \| "password" \| "email" \| "url"` | `"text"` | Native input type. |
+| `type` | `"text" \| "search" \| "password" \| "email" \| "url" \| "time"` | `"text"` | Native input type. |
 | `placeholder` | `string \| null` | `null` | Placeholder text. |
 | `help` | `string \| null` | `null` | Small helper text under the input. |
 | `disabled` | `boolean` | `false` | Disables the input. |
 | `required` | `boolean` | `false` | Marks the input as required for form validation. |
+| `labelHidden` | `boolean` | `false` | Hide the label visually but keep it for screen readers, for example on a toolbar search box. |
 
 **Events**
 
@@ -62,6 +63,7 @@ None.
 
 ## Gotchas
 
+- Extra attributes (`autocomplete`, `inputmode`, `name`, `autofocus`, `data-*`, `aria-*`) are applied to the `input`, not to the wrapper. Use `data-autofocus` to mark the initial focus target inside a dialog.
 - Give every field a stable, unique `id`; two fields sharing one break label association.
 
 ## Migration

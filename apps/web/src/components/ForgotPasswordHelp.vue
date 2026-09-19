@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
 import { writeClipboardText } from "../api/client";
+import { AppButton } from "../design-system/components";
 import { notify } from "../notifications";
 
 const { t } = useI18n();
@@ -22,12 +23,11 @@ async function copyCommand() {
     <summary>{{ t("common.forgotPassword") }}</summary>
     <p>{{ t("common.forgotPasswordIntro") }}</p>
     <pre><code>{{ command }}</code></pre>
-    <button
-      class="action-button"
-      type="button"
+    <AppButton
+      variant="action"
       @click="copyCommand"
     >
       {{ t("common.forgotPasswordCopy") }}
-    </button>
+    </AppButton>
   </details>
 </template>

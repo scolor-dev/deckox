@@ -260,3 +260,11 @@ describe("design-system README", () => {
     for (const folder of folders) expect(readme).toContain(`components/${folder}/${folder}.md`);
   });
 });
+
+describe("component isolation", () => {
+  it.each(sfcs)("$name uses only ds- prefixed static classes", ({ source }) => {
+    const template = source.slice(source.indexOf("<template>"), source.indexOf("<style"));
+    const foreign = [...template.matchAll(/(?<![:\w-])class="([^"]*)"/g)].flatMap((match) => match[1].split(/\s+/)).filter((name) => name !== "" && !name.startsWith("ds-"));
+    expect(foreign).toEqual([]);
+  });
+});

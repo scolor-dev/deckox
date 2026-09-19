@@ -42,6 +42,7 @@ None.
 | `note` | Extra content between the toolbar and the table. |
 | `default` | The `table` element. |
 | `loading` | Content shown while `loading` is true. |
+| `footer` | Row below the table, for example a "load more" button. The bar renders only when provided. |
 
 ### TableToolbar
 

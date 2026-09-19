@@ -11,6 +11,24 @@ import {
   type ServiceSummary,
 } from "../api/client";
 import { apiErrorKey } from "../api/errors";
+import {
+  AppButton,
+  AppModal,
+  AppStack,
+  InfoNote,
+  LogEntry,
+  LogList,
+  NoticeBanner,
+  PageHeader,
+  SelectField,
+  StateBadge,
+  TableToolbar,
+  TablePanel,
+  TagBadge,
+  TagToggle,
+  TagToggleGroup,
+  TextField,
+} from "../design-system/components";
 import { notify } from "../notifications";
 import { preferences, type ServiceTagFilterKey } from "../preferences";
 
@@ -65,6 +83,11 @@ function tagLabel(tag: ServiceTagFilterKey) {
 // "standard"/"deckox"/"other" get their own styling; any other tag is a
 // recognized product name and shares one generic "product" style, since the
 // set of possible products is open-ended.
+function badgeCategory(tag: ServiceTagFilterKey) {
+  const category = tagClass(tag);
+  return category === "other" ? "standard" : category;
+}
+
 function tagClass(tag: ServiceTagFilterKey) {
   return tag === "standard" || tag === "deckox" || tag === "other" ? tag : "product";
 }
@@ -114,6 +137,42 @@ const runningCount = computed(
 
 function activeStateLabel(state: string) {
   return t(state === "active" ? "services.running" : state === "failed" ? "services.failed" : "services.stopped");
+}
+
+const logLinesValue = computed({
+  get: () => String(logLines.value),
+  set: (value: string) => {
+    logLines.value = Number(value);
+  },
+});
+const logPriorityValue = computed({
+  get: () => logPriority.value,
+  set: (value: string) => {
+    logPriority.value = value as ServiceLogPriority;
+  },
+});
+const scheduleActionValue = computed({
+  get: () => scheduleAction.value,
+  set: (value: string) => {
+    scheduleAction.value = value as ScheduleAction;
+  },
+});
+const logLineOptions = computed(() =>
+  LOG_LINE_OPTIONS.map((lines) => ({ value: String(lines), label: t("services.logLinesValue", { count: lines }) })),
+);
+const logPriorityOptions = computed(() =>
+  LOG_PRIORITY_OPTIONS.map((priority) => ({ value: priority, label: t(`services.logPriority.${priority}`) })),
+);
+const scheduleActionOptions = computed(() =>
+  SCHEDULE_ACTION_OPTIONS.map((action) => ({ value: action, label: t(`services.${action}`) })),
+);
+const scheduleServiceOptions = computed(() => [
+  { value: "", label: t("services.scheduleSelectService") },
+  ...schedulableServices.value.map((service) => ({ value: service.id, label: service.id })),
+]);
+
+function logPriorityKind(priority: number): "error" | "warning" | "info" {
+  return priorityClass(priority);
 }
 
 function activeStateClass(state: string) {
@@ -368,450 +427,369 @@ onMounted(() => {
 
 <template>
   <div class="view">
-    <header class="view-header">
-      <div>
-        <h1>{{ t("services.title") }}</h1>
-        <p class="subtitle">
-          {{ t("services.summary", { total: services.length, running: runningCount }) }}
-        </p>
-      </div>
-      <button
-        class="button"
-        type="button"
-        :disabled="loading"
-        @click="refresh"
-      >
-        {{ loading ? t("common.loading") : t("common.refresh") }}
-      </button>
-    </header>
+    <PageHeader
+      :title="t('services.title')"
+      :subtitle="t('services.summary', { total: services.length, running: runningCount })"
+    >
+      <template #actions>
+        <AppButton
+          :disabled="loading"
+          @click="refresh"
+        >
+          {{ loading ? t("common.loading") : t("common.refresh") }}
+        </AppButton>
+      </template>
+    </PageHeader>
 
-    <div
+    <NoticeBanner
       v-if="error"
-      class="notice error"
+      tone="error"
     >
       {{ error }}
-    </div>
-    <section class="table-panel">
-      <div class="table-toolbar">
-        <label class="search">
-          <span class="sr-only">{{ t("services.search") }}</span>
-          <input
-            v-model="query"
-            type="search"
-            :placeholder="t('services.searchPlaceholder')"
-          >
-        </label>
-        <fieldset class="tag-toggles">
-          <legend class="sr-only">
-            {{ t("services.tagVisibility") }}
-          </legend>
-          <label
-            v-for="tag in availableTagKeys"
-            :key="tag"
-            :class="['tag-toggle', tagClass(tag), { off: isTagHidden(tag) }]"
-          >
-            <input
-              type="checkbox"
-              :checked="!isTagHidden(tag)"
-              @change="toggleTag(tag)"
-            >
-            {{ tagLabel(tag) }}
-          </label>
-        </fieldset>
-        <span class="table-count">{{ t("services.count", { count: filteredServices.length }) }}</span>
-      </div>
+    </NoticeBanner>
 
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>{{ t("services.service") }}</th><th>{{ t("services.state") }}</th><th>{{ t("services.startup") }}</th><th>{{ t("services.actions") }}</th></tr></thead>
-          <tbody>
-            <tr v-if="loading && services.length === 0">
-              <td
-                colspan="4"
-                class="empty"
-              >
-                {{ t("services.loading") }}
-              </td>
-            </tr>
-            <tr v-else-if="filteredServices.length === 0">
-              <td
-                colspan="4"
-                class="empty"
-              >
-                {{ t("services.empty") }}
-              </td>
-            </tr>
-            <tr
-              v-for="service in filteredServices"
-              :key="service.id"
-              :class="{ 'row-failed': service.active_state === 'failed' }"
-            >
-              <td>
-                <strong class="service-name">{{ service.id }}</strong>
-                <span
-                  v-if="serviceTags(service).length"
-                  class="tag-badges"
-                >
-                  <span
-                    v-for="tag in serviceTags(service)"
-                    :key="tag"
-                    :class="['tag-badge', tagClass(tag)]"
-                  >{{ tagLabel(tag) }}</span>
-                </span>
-                <small>{{ service.description || t("services.noDescription") }}</small>
-              </td>
-              <td>
-                <span :class="['state-badge', activeStateClass(service.active_state)]">
-                  {{ activeStateLabel(service.active_state) }}
-                </span>
-                <small>{{ service.sub_state }}</small>
-              </td>
-              <td><span class="unit-state">{{ unitStateLabel(service.unit_file_state) }}</span></td>
-              <td>
-                <div class="actions">
-                  <template v-if="service.control_allowed">
-                    <button
-                      class="action-button"
-                      type="button"
-                      :disabled="pending !== null || service.active_state === 'active'"
-                      @click="runAction(service, 'start')"
-                    >
-                      {{ t("services.start") }}
-                    </button>
-                    <button
-                      class="action-button"
-                      type="button"
-                      :disabled="pending !== null || service.active_state !== 'active'"
-                      @click="runAction(service, 'restart')"
-                    >
-                      {{ t("services.restart") }}
-                    </button>
-                    <button
-                      class="action-button danger"
-                      type="button"
-                      :disabled="pending !== null || service.active_state !== 'active'"
-                      @click="runAction(service, 'stop')"
-                    >
-                      {{ t("services.stop") }}
-                    </button>
-                    <button
-                      v-if="service.unit_file_state === 'disabled'"
-                      class="action-button"
-                      type="button"
-                      :disabled="pending !== null"
-                      @click="runAction(service, 'enable')"
-                    >
-                      {{ t("services.enable") }}
-                    </button>
-                    <button
-                      v-else-if="service.unit_file_state === 'enabled'"
-                      class="action-button"
-                      type="button"
-                      :disabled="pending !== null"
-                      @click="runAction(service, 'disable')"
-                    >
-                      {{ t("services.disable") }}
-                    </button>
-                    <button
-                      class="action-button"
-                      type="button"
-                      :disabled="pending !== null"
-                      @click="openLogs(service)"
-                    >
-                      {{ t("services.logs") }}
-                    </button>
-                    <button
-                      class="action-button danger"
-                      type="button"
-                      :disabled="pending !== null"
-                      @click="runAction(service, 'disallow')"
-                    >
-                      {{ t("services.disallow") }}
-                    </button>
-                  </template>
-                  <template v-else>
-                    <button
-                      v-if="!service.deckox_managed"
-                      class="action-button"
-                      type="button"
-                      :disabled="pending !== null"
-                      @click="runAction(service, 'allow')"
-                    >
-                      {{ t("services.allow") }}
-                    </button>
-                    <span class="locked">{{ t("services.readOnly") }}</span>
-                  </template>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <aside class="inline-note">
-      {{ t("services.allowlist") }}
-    </aside>
-
-    <section class="table-panel">
-      <div class="table-toolbar">
-        <h2 class="panel-title">
-          {{ t("services.scheduleTitle") }}
-        </h2>
-        <span class="table-count">{{ t("services.count", { count: schedules.length }) }}</span>
-      </div>
-
-      <div
-        v-if="schedulesError"
-        class="notice error"
-      >
-        {{ schedulesError }}
-      </div>
-
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>{{ t("services.service") }}</th>
-              <th>{{ t("services.scheduleAction") }}</th>
-              <th>{{ t("services.scheduleWeekdays") }}</th>
-              <th>{{ t("services.scheduleTime") }}</th>
-              <th>{{ t("services.scheduleLastRun") }}</th>
-              <th>{{ t("services.actions") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="schedulesLoading && schedules.length === 0">
-              <td
-                colspan="6"
-                class="empty"
-              >
-                {{ t("common.loading") }}
-              </td>
-            </tr>
-            <tr v-else-if="schedules.length === 0">
-              <td
-                colspan="6"
-                class="empty"
-              >
-                {{ t("services.scheduleEmpty") }}
-              </td>
-            </tr>
-            <tr
-              v-for="schedule in schedules"
-              :key="schedule.id"
-            >
-              <td><strong class="service-name">{{ schedule.service_id }}</strong></td>
-              <td>{{ t(`services.${schedule.action}`) }}</td>
-              <td>{{ scheduleWeekdaysLabel(schedule) }}</td>
-              <td>{{ scheduleTimeLabel(schedule) }}</td>
-              <td>
-                <span>{{ scheduleLastRunLabel(schedule) }}</span>
-                <small v-if="schedule.last_result">{{ schedule.last_result }}</small>
-              </td>
-              <td>
-                <div class="actions">
-                  <button
-                    class="action-button"
-                    type="button"
-                    :disabled="schedulePending !== null"
-                    @click="toggleScheduleEnabled(schedule)"
-                  >
-                    {{ schedule.enabled ? t("services.scheduleDisable") : t("services.scheduleEnable") }}
-                  </button>
-                  <button
-                    class="action-button danger"
-                    type="button"
-                    :disabled="schedulePending !== null"
-                    @click="deleteSchedule(schedule)"
-                  >
-                    {{ t("services.scheduleDelete") }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <form
-        class="schedule-form"
-        @submit.prevent="createSchedule"
-      >
-        <label>
-          <span>{{ t("services.service") }}</span>
-          <select
-            v-model="scheduleServiceId"
-            required
-          >
-            <option
-              value=""
-              disabled
-            >
-              {{ t("services.scheduleSelectService") }}
-            </option>
-            <option
-              v-for="service in schedulableServices"
-              :key="service.id"
-              :value="service.id"
-            >
-              {{ service.id }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>{{ t("services.scheduleAction") }}</span>
-          <select v-model="scheduleAction">
-            <option
-              v-for="action in SCHEDULE_ACTION_OPTIONS"
-              :key="action"
-              :value="action"
-            >
-              {{ t(`services.${action}`) }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>{{ t("services.scheduleTime") }}</span>
-          <input
-            v-model="scheduleTime"
-            type="time"
-            required
-          >
-        </label>
-        <fieldset class="schedule-weekdays">
-          <legend>{{ t("services.scheduleWeekdays") }}</legend>
-          <label
-            v-for="day in WEEKDAY_OPTIONS"
-            :key="day"
-            class="tag-toggle"
-          >
-            <input
-              type="checkbox"
-              :checked="scheduleWeekdays.includes(day)"
-              @change="toggleScheduleWeekday(day)"
-            >
-            {{ weekdayLabel(day) }}
-          </label>
-        </fieldset>
-        <button
-          class="button"
-          type="submit"
-          :disabled="schedulePending !== null || !scheduleServiceId || scheduleWeekdays.length === 0"
-        >
-          {{ t("services.scheduleAdd") }}
-        </button>
-      </form>
-      <aside class="inline-note">
-        {{ t("services.scheduleNote") }}
-      </aside>
-    </section>
-
-    <div
-      v-if="logService"
-      class="dialog-backdrop"
-      @click.self="closeLogs"
+    <TablePanel
+      :loading="loading && services.length === 0"
+      :empty="filteredServices.length === 0"
+      :empty-message="t('services.empty')"
     >
-      <section
-        class="log-dialog"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('services.logTitle', { id: logService.id })"
+      <template #toolbar>
+        <TableToolbar :count="t('services.count', { count: filteredServices.length })">
+          <template #search>
+            <TextField
+              id="services-search"
+              v-model="query"
+              :label="t('services.search')"
+              type="search"
+              :placeholder="t('services.searchPlaceholder')"
+              label-hidden
+            />
+          </template>
+          <template #filters>
+            <TagToggleGroup :label="t('services.tagVisibility')">
+              <TagToggle
+                v-for="tag in availableTagKeys"
+                :key="tag"
+                :category="tagClass(tag)"
+                :checked="!isTagHidden(tag)"
+                @update:checked="toggleTag(tag)"
+              >
+                {{ tagLabel(tag) }}
+              </TagToggle>
+            </TagToggleGroup>
+          </template>
+        </TableToolbar>
+      </template>
+      <template #loading>
+        {{ t("services.loading") }}
+      </template>
+      <table>
+        <thead><tr><th>{{ t("services.service") }}</th><th>{{ t("services.state") }}</th><th>{{ t("services.startup") }}</th><th>{{ t("services.actions") }}</th></tr></thead>
+        <tbody>
+          <tr
+            v-for="service in filteredServices"
+            :key="service.id"
+            :class="{ 'row-failed': service.active_state === 'failed' }"
+          >
+            <td>
+              <AppStack
+                direction="row"
+                gap="2"
+                align="center"
+                wrap
+              >
+                <strong class="service-name">{{ service.id }}</strong>
+                <TagBadge
+                  v-for="tag in serviceTags(service)"
+                  :key="tag"
+                  :category="badgeCategory(tag)"
+                >
+                  {{ tagLabel(tag) }}
+                </TagBadge>
+              </AppStack>
+              <small>{{ service.description || t("services.noDescription") }}</small>
+            </td>
+            <td>
+              <StateBadge :state="activeStateClass(service.active_state)">
+                {{ activeStateLabel(service.active_state) }}
+              </StateBadge>
+              <small>{{ service.sub_state }}</small>
+            </td>
+            <td><span class="unit-state">{{ unitStateLabel(service.unit_file_state) }}</span></td>
+            <td>
+              <AppStack
+                class="row-actions"
+                direction="row"
+                gap="2"
+                align="center"
+              >
+                <template v-if="service.control_allowed">
+                  <AppButton
+                    variant="action"
+                    :disabled="pending !== null || service.active_state === 'active'"
+                    @click="runAction(service, 'start')"
+                  >
+                    {{ t("services.start") }}
+                  </AppButton>
+                  <AppButton
+                    variant="action"
+                    :disabled="pending !== null || service.active_state !== 'active'"
+                    @click="runAction(service, 'restart')"
+                  >
+                    {{ t("services.restart") }}
+                  </AppButton>
+                  <AppButton
+                    variant="action"
+                    danger
+                    :disabled="pending !== null || service.active_state !== 'active'"
+                    @click="runAction(service, 'stop')"
+                  >
+                    {{ t("services.stop") }}
+                  </AppButton>
+                  <AppButton
+                    v-if="service.unit_file_state === 'disabled'"
+                    variant="action"
+                    :disabled="pending !== null"
+                    @click="runAction(service, 'enable')"
+                  >
+                    {{ t("services.enable") }}
+                  </AppButton>
+                  <AppButton
+                    v-else-if="service.unit_file_state === 'enabled'"
+                    variant="action"
+                    :disabled="pending !== null"
+                    @click="runAction(service, 'disable')"
+                  >
+                    {{ t("services.disable") }}
+                  </AppButton>
+                  <AppButton
+                    variant="action"
+                    :disabled="pending !== null"
+                    @click="openLogs(service)"
+                  >
+                    {{ t("services.logs") }}
+                  </AppButton>
+                  <AppButton
+                    variant="action"
+                    danger
+                    :disabled="pending !== null"
+                    @click="runAction(service, 'disallow')"
+                  >
+                    {{ t("services.disallow") }}
+                  </AppButton>
+                </template>
+                <template v-else>
+                  <AppButton
+                    v-if="!service.deckox_managed"
+                    variant="action"
+                    :disabled="pending !== null"
+                    @click="runAction(service, 'allow')"
+                  >
+                    {{ t("services.allow") }}
+                  </AppButton>
+                  <span class="locked">{{ t("services.readOnly") }}</span>
+                </template>
+              </AppStack>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </TablePanel>
+
+    <InfoNote>{{ t("services.allowlist") }}</InfoNote>
+
+    <TablePanel
+      :loading="schedulesLoading && schedules.length === 0"
+      :empty="schedules.length === 0"
+      :empty-message="t('services.scheduleEmpty')"
+    >
+      <template #toolbar>
+        <TableToolbar :count="t('services.count', { count: schedules.length })">
+          <template #filters>
+            <h2>
+              {{ t("services.scheduleTitle") }}
+            </h2>
+          </template>
+        </TableToolbar>
+      </template>
+      <template
+        v-if="schedulesError"
+        #note
       >
-        <header class="log-dialog-header">
-          <div>
-            <h2>{{ t("services.logTitle", { id: logService.id }) }}</h2>
-            <small>{{ t("services.logDescription") }}</small>
-          </div>
-          <div class="header-actions">
-            <button
-              class="button"
-              type="button"
-              :disabled="logDownloading"
-              @click="downloadLogs"
-            >
-              {{ logDownloading ? t("services.logDownloading") : t("services.logDownload") }}
-            </button>
-            <button
-              class="button"
-              type="button"
-              @click="closeLogs"
-            >
-              {{ t("common.close") }}
-            </button>
-          </div>
-        </header>
-        <div class="log-toolbar">
-          <label>
-            <span>{{ t("services.logLines") }}</span>
-            <select v-model.number="logLines">
-              <option
-                v-for="lines in LOG_LINE_OPTIONS"
-                :key="lines"
-                :value="lines"
+        <NoticeBanner tone="error">
+          {{ schedulesError }}
+        </NoticeBanner>
+      </template>
+      <template #loading>
+        {{ t("common.loading") }}
+      </template>
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t("services.service") }}</th>
+            <th>{{ t("services.scheduleAction") }}</th>
+            <th>{{ t("services.scheduleWeekdays") }}</th>
+            <th>{{ t("services.scheduleTime") }}</th>
+            <th>{{ t("services.scheduleLastRun") }}</th>
+            <th>{{ t("services.actions") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="schedule in schedules"
+            :key="schedule.id"
+          >
+            <td><strong class="service-name">{{ schedule.service_id }}</strong></td>
+            <td>{{ t(`services.${schedule.action}`) }}</td>
+            <td>{{ scheduleWeekdaysLabel(schedule) }}</td>
+            <td>{{ scheduleTimeLabel(schedule) }}</td>
+            <td>
+              <span>{{ scheduleLastRunLabel(schedule) }}</span>
+              <small v-if="schedule.last_result">{{ schedule.last_result }}</small>
+            </td>
+            <td>
+              <AppStack
+                class="row-actions"
+                direction="row"
+                gap="2"
               >
-                {{ t("services.logLinesValue", { count: lines }) }}
-              </option>
-            </select>
-          </label>
-          <label>
-            <span>{{ t("services.logPriorityLabel") }}</span>
-            <select v-model="logPriority">
-              <option
-                v-for="priority in LOG_PRIORITY_OPTIONS"
-                :key="priority"
-                :value="priority"
-              >
-                {{ t(`services.logPriority.${priority}`) }}
-              </option>
-            </select>
-          </label>
-          <button
-            class="button"
-            type="button"
+                <AppButton
+                  variant="action"
+                  :disabled="schedulePending !== null"
+                  @click="toggleScheduleEnabled(schedule)"
+                >
+                  {{ schedule.enabled ? t("services.scheduleDisable") : t("services.scheduleEnable") }}
+                </AppButton>
+                <AppButton
+                  variant="action"
+                  danger
+                  :disabled="schedulePending !== null"
+                  @click="deleteSchedule(schedule)"
+                >
+                  {{ t("services.scheduleDelete") }}
+                </AppButton>
+              </AppStack>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </TablePanel>
+
+    <AppStack
+      as="form"
+      class="schedule-form"
+      direction="row"
+      gap="3"
+      align="end"
+      wrap
+      @submit.prevent="createSchedule"
+    >
+      <SelectField
+        id="schedule-service"
+        v-model="scheduleServiceId"
+        :label="t('services.service')"
+        :options="scheduleServiceOptions"
+      />
+      <SelectField
+        id="schedule-action"
+        v-model="scheduleActionValue"
+        :label="t('services.scheduleAction')"
+        :options="scheduleActionOptions"
+      />
+      <TextField
+        id="schedule-time"
+        v-model="scheduleTime"
+        :label="t('services.scheduleTime')"
+        type="time"
+        required
+      />
+      <TagToggleGroup :label="t('services.scheduleWeekdays')">
+        <TagToggle
+          v-for="day in WEEKDAY_OPTIONS"
+          :key="day"
+          category="other"
+          :checked="scheduleWeekdays.includes(day)"
+          @update:checked="toggleScheduleWeekday(day)"
+        >
+          {{ weekdayLabel(day) }}
+        </TagToggle>
+      </TagToggleGroup>
+      <AppButton
+        type="submit"
+        :disabled="schedulePending !== null || !scheduleServiceId || scheduleWeekdays.length === 0"
+      >
+        {{ t("services.scheduleAdd") }}
+      </AppButton>
+    </AppStack>
+    <InfoNote>{{ t("services.scheduleNote") }}</InfoNote>
+
+    <AppModal
+      :open="logService !== null"
+      :title="logService ? t('services.logTitle', { id: logService.id }) : ''"
+      size="large"
+      @close="closeLogs"
+    >
+      <template #header-actions>
+        <AppButton
+          :disabled="logDownloading"
+          @click="downloadLogs"
+        >
+          {{ logDownloading ? t("services.logDownloading") : t("services.logDownload") }}
+        </AppButton>
+      </template>
+      <AppStack gap="3">
+        <InfoNote>{{ t("services.logDescription") }}</InfoNote>
+        <AppStack
+          direction="row"
+          gap="3"
+          align="end"
+          wrap
+        >
+          <SelectField
+            id="log-lines"
+            v-model="logLinesValue"
+            :label="t('services.logLines')"
+            :options="logLineOptions"
+          />
+          <SelectField
+            id="log-priority"
+            v-model="logPriorityValue"
+            :label="t('services.logPriorityLabel')"
+            :options="logPriorityOptions"
+          />
+          <AppButton
             :disabled="logLoading"
             @click="loadLogs"
           >
             {{ logLoading ? t("common.loading") : t("common.refresh") }}
-          </button>
-        </div>
-        <div
+          </AppButton>
+        </AppStack>
+        <NoticeBanner
           v-if="logError"
-          class="notice error log-notice"
-          role="alert"
+          tone="error"
         >
           {{ logError }}
-        </div>
-        <div
-          v-else-if="logLoading"
-          class="log-empty"
-        >
+        </NoticeBanner>
+        <InfoNote v-else-if="logLoading">
           {{ t("services.logLoading") }}
-        </div>
-        <div
-          v-else-if="logEntries.length === 0"
-          class="log-empty"
-        >
+        </InfoNote>
+        <InfoNote v-else-if="logEntries.length === 0">
           {{ t("services.logEmpty") }}
-        </div>
-        <ol
-          v-else
-          class="log-list"
-        >
-          <li
+        </InfoNote>
+        <LogList v-else>
+          <LogEntry
             v-for="(entry, index) in logEntries"
             :key="`${entry.timestamp_ms}-${index}`"
-            :class="['log-entry', priorityClass(entry.priority)]"
-          >
-            <div class="log-meta">
-              <time :datetime="logDateTime(entry.timestamp_ms)">{{ formatLogTimestamp(entry.timestamp_ms) }}</time>
-              <span>{{ priorityLabel(entry.priority) }}</span>
-              <span v-if="entry.process">{{ entry.process }}<template v-if="entry.pid !== null">[{{ entry.pid }}]</template></span>
-            </div>
-            <pre>{{ entry.message }}</pre>
-          </li>
-        </ol>
-      </section>
-    </div>
+            :priority="logPriorityKind(entry.priority)"
+            :priority-label="priorityLabel(entry.priority)"
+            :timestamp="formatLogTimestamp(entry.timestamp_ms)"
+            :iso-timestamp="logDateTime(entry.timestamp_ms)"
+            :process="entry.process"
+            :pid="entry.pid"
+            :message="entry.message"
+          />
+        </LogList>
+      </AppStack>
+    </AppModal>
   </div>
 </template>

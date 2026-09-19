@@ -55,12 +55,12 @@ None.
 
 ## Tokens
 
-`--font-2xl`, `--font-3xl`, `--font-sm`, `--space-1`, `--space-2`, `--space-5`, `--space-6`, `--text-heading`, `--text-muted`
+`--font-2xl`, `--font-3xl`, `--font-sm`, `--space-1`, `--space-2`, `--space-5`, `--text-heading`, `--text-muted`
 
 ## Gotchas
 
 - Below the mobile breakpoint the heading shrinks to 19px and the row aligns to the top.
-- It carries a 24px bottom margin (20px on mobile).
+- It sets no outer margin; space it from the content below with a flex or grid parent using `gap`.
 
 ## Migration
 

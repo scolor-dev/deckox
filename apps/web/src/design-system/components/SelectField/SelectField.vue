@@ -7,10 +7,12 @@ withDefaults(
     options: { value: string; label: string }[];
     help?: string | null;
     disabled?: boolean;
+    labelHidden?: boolean;
   }>(),
   {
     help: null,
     disabled: false,
+    labelHidden: false,
   },
 );
 
@@ -21,7 +23,10 @@ defineEmits<{
 
 <template>
   <div class="ds-field">
-    <label :for="id">{{ label }}</label>
+    <label
+      :for="id"
+      :class="{ 'ds-field-label--hidden': labelHidden }"
+    >{{ label }}</label>
     <select
       :id="id"
       :value="modelValue"
@@ -56,4 +61,12 @@ defineEmits<{
 .ds-field select:focus { border-color: var(--brand-focus); box-shadow: var(--shadow-focus); }
 .ds-field select:disabled { color: var(--text-faint); background: var(--surface-muted); cursor: not-allowed; }
 .ds-field small { color: var(--text-muted); font-size: var(--font-xs); }
+.ds-field .ds-field-label--hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 </style>

@@ -965,6 +965,8 @@ const colorGroups: { name: string; tokens: string[] }[] = [
   background: var(--surface-elevated);
 }
 .catalog-section {
+  display: grid;
+  gap: 12px;
   margin-bottom: 40px;
   padding-bottom: 32px;
   border-bottom: 1px solid var(--border-default);

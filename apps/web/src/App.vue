@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import { api, type ServerStatus } from "./api/client";
 import NotificationRegion from "./components/NotificationRegion.vue";
+import { AppButton } from "./design-system/components";
 import LoginView from "./views/LoginView.vue";
 
 const route = useRoute();
@@ -105,15 +106,14 @@ onBeforeUnmount(() => {
       <div class="brand">
         <span class="brand-mark">D</span><span>Deckox</span>
       </div>
-      <button
-        class="menu-button"
-        type="button"
+      <AppButton
+        variant="menu"
         :aria-expanded="menuOpen"
         :aria-label="t('app.openMenu')"
         @click="menuOpen = !menuOpen"
       >
         {{ menuOpen ? t("common.close") : t("app.menu") }}
-      </button>
+      </AppButton>
     </header>
 
     <div
@@ -158,13 +158,12 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="sidebar-footer">
-        <button
-          class="logout-button"
-          type="button"
+        <AppButton
+          variant="logout"
           @click="logout"
         >
           {{ t("app.logout") }}
-        </button>
+        </AppButton>
         <span>{{ t("common.version") }} {{ status?.version ?? "0.3.8" }}</span>
       </div>
     </aside>

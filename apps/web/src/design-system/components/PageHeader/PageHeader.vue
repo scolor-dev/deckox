@@ -28,7 +28,6 @@ defineProps<{
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
-  margin-bottom: var(--space-6);
 }
 .ds-page-header h1 {
   margin: 0;
@@ -42,7 +41,7 @@ defineProps<{
 .ds-page-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
 
 @media (max-width: 700px) {
-  .ds-page-header { align-items: flex-start; margin-bottom: var(--space-5); }
+  .ds-page-header { align-items: flex-start; }
   .ds-page-header h1 { font-size: var(--font-2xl); }
 }
 </style>
