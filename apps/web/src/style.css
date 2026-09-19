@@ -311,6 +311,7 @@ summary:focus-visible { outline: 2px solid var(--brand-primary); outline-offset:
 }
 
 .diagnostics-view { width: min(1040px, 100%); }
+.disk-model { color: var(--text-muted); font-size: var(--font-sm); }
 .storage-summary-detail { color: var(--text-faint-alt); font-size: var(--font-xs); }
 .storage-table { table-layout: fixed; min-width: 760px; }
 .storage-table th:nth-child(1) { width: 27%; }

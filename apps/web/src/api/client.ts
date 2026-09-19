@@ -77,6 +77,27 @@ export interface StorageMount {
   standard: boolean;
 }
 
+export interface StoragePartition {
+  name: string;
+  path: string;
+  kind: string;
+  size_bytes: number;
+  filesystem_type: string | null;
+  label: string | null;
+  mount: StorageMount | null;
+}
+
+export interface StorageDisk {
+  name: string;
+  path: string;
+  model: string | null;
+  size_bytes: number;
+  transport: string | null;
+  rotational: boolean | null;
+  removable: boolean;
+  partitions: StoragePartition[];
+}
+
 export interface BackupSummary {
   name: string;
   previous_version: string | null;
@@ -383,6 +404,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
     }),
   storage: () => request<StorageMount[]>("/api/v1/storage"),
+  storageDisks: () => request<StorageDisk[]>("/api/v1/storage/disks"),
   backups: () => request<BackupSummary[]>("/api/v1/backups"),
   diagnostics: () => request<DiagnosticsResponse>("/api/v1/diagnostics"),
   diagnosticsReport: () => requestBlob("/api/v1/diagnostics/report"),

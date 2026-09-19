@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { api, formatBytes, usagePercentage, type StorageMount } from "../api/client";
+import { api, formatBytes, usagePercentage, type StorageDisk, type StorageMount } from "../api/client";
+import DiskPanel from "../components/DiskPanel.vue";
 import { apiErrorKey } from "../api/errors";
 import {
   AppButton,
@@ -11,6 +12,7 @@ import {
   PageHeader,
   ProgressBar,
   StorageAllocationBar,
+  TabBar,
   TableToolbar,
   TablePanel,
   TagBadge,
@@ -40,6 +42,14 @@ interface AllocationSegment {
 }
 
 const mounts = ref<StorageMount[]>([]);
+const disks = ref<StorageDisk[]>([]);
+const activeTab = ref("all");
+
+const tabs = computed(() => [
+  { key: "all", label: t("storage.tabAll") },
+  ...disks.value.map((disk) => ({ key: disk.name, label: `${disk.name} · ${formatBytes(disk.size_bytes, locale.value)}` })),
+]);
+const activeDisk = computed(() => disks.value.find((disk) => disk.name === activeTab.value) ?? null);
 const loading = ref(true);
 const error = ref<string | null>(null);
 
@@ -133,7 +143,9 @@ async function refresh() {
   loading.value = true;
   error.value = null;
   try {
-    mounts.value = await api.storage();
+    const [mountList, diskList] = await Promise.all([api.storage(), api.storageDisks().catch(() => [])]);
+    mounts.value = mountList;
+    disks.value = diskList;
   } catch (cause) {
     error.value = t(apiErrorKey(cause, "errors.storage"));
   } finally {
@@ -167,118 +179,132 @@ onMounted(refresh);
       {{ error }}
     </NoticeBanner>
 
-    <AppCard v-if="mounts.length > 0">
-      <AppStack gap="3">
-        <AppStack
-          direction="row"
-          justify="between"
-          align="center"
-          gap="3"
-          wrap
-        >
+    <TabBar
+      v-if="disks.length > 0"
+      v-model="activeTab"
+      :tabs="tabs"
+      :label="t('storage.tabsLabel')"
+    />
+
+    <DiskPanel
+      v-if="activeDisk"
+      :disk="activeDisk"
+    />
+
+    <template v-else>
+      <AppCard v-if="mounts.length > 0">
+        <AppStack gap="3">
           <AppStack
             direction="row"
-            gap="3"
+            justify="between"
             align="center"
+            gap="3"
+            wrap
           >
-            <span>{{ t("storage.overallUsage") }}</span>
-            <strong class="storage-overall">{{ overallPercent.toFixed(0) }}%</strong>
+            <AppStack
+              direction="row"
+              gap="3"
+              align="center"
+            >
+              <span>{{ t("storage.overallUsage") }}</span>
+              <strong class="storage-overall">{{ overallPercent.toFixed(0) }}%</strong>
+            </AppStack>
+            <span class="storage-summary-detail">{{ t("storage.overallUsageDetail", { used: formatBytes(totalUsed, locale), total: formatBytes(totalCapacity, locale) }) }}</span>
           </AppStack>
-          <span class="storage-summary-detail">{{ t("storage.overallUsageDetail", { used: formatBytes(totalUsed, locale), total: formatBytes(totalCapacity, locale) }) }}</span>
+          <ProgressBar
+            :value="overallPercent"
+            :critical="overallPercent >= 90"
+            :label="t('storage.overallUsage')"
+          />
+          <StorageAllocationBar
+            :segments="barSegments"
+            :label="t('storage.allocation')"
+          />
         </AppStack>
-        <ProgressBar
-          :value="overallPercent"
-          :critical="overallPercent >= 90"
-          :label="t('storage.overallUsage')"
-        />
-        <StorageAllocationBar
-          :segments="barSegments"
-          :label="t('storage.allocation')"
-        />
-      </AppStack>
-    </AppCard>
+      </AppCard>
 
-    <TablePanel
-      :loading="loading && mounts.length === 0"
-      :empty="filteredMounts.length === 0"
-      :empty-message="t('storage.empty')"
-    >
-      <template
-        v-if="mounts.length > 0"
-        #toolbar
+      <TablePanel
+        :loading="loading && mounts.length === 0"
+        :empty="filteredMounts.length === 0"
+        :empty-message="t('storage.empty')"
       >
-        <TableToolbar :count="t('storage.count', { count: filteredMounts.length })">
-          <template #filters>
-            <TagToggleGroup :label="t('storage.tagVisibility')">
-              <TagToggle
-                v-for="tag in TAG_FILTER_KEYS"
-                :key="tag"
-                :category="tag === 'standard' ? 'standard' : 'other'"
-                :checked="!isTagHidden(tag)"
-                @update:checked="toggleTag(tag)"
-              >
-                {{ tagLabel(tag) }}
-              </TagToggle>
-            </TagToggleGroup>
-          </template>
-        </TableToolbar>
-      </template>
-      <template #loading>
-        {{ t("storage.loading") }}
-      </template>
-      <table class="storage-table">
-        <thead>
-          <tr><th>{{ t("storage.mount") }}</th><th>{{ t("storage.filesystem") }}</th><th>{{ t("storage.capacity") }}</th><th>{{ t("storage.usage") }}</th></tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="mount in filteredMounts"
-            :key="`${mount.filesystem}:${mount.mount_point}`"
-          >
-            <td class="path-cell">
-              <AppStack
-                direction="row"
-                gap="2"
-                align="center"
-                wrap
-              >
-                <strong
-                  class="storage-path"
-                  :title="mount.mount_point"
-                >{{ mount.mount_point }}</strong>
-                <TagBadge
-                  v-for="tag in mountTags(mount)"
+        <template
+          v-if="mounts.length > 0"
+          #toolbar
+        >
+          <TableToolbar :count="t('storage.count', { count: filteredMounts.length })">
+            <template #filters>
+              <TagToggleGroup :label="t('storage.tagVisibility')">
+                <TagToggle
+                  v-for="tag in TAG_FILTER_KEYS"
                   :key="tag"
-                  :category="tag === 'standard' ? 'standard' : 'deckox'"
+                  :category="tag === 'standard' ? 'standard' : 'other'"
+                  :checked="!isTagHidden(tag)"
+                  @update:checked="toggleTag(tag)"
                 >
                   {{ tagLabel(tag) }}
-                </TagBadge>
-              </AppStack>
-            </td>
-            <td class="filesystem-cell">
-              <span :title="mount.filesystem">{{ mount.filesystem }}</span>
-              <small>{{ mount.filesystem_type }}</small>
-            </td>
-            <td class="capacity-cell">
-              <strong>{{ formatBytes(mount.total_bytes, locale) }}</strong>
-              <small>{{ t("storage.available", { value: formatBytes(mount.available_bytes, locale) }) }}</small>
-            </td>
-            <td class="storage-usage-cell">
-              <AppStack gap="1">
-                <span class="usage-row">
-                  <span>{{ mount.usage_percent.toFixed(0) }}%</span>
-                  <small>{{ t("storage.used", { value: formatBytes(mount.used_bytes, locale) }) }}</small>
-                </span>
-                <ProgressBar
-                  :value="mount.usage_percent"
-                  :critical="mount.usage_percent >= 90"
-                  :label="mount.mount_point"
-                />
-              </AppStack>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </TablePanel>
+                </TagToggle>
+              </TagToggleGroup>
+            </template>
+          </TableToolbar>
+        </template>
+        <template #loading>
+          {{ t("storage.loading") }}
+        </template>
+        <table class="storage-table">
+          <thead>
+            <tr><th>{{ t("storage.mount") }}</th><th>{{ t("storage.filesystem") }}</th><th>{{ t("storage.capacity") }}</th><th>{{ t("storage.usage") }}</th></tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="mount in filteredMounts"
+              :key="`${mount.filesystem}:${mount.mount_point}`"
+            >
+              <td class="path-cell">
+                <AppStack
+                  direction="row"
+                  gap="2"
+                  align="center"
+                  wrap
+                >
+                  <strong
+                    class="storage-path"
+                    :title="mount.mount_point"
+                  >{{ mount.mount_point }}</strong>
+                  <TagBadge
+                    v-for="tag in mountTags(mount)"
+                    :key="tag"
+                    :category="tag === 'standard' ? 'standard' : 'deckox'"
+                  >
+                    {{ tagLabel(tag) }}
+                  </TagBadge>
+                </AppStack>
+              </td>
+              <td class="filesystem-cell">
+                <span :title="mount.filesystem">{{ mount.filesystem }}</span>
+                <small>{{ mount.filesystem_type }}</small>
+              </td>
+              <td class="capacity-cell">
+                <strong>{{ formatBytes(mount.total_bytes, locale) }}</strong>
+                <small>{{ t("storage.available", { value: formatBytes(mount.available_bytes, locale) }) }}</small>
+              </td>
+              <td class="storage-usage-cell">
+                <AppStack gap="1">
+                  <span class="usage-row">
+                    <span>{{ mount.usage_percent.toFixed(0) }}%</span>
+                    <small>{{ t("storage.used", { value: formatBytes(mount.used_bytes, locale) }) }}</small>
+                  </span>
+                  <ProgressBar
+                    :value="mount.usage_percent"
+                    :critical="mount.usage_percent >= 90"
+                    :label="mount.mount_point"
+                  />
+                </AppStack>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </TablePanel>
+    </template>
   </div>
 </template>
