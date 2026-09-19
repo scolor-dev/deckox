@@ -73,10 +73,11 @@ None.
 
 ## Tokens
 
-`--border-strong`, `--danger-accent`, `--font-sm`, `--radius-sm`, `--shadow-raised`, `--space-2`, `--space-3`, `--space-4`, `--space-8`, `--success-strong`, `--surface-elevated`, `--text-strong`, `--warning-strong`, `--z-toast`
+`--border-strong`, `--danger-accent`, `--font-sm`, `--radius-sm`, `--shadow-raised`, `--space-2`, `--space-3`, `--space-4`, `--space-8`, `--success-strong`, `--surface-elevated`, `--text-strong`, `--toast-offset-top`, `--warning-strong`, `--z-toast`
 
 ## Gotchas
 
+- ToastRegion sits `--toast-offset-top` from the top of the viewport (`--space-4` by default). An app with a fixed top bar overrides that token so toasts appear below the bar.
 - ToastRegion holds no state. The queue and auto-dismiss timing belong to the caller (today: `notifications.ts`).
 - Toasts sit below dialogs and modals (`--z-toast` 50 is lower than `--z-overlay` 60), so an open dialog covers them.
 - The old markup used a text button ("Close"); this uses an × icon button, which is a visible change.

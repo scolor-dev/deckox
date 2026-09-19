@@ -1,19 +1,25 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::PathBuf,
     process::Output,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use deckox_protocol::{CommandResult, CommandStatus, InstalledSoftware, SoftwarePackage};
-use tokio::{process::Command, sync::RwLock};
+use tokio::{
+    process::Command,
+    sync::{Mutex, RwLock},
+};
 use tracing::warn;
 
-use crate::{config, error::AgentError};
+use crate::{
+    config::{self, SoftwareConfig},
+    error::AgentError,
+};
 
 static COMMAND_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -102,6 +108,54 @@ impl PackageManager {
         })
     }
 
+    /// Names of the packages the admin installed on purpose, as opposed to
+    /// ones pulled in as dependencies. `None` when the package manager
+    /// cannot say (zypper keeps no such record) or the query failed, in
+    /// which case nothing is adopted automatically.
+    async fn list_user_installed(self) -> Option<Detection> {
+        match self {
+            Self::Apt => {
+                let manual = run_query("apt-mark", &["showmanual"]).await?;
+                let table = run_query(
+                    "dpkg-query",
+                    &[
+                        "-W",
+                        "-f=${Package}\t${Priority}\t${Essential}\t${Depends}\t${Recommends}\t${Status}\n",
+                    ],
+                )
+                .await?;
+                Some(parse_apt_detection(
+                    &String::from_utf8_lossy(&manual.stdout),
+                    &String::from_utf8_lossy(&table.stdout),
+                ))
+            }
+            Self::Pacman => {
+                let output = run_query("pacman", &["-Qqet"]).await?;
+                Some(Detection::flat(parse_name_lines(&String::from_utf8_lossy(
+                    &output.stdout,
+                ))))
+            }
+            Self::Dnf => {
+                let output = run_query_within(
+                    "dnf",
+                    &[
+                        "--quiet",
+                        "-C",
+                        "repoquery",
+                        "--userinstalled",
+                        "--queryformat",
+                        "%{name}\n",
+                    ],
+                    20,
+                )
+                .await?;
+                let names = parse_name_lines(&String::from_utf8_lossy(&output.stdout));
+                Some(rpm_detection(names).await)
+            }
+            Self::Zypper => None,
+        }
+    }
+
     async fn install(self, name: &str) -> Result<(), AgentError> {
         match self {
             Self::Apt => apt_install(name).await,
@@ -171,37 +225,177 @@ pub async fn detect_package_manager() -> Option<PackageManager> {
     None
 }
 
+#[derive(Debug, Clone)]
+struct Settings {
+    allowed: HashSet<String>,
+    dismissed: HashSet<String>,
+    auto_adopt: bool,
+}
+
+/// What automatic adoption found on the host.
+#[derive(Debug, Clone, Default)]
+struct Detection {
+    /// Packages worth managing on their own.
+    roots: HashSet<String>,
+    /// Packages bundled under a root: `child -> root`. Only apt reports these.
+    parents: HashMap<String, String>,
+}
+
+impl Detection {
+    fn flat(roots: HashSet<String>) -> Self {
+        Self {
+            roots,
+            parents: HashMap::new(),
+        }
+    }
+
+    fn knows(&self, name: &str) -> bool {
+        self.roots.contains(name) || self.parents.contains_key(name)
+    }
+}
+
+/// The packages Deckox manages right now and how they are grouped.
+struct ManagedView {
+    allowed: HashSet<String>,
+    /// Everything managed only through automatic adoption.
+    adopted: HashSet<String>,
+    parents: HashMap<String, String>,
+}
+
+impl ManagedView {
+    fn contains(&self, name: &str) -> bool {
+        self.allowed.contains(name) || self.adopted.contains(name)
+    }
+
+    fn names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.allowed.union(&self.adopted).cloned().collect();
+        names.sort();
+        names
+    }
+
+    /// The bundle root `name` sits under, when that root is itself managed.
+    fn parent_of(&self, name: &str) -> Option<String> {
+        self.parents
+            .get(name)
+            .filter(|parent| self.contains(parent))
+            .cloned()
+    }
+}
+
+type DetectionCache = Option<(Instant, Detection)>;
+
+const DETECTION_TTL: Duration = Duration::from_secs(30);
+
 #[derive(Clone)]
 pub struct SoftwareManager {
-    allowed: Arc<RwLock<HashSet<String>>>,
+    settings: Arc<RwLock<Settings>>,
+    detected: Arc<Mutex<DetectionCache>>,
     config_path: PathBuf,
     package_manager: Option<PackageManager>,
 }
 
+fn validated_names(names: Vec<String>) -> Result<HashSet<String>, AgentError> {
+    let mut validated = HashSet::new();
+    for name in names {
+        validate_package_name(&name)?;
+        validated.insert(name);
+    }
+    Ok(validated)
+}
+
 impl SoftwareManager {
     pub fn new(
-        allowed: Vec<String>,
+        config: SoftwareConfig,
         config_path: PathBuf,
         package_manager: Option<PackageManager>,
     ) -> Result<Self, AgentError> {
-        let mut validated = HashSet::new();
-        for name in allowed {
-            validate_package_name(&name)?;
-            validated.insert(name);
-        }
         Ok(Self {
-            allowed: Arc::new(RwLock::new(validated)),
+            settings: Arc::new(RwLock::new(Settings {
+                allowed: validated_names(config.allowed)?,
+                dismissed: validated_names(config.dismissed)?,
+                auto_adopt: config.auto_adopt,
+            })),
+            detected: Arc::new(Mutex::new(None)),
             config_path,
             package_manager,
         })
     }
 
+    fn persist(&self, settings: &Settings) -> Result<(), AgentError> {
+        config::write_software_settings(
+            &self.config_path,
+            &SoftwareConfig {
+                allowed: settings.allowed.iter().cloned().collect(),
+                auto_adopt: settings.auto_adopt,
+                dismissed: settings.dismissed.iter().cloned().collect(),
+            },
+        )
+    }
+
+    /// Packages installed on purpose, cached briefly because listing and
+    /// every action ask for it and the query can be slow (dnf).
+    async fn detected(&self, backend: PackageManager) -> Detection {
+        let mut cache = self.detected.lock().await;
+        if let Some((taken, detection)) = cache.as_ref()
+            && taken.elapsed() < DETECTION_TTL
+        {
+            return detection.clone();
+        }
+        let mut detection = backend.list_user_installed().await.unwrap_or_default();
+        detection
+            .roots
+            .retain(|name| validate_package_name(name).is_ok());
+        detection.parents.retain(|child, parent| {
+            validate_package_name(child).is_ok() && validate_package_name(parent).is_ok()
+        });
+        *cache = Some((Instant::now(), detection.clone()));
+        detection
+    }
+
+    /// The managed set: the allowlist, plus with `auto_adopt` every detected
+    /// root the admin has not dismissed and the packages bundled under a
+    /// managed root (unless dismissed themselves).
+    async fn managed_view(&self, backend: PackageManager) -> ManagedView {
+        let (allowed, auto_adopt, dismissed) = {
+            let settings = self.settings.read().await;
+            (
+                settings.allowed.clone(),
+                settings.auto_adopt,
+                settings.dismissed.clone(),
+            )
+        };
+        if !auto_adopt {
+            return ManagedView {
+                allowed,
+                adopted: HashSet::new(),
+                parents: HashMap::new(),
+            };
+        }
+        let detection = self.detected(backend).await;
+        let mut adopted: HashSet<String> = detection
+            .roots
+            .iter()
+            .filter(|name| !dismissed.contains(*name))
+            .cloned()
+            .collect();
+        for (child, root) in &detection.parents {
+            if !dismissed.contains(child) && (allowed.contains(root) || adopted.contains(root)) {
+                adopted.insert(child.clone());
+            }
+        }
+        ManagedView {
+            allowed,
+            adopted,
+            parents: detection.parents,
+        }
+    }
+
     /// Adds `name` to the management allowlist, but only after confirming
     /// it resolves from the host's already-configured repositories or is
     /// already installed on this host (a manually installed package no
-    /// repository knows about can still be managed) — the
-    /// dynamic equivalent of a catalog membership check. Persists the same
-    /// way [`crate::services::ServiceManager::allow`] does for services.
+    /// repository knows about can still be managed) — the dynamic
+    /// equivalent of a catalog membership check. Adding a name the admin
+    /// had dismissed also lifts the dismissal.
     pub async fn allow(&self, name: &str) -> Result<CommandResult, AgentError> {
         ensure_linux()?;
         validate_package_name(name)?;
@@ -215,12 +409,13 @@ impl SoftwareManager {
         }
 
         {
-            let mut allowed = self.allowed.write().await;
-            if !allowed.contains(name) {
-                let mut updated: Vec<String> = allowed.iter().cloned().collect();
-                updated.push(name.to_owned());
-                config::write_allowed_software(&self.config_path, &updated)?;
-                allowed.insert(name.to_owned());
+            let mut settings = self.settings.write().await;
+            let mut updated = settings.clone();
+            let added = updated.allowed.insert(name.to_owned());
+            let lifted = updated.dismissed.remove(name);
+            if added || lifted {
+                self.persist(&updated)?;
+                *settings = updated;
             }
         }
 
@@ -231,21 +426,25 @@ impl SoftwareManager {
         })
     }
 
-    /// Removes `name` from the management allowlist. Idempotent.
+    /// Removes `name` from management. A package that automatic adoption
+    /// would otherwise pick up again is remembered as dismissed. Idempotent.
     pub async fn disallow(&self, name: &str) -> Result<CommandResult, AgentError> {
         ensure_linux()?;
         validate_package_name(name)?;
+        let detected = match self.backend() {
+            Ok(backend) => self.detected(backend).await.knows(name),
+            Err(_) => false,
+        };
 
         {
-            let mut allowed = self.allowed.write().await;
-            if allowed.contains(name) {
-                let updated: Vec<String> = allowed
-                    .iter()
-                    .filter(|existing| existing.as_str() != name)
-                    .cloned()
-                    .collect();
-                config::write_allowed_software(&self.config_path, &updated)?;
-                allowed.remove(name);
+            let mut settings = self.settings.write().await;
+            let mut updated = settings.clone();
+            let removed = updated.allowed.remove(name);
+            let dismissed =
+                detected && updated.auto_adopt && updated.dismissed.insert(name.to_owned());
+            if removed || dismissed {
+                self.persist(&updated)?;
+                *settings = updated;
             }
         }
 
@@ -258,14 +457,14 @@ impl SoftwareManager {
         })
     }
 
-    /// Reports state for every allow-listed package — there is no wider
-    /// catalog or host-wide package list to browse, only what an admin has
-    /// already vetted and added.
+    /// Reports state for every managed package: the allowlist plus, with
+    /// `auto_adopt`, whatever the admin installed on purpose. There is no
+    /// wider catalog to browse.
     pub async fn list(&self) -> Result<Vec<SoftwarePackage>, AgentError> {
         ensure_linux()?;
         let backend = self.backend()?;
-        let mut names: Vec<String> = self.allowed.read().await.iter().cloned().collect();
-        names.sort();
+        let view = self.managed_view(backend).await;
+        let names = view.names();
 
         let mut packages = Vec::with_capacity(names.len());
         for name in names {
@@ -275,6 +474,8 @@ impl SoftwareManager {
                 installed && available_version.is_some() && available_version != installed_version;
 
             packages.push(SoftwarePackage {
+                auto: !view.allowed.contains(&name),
+                parent: view.parent_of(&name),
                 name,
                 installed,
                 installed_version,
@@ -297,13 +498,13 @@ impl SoftwareManager {
             .list_installed()
             .await
             .ok_or_else(|| AgentError::internal("failed to read the installed package list"))?;
-        let allowed = self.allowed.read().await;
+        let view = self.managed_view(backend).await;
 
         let mut packages: Vec<InstalledSoftware> = installed
             .into_iter()
             .filter(|(name, _)| validate_package_name(name).is_ok())
             .map(|(name, version)| InstalledSoftware {
-                managed: allowed.contains(&name),
+                managed: view.contains(&name),
                 name,
                 version,
             })
@@ -359,12 +560,14 @@ impl SoftwareManager {
 
     async fn ensure_allowed(&self, name: &str) -> Result<PackageManager, AgentError> {
         validate_package_name(name)?;
-        if !self.allowed.read().await.contains(name) {
-            return Err(AgentError::forbidden(format!(
+        let backend = self.backend()?;
+        if self.managed_view(backend).await.contains(name) {
+            Ok(backend)
+        } else {
+            Err(AgentError::forbidden(format!(
                 "software is not in the management allowlist: {name}"
-            )));
+            )))
         }
-        self.backend()
     }
 }
 
@@ -424,8 +627,12 @@ fn command_id() -> String {
 /// once a backend has already been selected for this host by
 /// [`detect_package_manager`].
 async fn run_query(binary: &str, args: &[&str]) -> Option<Output> {
+    run_query_within(binary, args, 5).await
+}
+
+async fn run_query_within(binary: &str, args: &[&str], timeout_seconds: u64) -> Option<Output> {
     let result = tokio::time::timeout(
-        Duration::from_secs(5),
+        Duration::from_secs(timeout_seconds),
         Command::new(binary).args(args).output(),
     )
     .await;
@@ -506,6 +713,204 @@ fn parse_labeled_version(output: &str, label: &str) -> Option<String> {
 /// `"install ok installed"`) ends in `"installed"` only when the package is
 /// actually present — `"unknown ok not-installed"` ends in the single word
 /// `"not-installed"`, which does not equal `"installed"`.
+/// A manually installed apt package and the package names it depends on or
+/// recommends.
+type Candidate = (String, HashSet<String>);
+
+/// The packages the admin installed on purpose, grouped into bundles.
+///
+/// Starts from `apt-mark showmanual` and drops what the distribution treats
+/// as the base system (`required` / `important` priority, `Essential`). Of
+/// what is left, a package that another candidate depends on or recommends
+/// is bundled under that package instead of standing alone: Docker's install
+/// command marks `docker-ce`, `docker-ce-cli`, the buildx and compose plugins
+/// all as manual, but only `docker-ce` is the product. A chain (a -> b -> c)
+/// bundles everything under the top of the chain. Multiarch names such as
+/// `libc6:i386` match by bare name.
+fn parse_apt_detection(manual: &str, table: &str) -> Detection {
+    let manual: HashSet<&str> = manual
+        .lines()
+        .map(|line| line.trim().split(':').next().unwrap_or_default())
+        .filter(|name| !name.is_empty())
+        .collect();
+
+    let mut candidates: Vec<Candidate> = Vec::new();
+    for line in table.lines() {
+        let mut fields = line.splitn(6, '\t');
+        let (
+            Some(name),
+            Some(priority),
+            Some(essential),
+            Some(depends),
+            Some(recommends),
+            Some(status),
+        ) = (
+            fields.next(),
+            fields.next(),
+            fields.next(),
+            fields.next(),
+            fields.next(),
+            fields.next(),
+        )
+        else {
+            continue;
+        };
+        if manual.contains(name)
+            && is_installed_status(status)
+            && !matches!(priority, "required" | "important")
+            && essential != "yes"
+        {
+            let mut referenced = parse_dependency_names(depends);
+            referenced.extend(parse_dependency_names(recommends));
+            candidates.push((name.to_owned(), referenced));
+        }
+    }
+
+    bundle_candidates(&candidates)
+}
+
+/// Bundles `candidates` under the candidate that depends on or recommends
+/// them: a package another candidate names becomes that candidate's child,
+/// and a chain (a -> b -> c) bundles everything under the top of the chain.
+fn bundle_candidates(candidates: &[Candidate]) -> Detection {
+    let names: HashSet<&str> = candidates.iter().map(|(name, _)| name.as_str()).collect();
+    let mut direct_parent: HashMap<&str, &str> = HashMap::new();
+    for (owner, referenced) in candidates {
+        for name in referenced {
+            if name != owner && names.contains(name.as_str()) {
+                let entry = direct_parent.entry(name.as_str()).or_insert(owner.as_str());
+                if owner.as_str() < *entry {
+                    *entry = owner.as_str();
+                }
+            }
+        }
+    }
+
+    let mut detection = Detection::default();
+    for (name, _) in candidates {
+        match resolve_root(name, &direct_parent) {
+            Some(root) if root != name.as_str() => {
+                detection.parents.insert(name.clone(), root.to_owned());
+            }
+            _ => {
+                detection.roots.insert(name.clone());
+            }
+        }
+    }
+    detection
+}
+
+/// Groups the user-installed rpm packages into bundles from rpm's own
+/// dependency data. rpm records dependencies as capabilities, so each
+/// candidate's requires (and, where this rpm supports them, recommends) are
+/// resolved to the candidate that provides them. Falls back to a flat list
+/// when rpm cannot be queried.
+async fn rpm_detection(names: HashSet<String>) -> Detection {
+    let formats = [
+        "%{NAME}\t[%{PROVIDENAME};]\t[%{REQUIRENAME};]\t[%{RECOMMENDNAME};]\n",
+        "%{NAME}\t[%{PROVIDENAME};]\t[%{REQUIRENAME};]\t\n",
+    ];
+    for format in formats {
+        if let Some(output) = run_query_within("rpm", &["-qa", "--qf", format], 20).await {
+            return parse_rpm_detection(&names, &String::from_utf8_lossy(&output.stdout));
+        }
+    }
+    Detection::flat(names)
+}
+
+fn parse_rpm_detection(user_installed: &HashSet<String>, table: &str) -> Detection {
+    struct Row<'a> {
+        name: &'a str,
+        provides: Vec<&'a str>,
+        requires: Vec<&'a str>,
+    }
+
+    fn capabilities(field: &str) -> Vec<&str> {
+        field.split(';').filter(|item| !item.is_empty()).collect()
+    }
+    let rows: Vec<Row> = table
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(4, '\t');
+            let name = fields.next()?;
+            let provides = capabilities(fields.next()?);
+            let requires = capabilities(fields.next()?);
+            let recommends = capabilities(fields.next().unwrap_or_default());
+            user_installed.contains(name).then(|| Row {
+                name,
+                provides,
+                requires: requires.into_iter().chain(recommends).collect(),
+            })
+        })
+        .collect();
+
+    let mut providers: HashMap<&str, Vec<&str>> = HashMap::new();
+    for row in &rows {
+        for capability in row.provides.iter().chain(std::iter::once(&row.name)) {
+            providers.entry(capability).or_default().push(row.name);
+        }
+    }
+
+    let mut candidates: Vec<Candidate> = rows
+        .iter()
+        .map(|row| {
+            let referenced = row
+                .requires
+                .iter()
+                .filter_map(|capability| providers.get(capability))
+                .flatten()
+                .filter(|provider| **provider != row.name)
+                .map(|provider| (*provider).to_owned())
+                .collect();
+            (row.name.to_owned(), referenced)
+        })
+        .collect();
+    let seen: HashSet<String> = candidates.iter().map(|(name, _)| name.clone()).collect();
+    candidates.extend(
+        user_installed
+            .iter()
+            .filter(|name| !seen.contains(*name))
+            .map(|name| (name.clone(), HashSet::new())),
+    );
+    bundle_candidates(&candidates)
+}
+
+/// Follows `direct_parent` links up to the top of the chain. `None` means
+/// the chain loops back on itself, in which case the package stands alone.
+fn resolve_root<'a>(name: &'a str, direct_parent: &HashMap<&'a str, &'a str>) -> Option<&'a str> {
+    let mut current = name;
+    let mut steps = 0;
+    while let Some(parent) = direct_parent.get(current) {
+        current = parent;
+        steps += 1;
+        if steps > direct_parent.len() {
+            return None;
+        }
+    }
+    Some(current)
+}
+
+/// Package names in a dpkg `Depends` / `Recommends` field, including every
+/// `a | b` alternative, without version constraints or `:any` suffixes.
+fn parse_dependency_names(field: &str) -> HashSet<String> {
+    field
+        .split([',', '|'])
+        .filter_map(|entry| {
+            let name = entry.split(['(', ' ']).find(|part| !part.is_empty())?;
+            Some(name.split(':').next().unwrap_or(name).to_owned())
+        })
+        .collect()
+}
+
+fn parse_name_lines(output: &str) -> HashSet<String> {
+    output
+        .lines()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
 /// Parses `dpkg-query -W -f='${Package}\t${Version}\t${Status}\n'`, keeping
 /// only packages whose status ends in `installed` (so removed-but-configured
 /// `deinstall ok config-files` entries are dropped).
@@ -845,17 +1250,117 @@ async fn zypper(args: &[&str], timeout_seconds: u64) -> Result<String, AgentErro
 #[cfg(test)]
 mod tests {
     use super::{
-        PackageManager, SoftwareManager, is_installed_status, parse_candidate_version,
-        parse_dnf_list, parse_dpkg_installed, parse_labeled_version, parse_space_pairs,
-        parse_tab_pairs, parse_zypper_list_updates, validate_package_name,
+        PackageManager, SoftwareManager, is_installed_status, parse_apt_detection,
+        parse_candidate_version, parse_dependency_names, parse_dnf_list, parse_dpkg_installed,
+        parse_labeled_version, parse_rpm_detection, parse_space_pairs, parse_tab_pairs,
+        parse_zypper_list_updates, validate_package_name,
     };
 
     fn test_manager(allowed: Vec<String>) -> Result<SoftwareManager, crate::error::AgentError> {
         SoftwareManager::new(
-            allowed,
+            crate::config::SoftwareConfig {
+                allowed,
+                auto_adopt: false,
+                dismissed: Vec::new(),
+            },
             std::path::PathBuf::from("/tmp/deckox-agent-software-test.toml"),
             Some(PackageManager::Apt),
         )
+    }
+
+    #[test]
+    fn bundles_dependencies_of_a_manual_apt_package_under_it() {
+        let manual = "docker-ce\ndocker-ce-cli\ndocker-compose-plugin\ncontainerd.io\ngit\nbash\nlibc6:i386\n";
+        let table = "docker-ce\toptional\t\tdocker-ce-cli, containerd.io, iptables | nftables\tdocker-compose-plugin\tinstall ok installed\n\
+                     docker-ce-cli\toptional\t\t\t\tinstall ok installed\n\
+                     docker-compose-plugin\toptional\t\t\t\tinstall ok installed\n\
+                     containerd.io\toptional\t\tlibc6 (>= 2.34)\t\tinstall ok installed\n\
+                     git\toptional\t\tlibc6 (>= 2.34), git-man (>> 1:2.43)\t\tinstall ok installed\n\
+                     bash\trequired\tyes\tlibc6\t\tinstall ok installed\n\
+                     libc6\trequired\tyes\t\t\tinstall ok installed\n\
+                     removed-tool\toptional\t\t\t\tdeinstall ok config-files\n";
+        let detection = parse_apt_detection(manual, table);
+        let mut roots: Vec<&str> = detection.roots.iter().map(String::as_str).collect();
+        roots.sort_unstable();
+        assert_eq!(roots, ["docker-ce", "git"]);
+        for child in ["docker-ce-cli", "docker-compose-plugin", "containerd.io"] {
+            assert_eq!(
+                detection.parents.get(child).map(String::as_str),
+                Some("docker-ce"),
+                "{child} is bundled under docker-ce"
+            );
+        }
+        assert!(!detection.knows("bash"), "base packages are ignored");
+    }
+
+    #[test]
+    fn bundles_rpm_packages_through_provided_capabilities() {
+        let user_installed: std::collections::HashSet<String> = [
+            "docker-ce",
+            "docker-ce-cli",
+            "docker-compose-plugin",
+            "git",
+            "nginx",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        let table = "docker-ce\tdocker-ce;docker-engine;\tdocker-ce-cli;/bin/sh;libc.so.6()(64bit);\tdocker-compose-plugin;\n\
+                     docker-ce-cli\tdocker-ce-cli;\tlibc.so.6()(64bit);\t\n\
+                     docker-compose-plugin\tdocker-compose-plugin;\t\t\n\
+                     git\tgit;\t/bin/sh;perl(Git);\t\n\
+                     glibc\tglibc;libc.so.6()(64bit);\t\t\n";
+        let detection = parse_rpm_detection(&user_installed, table);
+        let mut roots: Vec<&str> = detection.roots.iter().map(String::as_str).collect();
+        roots.sort_unstable();
+        assert_eq!(roots, ["docker-ce", "git", "nginx"]);
+        assert_eq!(
+            detection.parents.get("docker-ce-cli").map(String::as_str),
+            Some("docker-ce")
+        );
+        assert_eq!(
+            detection
+                .parents
+                .get("docker-compose-plugin")
+                .map(String::as_str),
+            Some("docker-ce")
+        );
+    }
+
+    #[test]
+    fn bundles_a_chain_under_the_top_of_the_chain() {
+        let manual = "a\nb\nc\n";
+        let table = "a\toptional\t\tb\t\tinstall ok installed\n\
+                     b\toptional\t\tc\t\tinstall ok installed\n\
+                     c\toptional\t\t\t\tinstall ok installed\n";
+        let detection = parse_apt_detection(manual, table);
+        assert_eq!(
+            detection.roots,
+            std::collections::HashSet::from(["a".to_owned()])
+        );
+        assert_eq!(detection.parents.get("b").map(String::as_str), Some("a"));
+        assert_eq!(detection.parents.get("c").map(String::as_str), Some("a"));
+    }
+
+    #[test]
+    fn a_dependency_cycle_leaves_its_members_standing_alone() {
+        let manual = "a\nb\n";
+        let table = "a\toptional\t\tb\t\tinstall ok installed\n\
+                     b\toptional\t\ta\t\tinstall ok installed\n";
+        let detection = parse_apt_detection(manual, table);
+        assert_eq!(detection.roots.len(), 2);
+        assert!(detection.parents.is_empty());
+    }
+
+    #[test]
+    fn extracts_dependency_names_without_versions_or_arch() {
+        let mut names: Vec<String> =
+            parse_dependency_names("libc6 (>= 2.34), python3:any, iptables | nftables")
+                .into_iter()
+                .collect();
+        names.sort();
+        assert_eq!(names, ["iptables", "libc6", "nftables", "python3"]);
+        assert!(parse_dependency_names("").is_empty());
     }
 
     #[test]

@@ -11,7 +11,7 @@
 .ds-toast-region {
   position: fixed;
   z-index: var(--z-toast);
-  top: var(--space-4);
+  top: var(--toast-offset-top);
   right: var(--space-4);
   display: grid;
   width: min(360px, calc(100vw - var(--space-8)));

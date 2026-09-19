@@ -41,7 +41,8 @@ defineProps<{
 .ds-page-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
 
 @media (max-width: 700px) {
-  .ds-page-header { align-items: flex-start; }
+  .ds-page-header { flex-direction: column; align-items: stretch; gap: var(--space-3); }
+  .ds-page-actions { justify-content: flex-start; }
   .ds-page-header h1 { font-size: var(--font-2xl); }
 }
 </style>

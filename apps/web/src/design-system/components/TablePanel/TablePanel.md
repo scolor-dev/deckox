@@ -82,15 +82,16 @@ None.
 ## Accessibility
 
 - Semantics come from the `table` you write; give it a caption or an accessible name if the screen has several tables.
+- The panel sets explicit `role` attributes (`table`, `rowgroup`, `row`, `columnheader`, `cell`) because the narrow-screen card layout changes the display type of the table parts.
 
 ## Tokens
 
-`--border-default`, `--border-faint`, `--border-strong`, `--border-subtle`, `--brand-focus`, `--font-sm`, `--font-xs`, `--radius-md`, `--radius-sm`, `--shadow-focus`, `--space-10`, `--space-2`, `--space-3`, `--space-4`, `--space-5`, `--surface-elevated`, `--surface-subtle`, `--text-faint`, `--text-label`, `--text-primary`, `--text-secondary`, `--z-sticky-column`
+`--border-default`, `--border-faint`, `--border-strong`, `--border-subtle`, `--brand-focus`, `--font-sm`, `--font-xs`, `--radius-md`, `--radius-sm`, `--shadow-focus`, `--space-1`, `--space-10`, `--space-16`, `--space-2`, `--space-3`, `--space-4`, `--space-5`, `--surface-elevated`, `--surface-subtle`, `--text-faint`, `--text-label`, `--text-primary`, `--text-secondary`
 
 ## Gotchas
 
 - `th` and `td` styles are applied through deep selectors, so they affect every table inside the panel.
-- On narrow screens the first column becomes sticky with an opaque background so the row's identity stays visible while scrolling sideways. Do not put wide content in the first column.
+- On narrow screens (700px and below) each row becomes a card: the header row is hidden and every cell shows its column header as a label, read from the `thead` text. Cells are labelled by position, so give every `td` a matching `th` and avoid `colspan` cells inside `tbody`. The panel adds `role` attributes to the table parts so assistive tech keeps the table semantics after the layout change.
 - Put TableToolbar only inside the `toolbar` slot; it draws no box of its own.
 
 ## Migration

@@ -350,6 +350,14 @@ pub struct SoftwarePackage {
     /// [`DiagnosticHost::upgradable_packages`]'s read-only convention).
     pub available_version: Option<String>,
     pub upgradable: bool,
+    /// `true` when the package is managed only because it was detected as
+    /// installed on purpose (`auto_adopt`), not because it was added by hand.
+    #[serde(default)]
+    pub auto: bool,
+    /// The package this one is bundled under (for example `docker-ce-cli`
+    /// under `docker-ce`), when it is only managed as part of that bundle.
+    #[serde(default)]
+    pub parent: Option<String>,
 }
 
 /// One package the host's package manager reports as installed.
