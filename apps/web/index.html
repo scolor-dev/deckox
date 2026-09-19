@@ -3,8 +3,31 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#0b1220">
+    <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#17181b" media="(prefers-color-scheme: dark)">
     <title>Deckox</title>
+    <script>
+      // Applies the saved theme before first paint, so there is no flash of
+      // the wrong theme while main.ts (design-system/theme.ts) loads. Kept
+      // deliberately minimal and defensive: on any failure it does nothing,
+      // and the `@media (prefers-color-scheme: dark)` fallback in
+      // design-system/tokens.css still renders the correct theme, just
+      // decided by the OS instead of the saved preference until main.ts runs.
+      (function () {
+        try {
+          var raw = window.localStorage.getItem("deckox:preferences");
+          var theme = raw ? JSON.parse(raw).theme : "auto";
+          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          if (theme === "dark" || (theme === "auto" && prefersDark)) {
+            document.documentElement.dataset.theme = "dark";
+          } else if (theme === "light") {
+            document.documentElement.dataset.theme = "light";
+          }
+        } catch (error) {
+          /* leave data-theme unset; the CSS media-query fallback still applies */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

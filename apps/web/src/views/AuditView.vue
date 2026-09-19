@@ -3,6 +3,16 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { AUDIT_REPORT_FILENAME, api, type AuditEvent } from "../api/client";
 import { apiErrorKey } from "../api/errors";
+import {
+  AppButton,
+  AppStack,
+  NoticeBanner,
+  PageHeader,
+  SelectField,
+  StateBadge,
+  TableToolbar,
+  TablePanel,
+} from "../design-system/components";
 import { notify } from "../notifications";
 
 const { t, locale } = useI18n();
@@ -30,6 +40,13 @@ const filteredEvents = computed(() =>
 // Event/result identifiers are free-form snake_case strings from the Rust
 // audit log (there is no fixed enum to map through i18n), so this only
 // tidies punctuation for the dropdown rather than translating each one.
+const eventFilterOptions = computed(() =>
+  eventOptions.value.map((option) => ({ value: option, label: option === "all" ? t("audit.allEvents") : optionLabel(option) })),
+);
+const resultFilterOptions = computed(() =>
+  resultOptions.value.map((option) => ({ value: option, label: option === "all" ? t("audit.allResults") : optionLabel(option) })),
+);
+
 function optionLabel(value: string) {
   return value.replaceAll("_", " ");
 }
@@ -99,134 +116,117 @@ onMounted(refresh);
 
 <template>
   <div class="view audit-view">
-    <header class="view-header">
-      <div>
-        <h1>{{ t("audit.title") }}</h1>
-        <p class="subtitle">
-          {{ t("audit.subtitle") }}
-        </p>
-      </div>
-      <div class="header-actions">
-        <button
-          class="button"
-          type="button"
-          :disabled="loading"
-          @click="refresh"
+    <PageHeader
+      :title="t('audit.title')"
+      :subtitle="t('audit.subtitle')"
+    >
+      <template #actions>
+        <AppStack
+          direction="row"
+          gap="2"
+          wrap
         >
-          {{ loading ? t("common.loading") : t("common.refresh") }}
-        </button>
-        <button
-          class="button"
-          type="button"
-          :disabled="downloading"
-          @click="downloadReport"
-        >
-          {{ downloading ? t("audit.downloading") : t("audit.download") }}
-        </button>
-      </div>
-    </header>
+          <AppButton
+            :disabled="loading"
+            @click="refresh"
+          >
+            {{ loading ? t("common.loading") : t("common.refresh") }}
+          </AppButton>
+          <AppButton
+            :disabled="downloading"
+            @click="downloadReport"
+          >
+            {{ downloading ? t("audit.downloading") : t("audit.download") }}
+          </AppButton>
+        </AppStack>
+      </template>
+    </PageHeader>
 
-    <div
+    <NoticeBanner
       v-if="error"
-      class="notice error"
+      tone="error"
     >
       {{ error }}
-    </div>
+    </NoticeBanner>
 
-    <section class="table-panel">
-      <div class="table-toolbar">
-        <div class="table-filters">
-          <label>
-            <span class="sr-only">{{ t("audit.filterEvent") }}</span>
-            <select v-model="eventFilter">
-              <option
-                v-for="option in eventOptions"
-                :key="option"
-                :value="option"
-              >
-                {{ option === "all" ? t("audit.allEvents") : optionLabel(option) }}
-              </option>
-            </select>
-          </label>
-          <label>
-            <span class="sr-only">{{ t("audit.filterResult") }}</span>
-            <select v-model="resultFilter">
-              <option
-                v-for="option in resultOptions"
-                :key="option"
-                :value="option"
-              >
-                {{ option === "all" ? t("audit.allResults") : optionLabel(option) }}
-              </option>
-            </select>
-          </label>
-        </div>
-        <span class="table-count">{{ t("audit.count", { count: filteredEvents.length }) }}</span>
-      </div>
-
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>{{ t("audit.time") }}</th>
-              <th>{{ t("audit.event") }}</th>
-              <th>{{ t("audit.actor") }}</th>
-              <th>{{ t("audit.sourceIp") }}</th>
-              <th>{{ t("audit.result") }}</th>
-              <th>{{ t("audit.detail") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading && events.length === 0">
-              <td
-                colspan="6"
-                class="empty"
-              >
-                {{ t("audit.loading") }}
-              </td>
-            </tr>
-            <tr v-else-if="filteredEvents.length === 0">
-              <td
-                colspan="6"
-                class="empty"
-              >
-                {{ t("audit.empty") }}
-              </td>
-            </tr>
-            <tr
-              v-for="(entry, index) in filteredEvents"
-              :key="`${entry.timestamp_ms}-${index}`"
-              :class="{ 'row-failed': entry.result !== 'success' && entry.result !== 'accepted' }"
+    <TablePanel
+      :loading="loading && events.length === 0"
+      :empty="filteredEvents.length === 0"
+      :empty-message="t('audit.empty')"
+    >
+      <template #toolbar>
+        <TableToolbar :count="t('audit.count', { count: filteredEvents.length })">
+          <template #filters>
+            <AppStack
+              direction="row"
+              gap="2"
+              wrap
             >
-              <td>{{ formatTime(entry.timestamp_ms) }}</td>
-              <td class="mono">
-                {{ entry.event }}
-              </td>
-              <td>{{ entry.actor }}</td>
-              <td class="mono">
-                {{ entry.source_ip }}
-              </td>
-              <td>
-                <span
-                  class="state-badge"
-                  :class="entry.result === 'success' || entry.result === 'accepted' ? 'active' : 'failed'"
-                >{{ entry.result }}</span>
-              </td>
-              <td>{{ entry.detail ?? t("common.none") }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <button
-        v-if="hasMore"
-        class="action-button audit-load-more"
-        type="button"
-        :disabled="loadingMore"
-        @click="loadMore"
-      >
-        {{ loadingMore ? t("common.loading") : t("audit.loadMore") }}
-      </button>
-    </section>
+              <SelectField
+                id="audit-event-filter"
+                v-model="eventFilter"
+                :label="t('audit.filterEvent')"
+                :options="eventFilterOptions"
+                label-hidden
+              />
+              <SelectField
+                id="audit-result-filter"
+                v-model="resultFilter"
+                :label="t('audit.filterResult')"
+                :options="resultFilterOptions"
+                label-hidden
+              />
+            </AppStack>
+          </template>
+        </TableToolbar>
+      </template>
+      <template #loading>
+        {{ t("audit.loading") }}
+      </template>
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t("audit.time") }}</th>
+            <th>{{ t("audit.event") }}</th>
+            <th>{{ t("audit.actor") }}</th>
+            <th>{{ t("audit.sourceIp") }}</th>
+            <th>{{ t("audit.result") }}</th>
+            <th>{{ t("audit.detail") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="(entry, index) in filteredEvents"
+            :key="`${entry.timestamp_ms}-${index}`"
+            :class="{ 'row-failed': entry.result !== 'success' && entry.result !== 'accepted' }"
+          >
+            <td>{{ formatTime(entry.timestamp_ms) }}</td>
+            <td class="mono">
+              {{ entry.event }}
+            </td>
+            <td>{{ entry.actor }}</td>
+            <td class="mono">
+              {{ entry.source_ip }}
+            </td>
+            <td>
+              <StateBadge :state="entry.result === 'success' || entry.result === 'accepted' ? 'active' : 'failed'">
+                {{ entry.result }}
+              </StateBadge>
+            </td>
+            <td>{{ entry.detail ?? t("common.none") }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <template #footer>
+        <AppButton
+          v-if="hasMore"
+          variant="action"
+          :disabled="loadingMore"
+          @click="loadMore"
+        >
+          {{ loadingMore ? t("common.loading") : t("audit.loadMore") }}
+        </AppButton>
+      </template>
+    </TablePanel>
   </div>
 </template>

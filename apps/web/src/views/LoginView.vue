@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { api } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import ForgotPasswordHelp from "../components/ForgotPasswordHelp.vue";
+import { AppButton, AppStack, NoticeBanner, TextField } from "../design-system/components";
 
 defineProps<{
   message?: string | null;
@@ -84,82 +85,81 @@ function backToPassword() {
       <p v-else>
         {{ t("login.totpDescription") }}
       </p>
-      <p
+      <NoticeBanner
         v-if="message"
-        class="notice success login-notice"
-        role="status"
+        tone="success"
       >
         {{ message }}
-      </p>
+      </NoticeBanner>
 
-      <form
+      <AppStack
         v-if="step === 'password'"
+        as="form"
+        gap="3"
         @submit.prevent="submitPassword"
       >
-        <label for="password">{{ t("login.password") }}</label>
-        <input
+        <TextField
           id="password"
           v-model="password"
+          :label="t('login.password')"
           type="password"
           name="password"
           autocomplete="current-password"
           required
           autofocus
-        >
-        <p
+        />
+        <NoticeBanner
           v-if="errorMessage"
-          class="login-error"
-          role="alert"
+          tone="error"
         >
           {{ errorMessage }}
-        </p>
-        <button
-          class="primary-button"
+        </NoticeBanner>
+        <AppButton
+          variant="primary"
           type="submit"
           :disabled="submitting || password.length === 0"
         >
           {{ submitting ? t("login.submitting") : t("login.submit") }}
-        </button>
-      </form>
+        </AppButton>
+      </AppStack>
 
-      <form
+      <AppStack
         v-else
+        as="form"
+        gap="3"
         @submit.prevent="submitTotp"
       >
-        <label for="totp-code">{{ t("login.totpCode") }}</label>
-        <input
+        <TextField
           id="totp-code"
           v-model="totpCode"
-          type="text"
+          :label="t('login.totpCode')"
           inputmode="numeric"
           autocomplete="one-time-code"
           :placeholder="t('login.totpPlaceholder')"
+          :help="t('login.totpHelp')"
           required
           autofocus
-        >
-        <small>{{ t("login.totpHelp") }}</small>
-        <p
+        />
+        <NoticeBanner
           v-if="errorMessage"
-          class="login-error"
-          role="alert"
+          tone="error"
         >
           {{ errorMessage }}
-        </p>
-        <button
-          class="primary-button"
+        </NoticeBanner>
+        <AppButton
+          variant="primary"
           type="submit"
           :disabled="submitting || totpCode.length === 0"
         >
           {{ submitting ? t("login.submitting") : t("login.totpSubmit") }}
-        </button>
-        <button
-          class="action-button"
-          type="button"
+        </AppButton>
+        <AppButton
+          variant="action"
           @click="backToPassword"
         >
           {{ t("login.totpBack") }}
-        </button>
-      </form>
+        </AppButton>
+      </AppStack>
 
       <ForgotPasswordHelp v-if="step === 'password'" />
     </section>

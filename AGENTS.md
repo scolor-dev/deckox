@@ -10,6 +10,17 @@
 - Document only implemented behavior. Documentation belongs in `docs/` as HTML; use SVG for diagrams.
 - Support both `x86_64` and `aarch64` Linux release artifacts.
 
+## Design system
+
+The Vue design system lives in `apps/web/src/design-system/`. Read `README.md` there first; each component has its own `.md` next to its `.vue`.
+
+- Build UI from the components exported by `design-system/components/index.ts`. Pick the component with the "Which component do I use?" table and read its `.md` (API, accessibility, gotchas) before writing markup. Do not hand-write a button, dialog, table, badge or form field that a component already covers.
+- Never write color, spacing, radius, font-size, shadow, z-index or duration literals in Vue or CSS. Use the tokens in `design-system/tokens.css`. A new color token must be defined in all three layers (light `:root`, the `prefers-color-scheme` block and `:root[data-theme="dark"]`) and must pass `contrast.test.ts`.
+- If a component lacks something, extend the component (props, `.md`, tests) instead of adding screen-specific CSS around it.
+- Component rules enforced by tests: no comments in component `.vue` files, only defined tokens, `.md` in sync with props/events/slots/tokens, every export in `components/index.ts`, breakpoints only through `breakpoints.ts`, `prefers-reduced-motion` handling for anything that animates, own `:focus-visible` styles for anything interactive, and no axe violations in the catalog.
+- Keyboard and focus behavior (focus trap in dialogs, arrow keys in tabs and menus) is part of the contract; changing it needs a matching test in `keyboard.test.ts`.
+- Preview components with `npm run dev` at `/design-system.html`. `npm run build:catalog` writes the single-file catalog to `apps/web/dist-catalog/` for publishing as an Artifact.
+
 ## Version bump
 
 Before releasing, the version recorded in the repository (`Cargo.toml`, etc.) must already match the target tag; `scripts/release.sh` refuses otherwise.

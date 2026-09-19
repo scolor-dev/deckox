@@ -1,30 +1,21 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
+import { AppToast, ToastRegion } from "../design-system/components";
 import { dismissNotification, notificationItems } from "../notifications";
 
 const { t } = useI18n();
 </script>
 
 <template>
-  <div
-    class="notification-region"
-    aria-live="polite"
-    aria-atomic="false"
-  >
-    <div
+  <ToastRegion>
+    <AppToast
       v-for="item in notificationItems"
       :key="item.id"
-      :class="['notification-item', item.kind]"
-      role="status"
+      :tone="item.kind"
+      :dismiss-label="t('common.dismiss')"
+      @dismiss="dismissNotification(item.id)"
     >
-      <span>{{ item.message }}</span>
-      <button
-        type="button"
-        :aria-label="t('common.dismiss')"
-        @click="dismissNotification(item.id)"
-      >
-        {{ t("common.close") }}
-      </button>
-    </div>
-  </div>
+      {{ item.message }}
+    </AppToast>
+  </ToastRegion>
 </template>
