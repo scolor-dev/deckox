@@ -294,6 +294,8 @@ td small {
   white-space: nowrap;
 }
 .last-updated { color: var(--text-faint); font-size: var(--font-2xs); white-space: nowrap; }
+.software-child { background: var(--surface-subtle); }
+.software-child td:first-child { padding-left: var(--space-8); }
 .row-actions { min-width: max-content; }
 .storage-overall { font-size: var(--font-xl); }
 a:focus-visible,

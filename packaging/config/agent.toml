@@ -17,8 +17,10 @@ allow_update = false
 # Package state can always be read. Install, remove, and upgrade are permitted
 # only for managed package names: those listed in `allowed`, plus (when
 # `auto_adopt` is true) packages you installed on purpose — for apt, the ones
-# `apt-mark showmanual` reports that no other such package depends on, and for
-# pacman and dnf the explicitly installed ones (zypper keeps no such record).
+# `apt-mark showmanual` reports, with any that another one depends on or
+# recommends (docker-ce-cli under docker-ce, for example) bundled under it in
+# the Web UI; for pacman the explicitly installed ones nothing else requires,
+# and for dnf the user-installed ones (zypper keeps no such record).
 # Base-system packages are never adopted. A package you remove from management
 # is remembered in `dismissed` so it is not adopted again. Names in `allowed`
 # were confirmed, when added, to resolve from this host's own configured

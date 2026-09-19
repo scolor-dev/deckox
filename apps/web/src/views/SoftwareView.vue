@@ -7,6 +7,8 @@ import PasswordConfirmDialog from "../components/PasswordConfirmDialog.vue";
 import {
   AppButton,
   AppCard,
+  AppIcon,
+  AppIconButton,
   AppStack,
   InfoNote,
   NoticeBanner,
@@ -21,6 +23,7 @@ import {
 } from "../design-system/components";
 import { notify } from "../notifications";
 import { preferences, type SoftwareTagFilterKey } from "../preferences";
+import { buildSoftwareRows } from "../softwareGroups";
 
 const { t } = useI18n();
 
@@ -71,9 +74,19 @@ function toggleTag(tag: SoftwareTagFilterKey) {
     : [...preferences.hiddenSoftwareTags, tag];
 }
 
-const filteredPackages = computed(() =>
-  packages.value.filter((pkg) => !isTagHidden(packageTag(pkg))),
+const expandedBundles = ref(new Set<string>());
+
+function toggleBundle(name: string) {
+  const next = new Set(expandedBundles.value);
+  if (next.has(name)) next.delete(name);
+  else next.add(name);
+  expandedBundles.value = next;
+}
+
+const rows = computed(() =>
+  buildSoftwareRows(packages.value, expandedBundles.value, (pkg) => !isTagHidden(packageTag(pkg))),
 );
+const topLevelCount = computed(() => rows.value.filter((row) => row.depth === 0).length);
 
 async function refresh() {
   loading.value = true;
@@ -227,11 +240,11 @@ onMounted(() => {
 
     <TablePanel
       :loading="loading && packages.length === 0"
-      :empty="filteredPackages.length === 0"
+      :empty="rows.length === 0"
       :empty-message="t('software.empty')"
     >
       <template #toolbar>
-        <TableToolbar :count="t('software.count', { count: filteredPackages.length })">
+        <TableToolbar :count="t('software.count', { count: topLevelCount })">
           <template #filters>
             <TagToggleGroup :label="t('software.tagVisibility')">
               <TagToggle
@@ -262,8 +275,9 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr
-            v-for="pkg in filteredPackages"
-            :key="pkg.name"
+            v-for="row in rows"
+            :key="row.pkg.name"
+            :class="{ 'software-child': row.depth === 1 }"
           >
             <td>
               <AppStack
@@ -272,9 +286,23 @@ onMounted(() => {
                 align="center"
                 wrap
               >
-                <strong class="service-name">{{ pkg.name }}</strong>
+                <AppIconButton
+                  v-if="row.childCount > 0"
+                  :label="t(row.expanded ? 'software.collapseBundle' : 'software.expandBundle', { name: row.pkg.name })"
+                  :aria-expanded="row.expanded"
+                  @click="toggleBundle(row.pkg.name)"
+                >
+                  <AppIcon :name="row.expanded ? 'chevron-down' : 'chevron-right'" />
+                </AppIconButton>
+                <strong class="service-name">{{ row.pkg.name }}</strong>
                 <TagBadge
-                  v-if="pkg.auto"
+                  v-if="row.childCount > 0"
+                  category="standard"
+                >
+                  {{ t("software.bundleCount", { count: row.childCount }) }}
+                </TagBadge>
+                <TagBadge
+                  v-if="row.pkg.auto && row.depth === 0"
                   category="deckox"
                 >
                   {{ t("software.autoDetected") }}
@@ -282,13 +310,13 @@ onMounted(() => {
               </AppStack>
             </td>
             <td>
-              <StateBadge :state="pkg.installed ? 'active' : 'inactive'">
-                {{ pkg.installed ? t("software.installed") : t("software.notInstalled") }}
+              <StateBadge :state="row.pkg.installed ? 'active' : 'inactive'">
+                {{ row.pkg.installed ? t("software.installed") : t("software.notInstalled") }}
               </StateBadge>
-              <small v-if="pkg.upgradable">{{ t("software.upgradable") }}</small>
+              <small v-if="row.pkg.upgradable">{{ t("software.upgradable") }}</small>
             </td>
-            <td>{{ pkg.installed_version ?? t("common.none") }}</td>
-            <td>{{ pkg.available_version ?? t("common.none") }}</td>
+            <td>{{ row.pkg.installed_version ?? t("common.none") }}</td>
+            <td>{{ row.pkg.available_version ?? t("common.none") }}</td>
             <td>
               <AppStack
                 class="row-actions"
@@ -296,19 +324,19 @@ onMounted(() => {
                 gap="2"
               >
                 <AppButton
-                  v-if="!pkg.installed"
+                  v-if="!row.pkg.installed"
                   variant="action"
                   :disabled="pending !== null"
-                  @click="openAction(pkg, 'install')"
+                  @click="openAction(row.pkg, 'install')"
                 >
                   {{ t("software.install") }}
                 </AppButton>
                 <template v-else>
                   <AppButton
-                    v-if="pkg.upgradable"
+                    v-if="row.pkg.upgradable"
                     variant="action"
                     :disabled="pending !== null"
-                    @click="openAction(pkg, 'upgrade')"
+                    @click="openAction(row.pkg, 'upgrade')"
                   >
                     {{ t("software.upgrade") }}
                   </AppButton>
@@ -316,7 +344,7 @@ onMounted(() => {
                     variant="action"
                     danger
                     :disabled="pending !== null"
-                    @click="openAction(pkg, 'remove')"
+                    @click="openAction(row.pkg, 'remove')"
                   >
                     {{ t("software.remove") }}
                   </AppButton>
@@ -325,7 +353,7 @@ onMounted(() => {
                   variant="action"
                   danger
                   :disabled="pending !== null"
-                  @click="disallow(pkg)"
+                  @click="disallow(row.pkg)"
                 >
                   {{ t("software.disallow") }}
                 </AppButton>
