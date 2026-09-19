@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { api, capacityMounts, formatBytes, usagePercentage, type StorageDisk, type StorageMount } from "../api/client";
 import DiskPanel from "../components/DiskPanel.vue";
@@ -50,6 +50,10 @@ const tabs = computed(() => [
   ...disks.value.map((disk) => ({ key: disk.name, label: `${disk.name} · ${formatBytes(disk.size_bytes, locale.value)}` })),
 ]);
 const activeDisk = computed(() => disks.value.find((disk) => disk.name === activeTab.value) ?? null);
+
+watch(disks, (list) => {
+  if (activeTab.value !== "all" && !list.some((disk) => disk.name === activeTab.value)) activeTab.value = "all";
+});
 const loading = ref(true);
 const error = ref<string | null>(null);
 

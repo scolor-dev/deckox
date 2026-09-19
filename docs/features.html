@@ -182,7 +182,7 @@
         </table>
         <aside class="note"><strong>診断データの境界:</strong> 診断は固定した安全な項目だけを構築します。生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、セッション、Cookie、boot IDはAPI・画面・ダウンロードへ含めません。</aside>
         <aside class="note"><strong>サービス管理の境界:</strong> 専用HTTPエンドポイントと<code>ServiceAction</code>で実装されています。ログ閲覧も完全一致許可リスト、最大500行、<code>all|error|warning|info</code>だけを受け付けます。許可リストの追加・削除は<code>/etc/deckox/agent.toml</code>への直接書き込みのみで行い、サービス自体の起動・停止などとは独立した専用エンドポイントです。汎用<code>AgentCommand</code>とWebコンソールは使っていません。</aside>
-        <aside class="note"><strong>ソフトウェア管理の境界:</strong> 固定のソフトウェアカタログは持ちません。管理許可リストへ追加できるのは、そのホストに<strong>既に設定済み</strong>のパッケージリポジトリで実在確認できたパッケージ名か、すでにインストール済みのパッケージだけです。インストール済みパッケージの一覧は読み取り専用で表示でき、そこから選んで追加できます。Deckoxが新しいリポジトリやGPG鍵を追加することはありません。<code>[software]</code>許可リストは<code>[services]</code>と同じ思想の別テーブルで、書き込み時にどちらのテーブルも互いを破壊しないよう境界を区切って置換します。</aside>
+        <aside class="note"><strong>ソフトウェア管理の境界:</strong> 固定のソフトウェアカタログは持ちません。管理許可リストへ追加できるのは、そのホストに<strong>既に設定済み</strong>のパッケージリポジトリで実在確認できたパッケージ名か、すでにインストール済みのパッケージだけです。インストール済みパッケージの一覧は読み取り専用で表示でき、そこから選んで追加できます。また<code>auto_adopt</code>(既定で有効)のとき、自分でインストールしたパッケージは自動で管理対象になります。Deckoxが新しいリポジトリやGPG鍵を追加することはありません。<code>[software]</code>許可リストは<code>[services]</code>と同じ思想の別テーブルで、書き込み時にどちらのテーブルも互いを破壊しないよう境界を区切って置換します。</aside>
       </section>
 
       <section class="section" aria-labelledby="not-title">
