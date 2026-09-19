@@ -1,3 +1,4 @@
+use std::os::unix::fs::MetadataExt;
 use std::{
     env,
     fmt::Write as _,
@@ -113,28 +114,8 @@ impl AgentConfig {
 /// directory plus a rename, so a crash mid-write cannot corrupt the config
 /// that is already on disk.
 pub fn write_allowed_services(path: &Path, allowed: &[String]) -> Result<(), AgentError> {
-    let original = match std::fs::read_to_string(path) {
-        Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => {
-            return Err(AgentError::internal(format!(
-                "failed to read config {}: {error}",
-                path.display()
-            )));
-        }
-    };
-
-    let updated = replace_services_section(&original, &render_services_section(allowed));
-
-    let temp_path = path.with_extension("toml.tmp");
-    std::fs::write(&temp_path, updated).map_err(|error| {
-        AgentError::internal(format!("failed to write {}: {error}", temp_path.display()))
-    })?;
-    std::fs::rename(&temp_path, path).map_err(|error| {
-        AgentError::internal(format!(
-            "failed to replace {} with the updated config: {error}",
-            path.display()
-        ))
+    rewrite_config(path, "toml.tmp", |original| {
+        replace_services_section(original, &render_services_section(allowed))
     })
 }
 
@@ -146,6 +127,19 @@ pub fn write_allowed_services(path: &Path, allowed: &[String]) -> Result<(), Age
 /// file belongs to this table. Writes via a temp file plus a rename, same as
 /// [`write_allowed_services`].
 pub fn write_software_settings(path: &Path, settings: &SoftwareConfig) -> Result<(), AgentError> {
+    rewrite_config(path, "software.toml.tmp", |original| {
+        replace_bounded_section(original, "software", &render_software_section(settings))
+    })
+}
+
+/// Reads the config, applies `transform`, and swaps the result in through a
+/// temp file plus a rename. The file's mode and owner are carried over so a
+/// rewrite by the Agent never loosens the permissions the installer set.
+fn rewrite_config(
+    path: &Path,
+    temp_extension: &str,
+    transform: impl FnOnce(&str) -> String,
+) -> Result<(), AgentError> {
     let original = match std::fs::read_to_string(path) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -156,14 +150,16 @@ pub fn write_software_settings(path: &Path, settings: &SoftwareConfig) -> Result
             )));
         }
     };
+    let metadata = std::fs::metadata(path).ok();
 
-    let updated =
-        replace_bounded_section(&original, "software", &render_software_section(settings));
-
-    let temp_path = path.with_extension("software.toml.tmp");
-    std::fs::write(&temp_path, updated).map_err(|error| {
+    let temp_path = path.with_extension(temp_extension);
+    std::fs::write(&temp_path, transform(&original)).map_err(|error| {
         AgentError::internal(format!("failed to write {}: {error}", temp_path.display()))
     })?;
+    if let Some(metadata) = metadata {
+        let _ = std::fs::set_permissions(&temp_path, metadata.permissions());
+        let _ = std::os::unix::fs::chown(&temp_path, Some(metadata.uid()), Some(metadata.gid()));
+    }
     std::fs::rename(&temp_path, path).map_err(|error| {
         AgentError::internal(format!(
             "failed to replace {} with the updated config: {error}",
@@ -215,8 +211,7 @@ fn render_software_section(settings: &SoftwareConfig) -> String {
 /// `[services]` is always the last table — this supports a managed table
 /// that has another managed table after it.
 fn replace_bounded_section(original: &str, table_name: &str, new_section: &str) -> String {
-    let header = format!("[{table_name}]");
-    let Some(start) = original.find(&header) else {
+    let Some(start) = table_header_offset(original, table_name) else {
         let mut result = original.trim_end().to_owned();
         if !result.is_empty() {
             result.push_str("\n\n");
@@ -225,14 +220,12 @@ fn replace_bounded_section(original: &str, table_name: &str, new_section: &str) 
         return result;
     };
 
-    let search_from = start + header.len();
-    let end = original[search_from..]
-        .match_indices('\n')
-        .map(|(offset, _)| search_from + offset + 1)
-        .find(|&line_start| original[line_start..].starts_with('['))
-        .unwrap_or(original.len());
+    let header_line_end = original[start..]
+        .find('\n')
+        .map_or(original.len(), |offset| start + offset + 1);
+    let end = table_end(original, header_line_end);
 
-    let mut result = original[..start].trim_end().to_owned();
+    let mut result = strip_trailing_comment_block(&original[..start]);
     if !result.is_empty() {
         result.push_str("\n\n");
     }
@@ -268,15 +261,63 @@ fn render_services_section(allowed: &[String]) -> String {
 }
 
 fn replace_services_section(original: &str, new_section: &str) -> String {
-    let prefix = original
-        .find("[services]")
-        .map_or(original, |index| &original[..index]);
-    let mut prefix = prefix.trim_end().to_owned();
+    let prefix =
+        table_header_offset(original, "services").map_or(original, |index| &original[..index]);
+    let mut prefix = strip_trailing_comment_block(prefix);
     if !prefix.is_empty() {
         prefix.push_str("\n\n");
     }
     prefix.push_str(new_section);
     prefix
+}
+
+/// Byte offset of the line that is the `[name]` table header. Matching whole
+/// lines matters: the generated comments above the tables mention `[services]`
+/// in prose, and a plain substring search would cut the file there.
+fn table_header_offset(text: &str, name: &str) -> Option<usize> {
+    let header = format!("[{name}]");
+    let mut offset = 0;
+    for line in text.split_inclusive('\n') {
+        if line.trim_start().starts_with(&header) {
+            return Some(offset);
+        }
+        offset += line.len();
+    }
+    None
+}
+
+/// Drops the comment block directly above a table header. Each rewritten
+/// section brings its own comment, so keeping the old one would duplicate it
+/// on every write.
+fn strip_trailing_comment_block(prefix: &str) -> String {
+    let mut lines: Vec<&str> = prefix.trim_end().lines().collect();
+    while lines
+        .last()
+        .is_some_and(|line| line.trim_start().starts_with('#'))
+    {
+        lines.pop();
+    }
+    lines.join("\n").trim_end().to_owned()
+}
+
+/// Where the table starting at `from` ends: at the next table header, minus
+/// the comment block that belongs to that header (which must survive).
+fn table_end(text: &str, from: usize) -> usize {
+    let mut offset = from;
+    let mut comment_start: Option<usize> = None;
+    for line in text[from..].split_inclusive('\n') {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with('[') {
+            return comment_start.unwrap_or(offset);
+        }
+        if trimmed.starts_with('#') {
+            comment_start.get_or_insert(offset);
+        } else {
+            comment_start = None;
+        }
+        offset += line.len();
+    }
+    text.len()
 }
 
 #[cfg(test)]
@@ -458,5 +499,88 @@ allowed = ["nginx.service", "postgresql.service"]
         let docker_index = rendered.find("\"docker\"").expect("docker listed");
         let nginx_index = rendered.find("\"nginx\"").expect("nginx listed");
         assert!(docker_index < nginx_index, "allowlist should be sorted");
+    }
+
+    #[test]
+    fn a_later_tables_comment_survives_rewriting_the_table_before_it() {
+        let once = apply_software(SHIPPED_CONFIG, &["nginx"]);
+        assert!(
+            once.contains("# Service state can always be read"),
+            "the comment above [services] must be kept\n{once}"
+        );
+    }
+
+    const SHIPPED_CONFIG: &str = include_str!("../../../packaging/config/agent.toml");
+
+    fn apply_software(original: &str, allowed: &[&str]) -> String {
+        let allowed: Vec<String> = allowed.iter().map(|name| (*name).to_owned()).collect();
+        replace_bounded_section(
+            original,
+            "software",
+            &render_software_section(&settings(&allowed)),
+        )
+    }
+
+    #[test]
+    fn shipped_config_survives_repeated_rewrites_of_both_tables() {
+        let mut config = SHIPPED_CONFIG.to_owned();
+        for round in 0..3 {
+            config = apply_software(&config, &["nginx", "docker-ce"]);
+            config = replace_services_section(
+                &config,
+                &render_services_section(&["nginx.service".to_owned()]),
+            );
+            let parsed: AgentConfig = toml::from_str(&config)
+                .unwrap_or_else(|error| panic!("round {round}: {error}\n{config}"));
+            assert_eq!(
+                parsed.software.allowed,
+                vec!["docker-ce".to_owned(), "nginx".to_owned()],
+                "round {round}: the [software] table must survive a [services] rewrite\n{config}"
+            );
+            assert_eq!(parsed.services.allowed, vec!["nginx.service".to_owned()]);
+            assert_eq!(
+                config.matches("\n[software]\n").count(),
+                1,
+                "round {round}\n{config}"
+            );
+            assert_eq!(
+                config.matches("\n[services]\n").count(),
+                1,
+                "round {round}\n{config}"
+            );
+        }
+    }
+
+    #[test]
+    fn rewriting_a_table_does_not_pile_up_its_comment_block() {
+        let once = apply_software(SHIPPED_CONFIG, &["nginx"]);
+        let twice = apply_software(&once, &["nginx", "git"]);
+        assert_eq!(
+            once.matches("Package state can always be read").count(),
+            twice.matches("Package state can always be read").count(),
+            "the generated comment must not be duplicated on every write\n{twice}"
+        );
+        assert!(twice.contains("allow_reboot"), "[system] must be kept");
+    }
+
+    #[test]
+    fn rewriting_keeps_the_files_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!("deckox-config-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("agent.toml");
+        std::fs::write(&path, SHIPPED_CONFIG).expect("write config");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).expect("chmod");
+
+        super::write_allowed_services(&path, &["nginx.service".to_owned()]).expect("rewrite");
+
+        let mode = std::fs::metadata(&path)
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o640);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
