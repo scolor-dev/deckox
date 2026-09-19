@@ -77,6 +77,27 @@ export interface StorageMount {
   standard: boolean;
 }
 
+const NON_CAPACITY_FILESYSTEMS = new Set(["tmpfs", "devtmpfs", "squashfs", "overlay", "efivarfs", "ramfs"]);
+
+/**
+ * The mounts that count towards "overall usage": RAM-backed and image
+ * file systems are left out, and several mounts of one device (bind mounts,
+ * btrfs subvolumes) count once. Falls back to every mount, deduplicated, so a
+ * host whose only file system is an overlay (a container) still shows a number.
+ */
+export function capacityMounts(mounts: StorageMount[]): StorageMount[] {
+  const unique = (list: StorageMount[]) => {
+    const seen = new Set<string>();
+    return list.filter((mount) => {
+      if (seen.has(mount.filesystem)) return false;
+      seen.add(mount.filesystem);
+      return true;
+    });
+  };
+  const real = unique(mounts.filter((mount) => !NON_CAPACITY_FILESYSTEMS.has(mount.filesystem_type)));
+  return real.length > 0 ? real : unique(mounts);
+}
+
 export interface StoragePartition {
   name: string;
   path: string;

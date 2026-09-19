@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import {
   api,
   appendMetricHistory,
+  capacityMounts,
   formatBytes,
   formatUptime,
   usagePercentage,
@@ -73,19 +74,20 @@ const swapPercent = computed(() => {
   return memory ? usagePercentage(memory.swap_used_bytes, memory.swap_total_bytes) : null;
 });
 const temperature = computed(() => metrics.value?.cpu.temperature_celsius ?? null);
-const busiestMount = computed(() => storageMounts.value.length === 0
+const countedMounts = computed(() => capacityMounts(storageMounts.value));
+const busiestMount = computed(() => countedMounts.value.length === 0
   ? null
-  : storageMounts.value.reduce((busiest, mount) => (
+  : countedMounts.value.reduce((busiest, mount) => (
     mount.usage_percent > busiest.usage_percent ? mount : busiest
   )));
 // Matches StorageView's "overall usage" exactly (sum across every mount),
 // so the two screens never show a different number for the same concept —
 // only the per-mount warning below is specific to a single mount.
 const totalStorageCapacity = computed(
-  () => storageMounts.value.reduce((sum, mount) => sum + mount.total_bytes, 0),
+  () => countedMounts.value.reduce((sum, mount) => sum + mount.total_bytes, 0),
 );
 const totalStorageUsed = computed(
-  () => storageMounts.value.reduce((sum, mount) => sum + mount.used_bytes, 0),
+  () => countedMounts.value.reduce((sum, mount) => sum + mount.used_bytes, 0),
 );
 const overallStoragePercent = computed(
   () => usagePercentage(totalStorageUsed.value, totalStorageCapacity.value) ?? 0,

@@ -21,7 +21,11 @@ pub async fn read_storage() -> Result<Vec<StorageMount>, AgentError> {
 
     let output = tokio::time::timeout(
         Duration::from_secs(5),
-        Command::new("df").args(["-B1", "-P", "-T"]).output(),
+        Command::new("df")
+            .args([
+                "-B1", "-P", "-T", "-x", "squashfs", "-x", "devtmpfs", "-x", "efivarfs",
+            ])
+            .output(),
     )
     .await
     .map_err(|_| AgentError::internal("df command timed out"))?
@@ -49,39 +53,42 @@ pub async fn read_disks() -> Result<Vec<StorageDisk>, AgentError> {
     }
     let mounts = read_storage().await.unwrap_or_default();
 
-    let output = tokio::time::timeout(
-        Duration::from_secs(5),
-        Command::new("lsblk")
-            .args([
-                "-J",
-                "-b",
-                "-o",
-                "NAME,KNAME,PATH,TYPE,SIZE,MODEL,ROTA,TRAN,RM,FSTYPE,LABEL",
-            ])
-            .output(),
-    )
-    .await;
-    match output {
-        Ok(Ok(output)) if output.status.success() => Ok(parse_lsblk(
-            &String::from_utf8_lossy(&output.stdout),
-            &mounts,
-        )),
-        Ok(Ok(output)) => {
-            warn!(
+    // `PATH` needs util-linux 2.30 or newer; without it lsblk rejects the whole
+    // command, so retry once with the older column set (device paths are then
+    // rebuilt from the kernel name).
+    for columns in [
+        "NAME,KNAME,PATH,TYPE,SIZE,MODEL,ROTA,TRAN,RM,FSTYPE,LABEL",
+        "NAME,KNAME,TYPE,SIZE,MODEL,ROTA,TRAN,RM,FSTYPE,LABEL",
+    ] {
+        let output = tokio::time::timeout(
+            Duration::from_secs(5),
+            Command::new("lsblk")
+                .args(["-J", "-b", "-o", columns])
+                .output(),
+        )
+        .await;
+        match output {
+            Ok(Ok(output)) if output.status.success() => {
+                return Ok(parse_lsblk(
+                    &String::from_utf8_lossy(&output.stdout),
+                    &mounts,
+                ));
+            }
+            Ok(Ok(output)) => warn!(
                 "lsblk failed: {}",
                 String::from_utf8_lossy(&output.stderr).trim()
-            );
-            Ok(Vec::new())
-        }
-        Ok(Err(error)) => {
-            warn!(%error, "failed to execute lsblk");
-            Ok(Vec::new())
-        }
-        Err(_) => {
-            warn!("lsblk timed out");
-            Ok(Vec::new())
+            ),
+            Ok(Err(error)) => {
+                warn!(%error, "failed to execute lsblk");
+                return Ok(Vec::new());
+            }
+            Err(_) => {
+                warn!("lsblk timed out");
+                return Ok(Vec::new());
+            }
         }
     }
+    Ok(Vec::new())
 }
 
 /// `lsblk -J` has changed value types across util-linux versions (sizes and

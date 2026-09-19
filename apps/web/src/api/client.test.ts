@@ -3,6 +3,7 @@ import {
   api,
   appendMetricHistory,
   buildUpdateCommand,
+  capacityMounts,
   DIAGNOSTICS_REPORT_FILENAME,
   safeReleaseUrl,
   usagePercentage,
@@ -254,5 +255,34 @@ describe("diagnostics APIs", () => {
       expect.objectContaining({ credentials: "same-origin" }),
     );
     expect(DIAGNOSTICS_REPORT_FILENAME).toBe("deckox-diagnostics.json");
+  });
+});
+
+describe("capacityMounts", () => {
+  const mount = (filesystem: string, type: string, mountPoint: string) => ({
+    filesystem,
+    filesystem_type: type,
+    mount_point: mountPoint,
+    total_bytes: 100,
+    used_bytes: 50,
+    available_bytes: 50,
+    usage_percent: 50,
+    standard: false,
+  });
+
+  it("drops RAM-backed and image file systems and counts a device once", () => {
+    const counted = capacityMounts([
+      mount("/dev/sda1", "ext4", "/"),
+      mount("/dev/sda1", "ext4", "/var/lib/docker"),
+      mount("tmpfs", "tmpfs", "/run"),
+      mount("/dev/loop3", "squashfs", "/snap/core/1"),
+      mount("/dev/sdb1", "ext4", "/data"),
+    ]);
+    expect(counted.map((item) => item.mount_point)).toEqual(["/", "/data"]);
+  });
+
+  it("falls back to the deduplicated mounts when only overlays exist", () => {
+    const counted = capacityMounts([mount("overlay", "overlay", "/"), mount("overlay", "overlay", "/x")]);
+    expect(counted).toHaveLength(1);
   });
 });

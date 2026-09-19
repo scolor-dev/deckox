@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { api, formatBytes, usagePercentage, type StorageDisk, type StorageMount } from "../api/client";
+import { api, capacityMounts, formatBytes, usagePercentage, type StorageDisk, type StorageMount } from "../api/client";
 import DiskPanel from "../components/DiskPanel.vue";
 import { apiErrorKey } from "../api/errors";
 import {
@@ -53,8 +53,9 @@ const activeDisk = computed(() => disks.value.find((disk) => disk.name === activ
 const loading = ref(true);
 const error = ref<string | null>(null);
 
-const totalCapacity = computed(() => mounts.value.reduce((sum, mount) => sum + mount.total_bytes, 0));
-const totalUsed = computed(() => mounts.value.reduce((sum, mount) => sum + mount.used_bytes, 0));
+const countedMounts = computed(() => capacityMounts(mounts.value));
+const totalCapacity = computed(() => countedMounts.value.reduce((sum, mount) => sum + mount.total_bytes, 0));
+const totalUsed = computed(() => countedMounts.value.reduce((sum, mount) => sum + mount.used_bytes, 0));
 const overallPercent = computed(() => usagePercentage(totalUsed.value, totalCapacity.value) ?? 0);
 
 const allocationSegments = computed<AllocationSegment[]>(() => {
@@ -65,7 +66,7 @@ const allocationSegments = computed<AllocationSegment[]>(() => {
   // used_bytes); which color a shown mount gets is not — it is keyed by
   // mount_point, a stable identity, so a mount keeps its color across
   // refreshes even when usage jitter reorders the top-N ranking.
-  const byUsageDesc = [...mounts.value].sort((a, b) => b.used_bytes - a.used_bytes);
+  const byUsageDesc = [...countedMounts.value].sort((a, b) => b.used_bytes - a.used_bytes);
   const shown = byUsageDesc
     .slice(0, ALLOCATION_MAX_SEGMENTS)
     .sort((a, b) => a.mount_point.localeCompare(b.mount_point));

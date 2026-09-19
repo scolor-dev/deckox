@@ -145,10 +145,19 @@ impl ServiceManager {
             .lines()
             .filter_map(|line| line.split_whitespace().next().map(str::to_owned))
             .collect();
-        let unlisted = unlisted_unit_files(&enabled_states, &listed);
+        let mut unlisted = unlisted_unit_files(&enabled_states, &listed);
+        let listed_ids = listed.clone();
         let mut ids = listed;
         ids.extend(unlisted.iter().cloned());
-        let properties = read_unit_properties(&ids).await?;
+        // The extra unit-file rows are a best-effort addition: if reading
+        // their properties fails, the loaded services still list normally.
+        let properties = match read_unit_properties(&ids).await {
+            Ok(properties) => properties,
+            Err(_) => {
+                unlisted.clear();
+                read_unit_properties(&listed_ids).await?
+            }
+        };
         let fragment_paths = fragment_paths_of(&properties);
         let allowed = self.allowed.read().await;
 
