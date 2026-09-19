@@ -1,9 +1,41 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from "vue";
+
 defineProps<{
   loading?: boolean;
   empty?: boolean;
   emptyMessage?: string;
 }>();
+
+const scrollRef = ref<HTMLElement | null>(null);
+let observer: MutationObserver | undefined;
+
+function labelCells() {
+  for (const table of scrollRef.value?.querySelectorAll("table") ?? []) {
+    table.setAttribute("role", "table");
+    const headers = [...table.querySelectorAll("thead th")].map((th) => th.textContent.trim());
+    for (const group of table.querySelectorAll("thead, tbody")) group.setAttribute("role", "rowgroup");
+    for (const row of table.querySelectorAll("tr")) {
+      row.setAttribute("role", "row");
+      [...row.children].forEach((cell, index) => {
+        cell.setAttribute("role", cell.tagName === "TH" ? "columnheader" : "cell");
+        if (cell.tagName === "TD" && headers[index]) cell.setAttribute("data-label", headers[index]);
+      });
+    }
+  }
+}
+
+onMounted(() => {
+  labelCells();
+  if (scrollRef.value) {
+    observer = new MutationObserver(labelCells);
+    observer.observe(scrollRef.value, { childList: true, subtree: true });
+  }
+});
+
+onBeforeUnmount(() => {
+  observer?.disconnect();
+});
 </script>
 
 <template>
@@ -20,7 +52,10 @@ defineProps<{
     >
       <slot name="note" />
     </div>
-    <div class="ds-table-scroll">
+    <div
+      ref="scrollRef"
+      class="ds-table-scroll"
+    >
       <slot v-if="!loading && !empty" />
       <p
         v-else
@@ -84,15 +119,38 @@ defineProps<{
 
 @media (max-width: 700px) {
   .ds-table-panel { border-radius: var(--radius-sm); }
-  .ds-table-scroll :deep(th),
-  .ds-table-scroll :deep(td) { padding: var(--space-3) var(--space-3); }
-  .ds-table-scroll :deep(th:first-child),
-  .ds-table-scroll :deep(td:first-child) {
-    position: sticky;
-    left: 0;
-    z-index: var(--z-sticky-column);
-    background: var(--surface-elevated);
+  .ds-table-scroll { overflow-x: visible; }
+  .ds-table-scroll :deep(table),
+  .ds-table-scroll :deep(tbody) { display: block; min-width: 0; }
+  .ds-table-scroll :deep(thead) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
-  .ds-table-scroll :deep(th:first-child) { background: var(--surface-subtle); }
+  .ds-table-scroll :deep(tr) {
+    display: block;
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-faint);
+  }
+  .ds-table-scroll :deep(tr:last-child) { border-bottom: 0; }
+  .ds-table-scroll :deep(td) {
+    display: grid;
+    grid-template-columns: minmax(var(--space-16), 34%) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-3);
+    padding: var(--space-1) 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  .ds-table-scroll :deep(td > *) { grid-column: 2; min-width: 0; }
+  .ds-table-scroll :deep(td[data-label])::before {
+    content: attr(data-label);
+    grid-column: 1;
+    color: var(--text-label);
+    font-size: var(--font-xs);
+    font-weight: 600;
+  }
 }
 </style>

@@ -19,8 +19,9 @@ allow_update = false
 # `auto_adopt` is true) packages you installed on purpose — for apt, the ones
 # `apt-mark showmanual` reports, with any that another one depends on or
 # recommends (docker-ce-cli under docker-ce, for example) bundled under it in
-# the Web UI; for pacman the explicitly installed ones nothing else requires,
-# and for dnf the user-installed ones (zypper keeps no such record).
+# the Web UI, and for dnf the same using rpm's requires and recommends; for
+# pacman the explicitly installed ones nothing else requires (zypper keeps no
+# such record).
 # Base-system packages are never adopted. A package you remove from management
 # is remembered in `dismissed` so it is not adopted again. Names in `allowed`
 # were confirmed, when added, to resolve from this host's own configured

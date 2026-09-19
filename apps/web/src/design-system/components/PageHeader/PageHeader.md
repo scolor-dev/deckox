@@ -55,10 +55,11 @@ None.
 
 ## Tokens
 
-`--font-2xl`, `--font-3xl`, `--font-sm`, `--space-1`, `--space-2`, `--space-5`, `--text-heading`, `--text-muted`
+`--font-2xl`, `--font-3xl`, `--font-sm`, `--space-1`, `--space-2`, `--space-3`, `--space-5`, `--text-heading`, `--text-muted`
 
 ## Gotchas
 
+- On narrow screens (700px and below) the actions wrap under the title instead of sharing its row.
 - Below the mobile breakpoint the heading shrinks to 19px and the row aligns to the top.
 - It sets no outer margin; space it from the content below with a flex or grid parent using `gap`.
 

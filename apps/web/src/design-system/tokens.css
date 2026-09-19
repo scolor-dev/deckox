@@ -322,6 +322,7 @@
   --z-sticky-column: 1;
   --z-popover: 40;
   --z-toast: 50;
+  --toast-offset-top: var(--space-4);
   --z-overlay: 60;
 
   /* spacing / font-size — the scale every component builds from. Values

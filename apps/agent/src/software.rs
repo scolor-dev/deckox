@@ -149,9 +149,8 @@ impl PackageManager {
                     20,
                 )
                 .await?;
-                Some(Detection::flat(parse_name_lines(&String::from_utf8_lossy(
-                    &output.stdout,
-                ))))
+                let names = parse_name_lines(&String::from_utf8_lossy(&output.stdout));
+                Some(rpm_detection(names).await)
             }
             Self::Zypper => None,
         }
@@ -767,9 +766,16 @@ fn parse_apt_detection(manual: &str, table: &str) -> Detection {
         }
     }
 
+    bundle_candidates(&candidates)
+}
+
+/// Bundles `candidates` under the candidate that depends on or recommends
+/// them: a package another candidate names becomes that candidate's child,
+/// and a chain (a -> b -> c) bundles everything under the top of the chain.
+fn bundle_candidates(candidates: &[Candidate]) -> Detection {
     let names: HashSet<&str> = candidates.iter().map(|(name, _)| name.as_str()).collect();
     let mut direct_parent: HashMap<&str, &str> = HashMap::new();
-    for (owner, referenced) in &candidates {
+    for (owner, referenced) in candidates {
         for name in referenced {
             if name != owner && names.contains(name.as_str()) {
                 let entry = direct_parent.entry(name.as_str()).or_insert(owner.as_str());
@@ -781,7 +787,7 @@ fn parse_apt_detection(manual: &str, table: &str) -> Detection {
     }
 
     let mut detection = Detection::default();
-    for (name, _) in &candidates {
+    for (name, _) in candidates {
         match resolve_root(name, &direct_parent) {
             Some(root) if root != name.as_str() => {
                 detection.parents.insert(name.clone(), root.to_owned());
@@ -792,6 +798,81 @@ fn parse_apt_detection(manual: &str, table: &str) -> Detection {
         }
     }
     detection
+}
+
+/// Groups the user-installed rpm packages into bundles from rpm's own
+/// dependency data. rpm records dependencies as capabilities, so each
+/// candidate's requires (and, where this rpm supports them, recommends) are
+/// resolved to the candidate that provides them. Falls back to a flat list
+/// when rpm cannot be queried.
+async fn rpm_detection(names: HashSet<String>) -> Detection {
+    let formats = [
+        "%{NAME}\t[%{PROVIDENAME};]\t[%{REQUIRENAME};]\t[%{RECOMMENDNAME};]\n",
+        "%{NAME}\t[%{PROVIDENAME};]\t[%{REQUIRENAME};]\t\n",
+    ];
+    for format in formats {
+        if let Some(output) = run_query_within("rpm", &["-qa", "--qf", format], 20).await {
+            return parse_rpm_detection(&names, &String::from_utf8_lossy(&output.stdout));
+        }
+    }
+    Detection::flat(names)
+}
+
+fn parse_rpm_detection(user_installed: &HashSet<String>, table: &str) -> Detection {
+    struct Row<'a> {
+        name: &'a str,
+        provides: Vec<&'a str>,
+        requires: Vec<&'a str>,
+    }
+
+    fn capabilities(field: &str) -> Vec<&str> {
+        field.split(';').filter(|item| !item.is_empty()).collect()
+    }
+    let rows: Vec<Row> = table
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(4, '\t');
+            let name = fields.next()?;
+            let provides = capabilities(fields.next()?);
+            let requires = capabilities(fields.next()?);
+            let recommends = capabilities(fields.next().unwrap_or_default());
+            user_installed.contains(name).then(|| Row {
+                name,
+                provides,
+                requires: requires.into_iter().chain(recommends).collect(),
+            })
+        })
+        .collect();
+
+    let mut providers: HashMap<&str, Vec<&str>> = HashMap::new();
+    for row in &rows {
+        for capability in row.provides.iter().chain(std::iter::once(&row.name)) {
+            providers.entry(capability).or_default().push(row.name);
+        }
+    }
+
+    let mut candidates: Vec<Candidate> = rows
+        .iter()
+        .map(|row| {
+            let referenced = row
+                .requires
+                .iter()
+                .filter_map(|capability| providers.get(capability))
+                .flatten()
+                .filter(|provider| **provider != row.name)
+                .map(|provider| (*provider).to_owned())
+                .collect();
+            (row.name.to_owned(), referenced)
+        })
+        .collect();
+    let seen: HashSet<String> = candidates.iter().map(|(name, _)| name.clone()).collect();
+    candidates.extend(
+        user_installed
+            .iter()
+            .filter(|name| !seen.contains(*name))
+            .map(|name| (name.clone(), HashSet::new())),
+    );
+    bundle_candidates(&candidates)
 }
 
 /// Follows `direct_parent` links up to the top of the chain. `None` means
@@ -1171,8 +1252,8 @@ mod tests {
     use super::{
         PackageManager, SoftwareManager, is_installed_status, parse_apt_detection,
         parse_candidate_version, parse_dependency_names, parse_dnf_list, parse_dpkg_installed,
-        parse_labeled_version, parse_space_pairs, parse_tab_pairs, parse_zypper_list_updates,
-        validate_package_name,
+        parse_labeled_version, parse_rpm_detection, parse_space_pairs, parse_tab_pairs,
+        parse_zypper_list_updates, validate_package_name,
     };
 
     fn test_manager(allowed: Vec<String>) -> Result<SoftwareManager, crate::error::AgentError> {
@@ -1210,6 +1291,40 @@ mod tests {
             );
         }
         assert!(!detection.knows("bash"), "base packages are ignored");
+    }
+
+    #[test]
+    fn bundles_rpm_packages_through_provided_capabilities() {
+        let user_installed: std::collections::HashSet<String> = [
+            "docker-ce",
+            "docker-ce-cli",
+            "docker-compose-plugin",
+            "git",
+            "nginx",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        let table = "docker-ce\tdocker-ce;docker-engine;\tdocker-ce-cli;/bin/sh;libc.so.6()(64bit);\tdocker-compose-plugin;\n\
+                     docker-ce-cli\tdocker-ce-cli;\tlibc.so.6()(64bit);\t\n\
+                     docker-compose-plugin\tdocker-compose-plugin;\t\t\n\
+                     git\tgit;\t/bin/sh;perl(Git);\t\n\
+                     glibc\tglibc;libc.so.6()(64bit);\t\t\n";
+        let detection = parse_rpm_detection(&user_installed, table);
+        let mut roots: Vec<&str> = detection.roots.iter().map(String::as_str).collect();
+        roots.sort_unstable();
+        assert_eq!(roots, ["docker-ce", "git", "nginx"]);
+        assert_eq!(
+            detection.parents.get("docker-ce-cli").map(String::as_str),
+            Some("docker-ce")
+        );
+        assert_eq!(
+            detection
+                .parents
+                .get("docker-compose-plugin")
+                .map(String::as_str),
+            Some("docker-ce")
+        );
     }
 
     #[test]
