@@ -141,19 +141,38 @@ impl ServiceManager {
             "--plain",
         ])
         .await?;
-        let ids: Vec<String> = output
+        let listed: Vec<String> = output
             .lines()
             .filter_map(|line| line.split_whitespace().next().map(str::to_owned))
             .collect();
-        let fragment_paths = read_fragment_paths(&ids).await?;
-        let allowed = self.allowed.read().await;
+        let mut unlisted = unlisted_unit_files(&enabled_states, &listed);
+        let listed_ids = listed.clone();
+        let mut ids = listed;
+        ids.extend(unlisted.iter().cloned());
+        // The extra unit-file rows are a best-effort addition: if reading
+        // their properties fails, the loaded services still list normally.
+        let properties = if let Ok(properties) = read_unit_properties(&ids).await {
+            properties
+        } else {
+            unlisted.clear();
+            read_unit_properties(&listed_ids).await?
+        };
+        let fragment_paths = fragment_paths_of(&properties);
 
-        Ok(parse_service_list(
-            &output,
-            &enabled_states,
-            &fragment_paths,
-            &allowed,
-        ))
+        let mut services = {
+            let allowed = self.allowed.read().await;
+            let mut rows = parse_service_list(&output, &enabled_states, &fragment_paths, &allowed);
+            rows.extend(unlisted_services(
+                &unlisted,
+                &properties,
+                &enabled_states,
+                &allowed,
+            ));
+            drop(allowed);
+            rows
+        };
+        services.sort_by(|a, b| a.id.cmp(&b.id));
+        Ok(services)
     }
 
     pub async fn details(&self, service_id: &str) -> Result<ServiceDetails, AgentError> {
@@ -520,6 +539,14 @@ fn parse_service_list(
             let active_state = fields.next()?.to_owned();
             let sub_state = fields.next()?.to_owned();
             let description = fields.collect::<Vec<_>>().join(" ");
+            // `list-units --all` also reports units that other units merely
+            // reference but that are not installed (LoadState `not-found`).
+            // They can never be controlled, so hide them — unless they are
+            // still on the allowlist, where the admin needs to see them to
+            // revoke the stale entry.
+            if load_state == "not-found" && !allowed.contains(&id) {
+                return None;
+            }
             let standard_system = fragment_paths
                 .get(&id)
                 .is_some_and(|path| is_standard_system(path));
@@ -564,26 +591,119 @@ fn known_product(service_id: &str) -> Option<&'static str> {
 
 /// Batches a `FragmentPath` lookup for every given unit ID into a single
 /// `systemctl show` call instead of one round trip per service.
-async fn read_fragment_paths(ids: &[String]) -> Result<HashMap<String, String>, AgentError> {
+/// `systemctl list-units` only reports units systemd has loaded into memory
+/// — one that was never started or referenced is missing even though its
+/// unit file is installed. These are the installed service unit files that
+/// are absent from that list. Templates (`foo@.service`) are not startable
+/// on their own and aliases duplicate the unit they point to, so both are
+/// skipped.
+fn unlisted_unit_files(
+    unit_file_states: &HashMap<String, String>,
+    listed: &[String],
+) -> Vec<String> {
+    let listed: HashSet<&str> = listed.iter().map(String::as_str).collect();
+    let mut ids: Vec<String> = unit_file_states
+        .iter()
+        .filter(|(id, state)| {
+            id.ends_with(".service")
+                && !id.ends_with("@.service")
+                && state.as_str() != "alias"
+                && !listed.contains(id.as_str())
+        })
+        .map(|(id, _)| id.clone())
+        .collect();
+    ids.sort();
+    ids
+}
+
+/// Builds rows for [`unlisted_unit_files`] from `systemctl show`. A unit
+/// file that systemd still reports as `not-found` (a dangling link) is
+/// dropped, the same as a `not-found` row from `list-units`.
+fn unlisted_services(
+    ids: &[String],
+    properties: &HashMap<String, HashMap<String, String>>,
+    unit_file_states: &HashMap<String, String>,
+    allowed: &HashSet<String>,
+) -> Vec<ServiceSummary> {
+    ids.iter()
+        .filter_map(|id| {
+            let values = properties.get(id)?;
+            let load_state = values.get("LoadState").cloned().unwrap_or_default();
+            if load_state.is_empty() || load_state == "not-found" {
+                return None;
+            }
+            let fragment_path = values.get("FragmentPath").map_or("", String::as_str);
+            let description = values
+                .get("Description")
+                .filter(|text| !text.is_empty())
+                .cloned()
+                .unwrap_or_else(|| id.clone());
+            Some(ServiceSummary {
+                control_allowed: allowed.contains(id),
+                unit_file_state: unit_file_states.get(id).cloned(),
+                standard_system: is_standard_system(fragment_path),
+                deckox_managed: PROTECTED_SERVICES.contains(&id.as_str()),
+                product: known_product(id).map(str::to_owned),
+                id: id.clone(),
+                description,
+                load_state,
+                active_state: values
+                    .get("ActiveState")
+                    .cloned()
+                    .unwrap_or_else(|| "inactive".to_owned()),
+                sub_state: values
+                    .get("SubState")
+                    .cloned()
+                    .unwrap_or_else(|| "dead".to_owned()),
+            })
+        })
+        .collect()
+}
+
+async fn read_unit_properties(
+    ids: &[String],
+) -> Result<HashMap<String, HashMap<String, String>>, AgentError> {
     if ids.is_empty() {
         return Ok(HashMap::new());
     }
-    let mut args = vec!["show", "--no-pager", "--property=Id,FragmentPath"];
+    let mut args = vec![
+        "show",
+        "--no-pager",
+        "--property=Id,Description,LoadState,ActiveState,SubState,FragmentPath",
+    ];
     args.extend(ids.iter().map(String::as_str));
     let output = systemctl(&args).await?;
-    Ok(parse_fragment_paths(&output))
+    Ok(parse_unit_properties(&output))
 }
 
-fn parse_fragment_paths(input: &str) -> HashMap<String, String> {
+fn parse_unit_properties(input: &str) -> HashMap<String, HashMap<String, String>> {
     input
         .split("\n\n")
         .filter_map(|block| {
             let properties = parse_properties(block);
             let id = properties.get("Id")?.clone();
-            let fragment_path = properties.get("FragmentPath").cloned().unwrap_or_default();
-            Some((id, fragment_path))
+            Some((id, properties))
         })
         .collect()
+}
+
+fn fragment_paths_of(
+    properties: &HashMap<String, HashMap<String, String>>,
+) -> HashMap<String, String> {
+    properties
+        .iter()
+        .map(|(id, values)| {
+            (
+                id.clone(),
+                values.get("FragmentPath").cloned().unwrap_or_default(),
+            )
+        })
+        .collect()
+}
+
+#[cfg(test)]
+fn parse_fragment_paths(input: &str) -> HashMap<String, String> {
+    fragment_paths_of(&parse_unit_properties(input))
 }
 
 fn parse_properties(input: &str) -> HashMap<String, String> {
@@ -614,7 +734,8 @@ mod tests {
     use super::{
         MAX_LOG_MESSAGE_BYTES, PROTECTED_SERVICES, ServiceManager, journal_priority, known_product,
         parse_fragment_paths, parse_journal_entries, parse_properties, parse_service_list,
-        truncate_message, validate_log_lines,
+        parse_unit_properties, truncate_message, unlisted_services, unlisted_unit_files,
+        validate_log_lines,
     };
 
     fn test_manager(allowed: Vec<String>) -> Result<ServiceManager, crate::error::AgentError> {
@@ -679,6 +800,60 @@ mod tests {
             "a locally installed unit is not vendor-provided"
         );
         assert!(services[1].deckox_managed);
+    }
+
+    #[test]
+    fn hides_units_systemd_only_references_unless_still_allowed() {
+        let allowed = HashSet::from(["stale.service".to_owned()]);
+        let services = parse_service_list(
+            "auditd.service not-found inactive dead auditd.service\nstale.service not-found inactive dead stale.service\nkbd.service masked inactive dead kbd.service\n",
+            &HashMap::new(),
+            &HashMap::new(),
+            &allowed,
+        );
+        let ids: Vec<&str> = services.iter().map(|service| service.id.as_str()).collect();
+        assert_eq!(ids, ["stale.service", "kbd.service"]);
+    }
+
+    #[test]
+    fn finds_installed_unit_files_that_systemd_has_not_loaded() {
+        let states: HashMap<String, String> = [
+            ("nginx.service", "enabled"),
+            ("cron.service", "disabled"),
+            ("getty@.service", "enabled"),
+            ("dbus-org.freedesktop.login1.service", "alias"),
+            ("README.target", "static"),
+        ]
+        .into_iter()
+        .map(|(id, state)| (id.to_owned(), state.to_owned()))
+        .collect();
+        let unlisted = unlisted_unit_files(&states, &["nginx.service".to_owned()]);
+        assert_eq!(unlisted, ["cron.service"]);
+    }
+
+    #[test]
+    fn builds_rows_for_unloaded_unit_files_and_drops_dangling_ones() {
+        let properties = parse_unit_properties(
+            "Id=cron.service\nDescription=Regular background program processing daemon\nLoadState=loaded\nActiveState=inactive\nSubState=dead\nFragmentPath=/usr/lib/systemd/system/cron.service\n\nId=dangling.service\nDescription=dangling.service\nLoadState=not-found\nActiveState=inactive\nSubState=dead\nFragmentPath=\n",
+        );
+        let states = HashMap::from([("cron.service".to_owned(), "disabled".to_owned())]);
+        let rows = unlisted_services(
+            &["cron.service".to_owned(), "dangling.service".to_owned()],
+            &properties,
+            &states,
+            &HashSet::new(),
+        );
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, "cron.service");
+        assert_eq!(
+            rows[0].description,
+            "Regular background program processing daemon"
+        );
+        assert_eq!(rows[0].active_state, "inactive");
+        assert_eq!(rows[0].unit_file_state.as_deref(), Some("disabled"));
+        assert!(rows[0].standard_system);
+        assert!(!rows[0].control_allowed);
     }
 
     #[test]

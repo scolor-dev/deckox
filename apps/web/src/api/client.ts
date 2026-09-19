@@ -77,6 +77,48 @@ export interface StorageMount {
   standard: boolean;
 }
 
+const NON_CAPACITY_FILESYSTEMS = new Set(["tmpfs", "devtmpfs", "squashfs", "overlay", "efivarfs", "ramfs"]);
+
+/**
+ * The mounts that count towards "overall usage": RAM-backed and image
+ * file systems are left out, and several mounts of one device (bind mounts,
+ * btrfs subvolumes) count once. Falls back to every mount, deduplicated, so a
+ * host whose only file system is an overlay (a container) still shows a number.
+ */
+export function capacityMounts(mounts: StorageMount[]): StorageMount[] {
+  const unique = (list: StorageMount[]) => {
+    const seen = new Set<string>();
+    return list.filter((mount) => {
+      if (seen.has(mount.filesystem)) return false;
+      seen.add(mount.filesystem);
+      return true;
+    });
+  };
+  const real = unique(mounts.filter((mount) => !NON_CAPACITY_FILESYSTEMS.has(mount.filesystem_type)));
+  return real.length > 0 ? real : unique(mounts);
+}
+
+export interface StoragePartition {
+  name: string;
+  path: string;
+  kind: string;
+  size_bytes: number;
+  filesystem_type: string | null;
+  label: string | null;
+  mount: StorageMount | null;
+}
+
+export interface StorageDisk {
+  name: string;
+  path: string;
+  model: string | null;
+  size_bytes: number;
+  transport: string | null;
+  rotational: boolean | null;
+  removable: boolean;
+  partitions: StoragePartition[];
+}
+
 export interface BackupSummary {
   name: string;
   previous_version: string | null;
@@ -103,6 +145,12 @@ export interface SoftwarePackage {
   installed_version: string | null;
   available_version: string | null;
   upgradable: boolean;
+}
+
+export interface InstalledSoftware {
+  name: string;
+  version: string;
+  managed: boolean;
 }
 
 export type ScheduleAction = "start" | "stop" | "restart";
@@ -377,6 +425,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
     }),
   storage: () => request<StorageMount[]>("/api/v1/storage"),
+  storageDisks: () => request<StorageDisk[]>("/api/v1/storage/disks"),
   backups: () => request<BackupSummary[]>("/api/v1/backups"),
   diagnostics: () => request<DiagnosticsResponse>("/api/v1/diagnostics"),
   diagnosticsReport: () => requestBlob("/api/v1/diagnostics/report"),
@@ -408,6 +457,7 @@ export const api = {
       { method: "POST" },
     ),
   software: () => request<SoftwarePackage[]>("/api/v1/software"),
+  installedSoftware: () => request<InstalledSoftware[]>("/api/v1/software/installed"),
   softwareAllowlist: (name: string, action: "allow" | "disallow") =>
     request<CommandResult>(
       `/api/v1/software/${encodeURIComponent(name)}/${action}`,

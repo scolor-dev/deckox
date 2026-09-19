@@ -22,9 +22,15 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    config::AgentConfig, error::AgentError, power::PowerManager, schedules::ScheduleStore,
-    services::ServiceManager, software::SoftwareManager, storage::read_storage,
-    system::read_system_info, update::UpdateManager,
+    config::AgentConfig,
+    error::AgentError,
+    power::PowerManager,
+    schedules::ScheduleStore,
+    services::ServiceManager,
+    software::SoftwareManager,
+    storage::{read_disks, read_storage},
+    system::read_system_info,
+    update::UpdateManager,
 };
 
 mod backups;
@@ -155,6 +161,7 @@ async fn main() {
         .route("/v1/system/update", post(update_system))
         .route("/v1/system/metrics", get(system_metrics))
         .route("/v1/storage", get(storage))
+        .route("/v1/storage/disks", get(storage_disks))
         .route("/v1/backups", get(list_backups))
         .route("/v1/services", get(list_services))
         .route("/v1/services/{service_id}", get(service_details))
@@ -167,6 +174,7 @@ async fn main() {
         .route("/v1/services/{service_id}/disallow", post(disallow_service))
         .route("/v1/services/{service_id}/logs", get(service_logs))
         .route("/v1/software", get(list_software))
+        .route("/v1/software/installed", get(list_installed_software))
         .route("/v1/software/{software_id}/install", post(install_software))
         .route("/v1/software/{software_id}/remove", post(remove_software))
         .route("/v1/software/{software_id}/upgrade", post(upgrade_software))
@@ -339,6 +347,10 @@ async fn storage() -> Result<Json<Vec<StorageMount>>, AgentError> {
     read_storage().await.map(Json)
 }
 
+async fn storage_disks() -> Result<Json<Vec<deckox_protocol::StorageDisk>>, AgentError> {
+    read_disks().await.map(Json)
+}
+
 async fn list_backups() -> Result<Json<Vec<BackupSummary>>, AgentError> {
     backups::list_backups().await.map(Json)
 }
@@ -428,6 +440,12 @@ async fn list_software(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<SoftwarePackage>>, AgentError> {
     state.software.list().await.map(Json)
+}
+
+async fn list_installed_software(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<deckox_protocol::InstalledSoftware>>, AgentError> {
+    state.software.list_installed().await.map(Json)
 }
 
 async fn install_software(

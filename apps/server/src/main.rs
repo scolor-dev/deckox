@@ -223,6 +223,7 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
         .route("/system/metrics", get(proxy_metrics))
         .route("/events/metrics", get(metrics_stream::metrics_events))
         .route("/storage", get(proxy_storage))
+        .route("/storage/disks", get(proxy_storage_disks))
         .route("/backups", get(proxy_backups))
         .route("/services", get(proxy_services))
         .route("/services/{service_id}", get(proxy_service_details))
@@ -248,6 +249,7 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
             get(service_logs_report),
         )
         .route("/software", get(proxy_software))
+        .route("/software/installed", get(proxy_installed_software))
         .route("/software/{software_id}/install", post(install_software))
         .route("/software/{software_id}/remove", post(remove_software))
         .route("/software/{software_id}/upgrade", post(upgrade_software))
@@ -660,6 +662,13 @@ async fn trigger_update(
     response
 }
 
+async fn proxy_storage_disks(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/storage/disks", &request_id).await
+}
+
 async fn proxy_storage(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
@@ -829,6 +838,13 @@ async fn proxy_software(
     Extension(request_id): Extension<RequestId>,
 ) -> Response {
     proxy_agent(&state.agent, "GET", "/v1/software", &request_id).await
+}
+
+async fn proxy_installed_software(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/software/installed", &request_id).await
 }
 
 async fn proxy_allow_software(

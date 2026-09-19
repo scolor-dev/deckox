@@ -26,7 +26,7 @@
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
         <a href="design-system.html"><span class="nav-icon">◐</span>デザインシステム</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.6.4</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.6.5</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -57,6 +57,7 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>CPU・メモリ・Swap・負荷平均、ネットワーク送受信速度、ディスクI/O速度、任意のCPU温度を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">SSE</span><code>/api/v1/events/metrics?interval=1|2|5</code></span></td><td><span class="status done">実装済み</span></td><td>拡張リソースメトリクスを認証済みブラウザへ配信。購読者0件では追加統計を含む採取を休止</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのストレージAPIを中継。既知のシステムマウントポイントには標準タグを付与</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/storage/disks</code></span></td><td><span class="status done">実装済み</span></td><td>ディスクごとのパーティション・LVM等の構成と、マウント済みのものの使用量を中継(未マウントも含む)</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/backups</code></span></td><td><span class="status done">実装済み</span></td><td>AgentのバックアップAPIを中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス一覧を中継。各サービスに標準システム・Deckox管理・既知の主要ソフトウェア(Docker・nginxなど)のタグ判定を付与</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>systemdサービス詳細を中継</td></tr>
@@ -64,10 +65,11 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}/logs</code></span></td><td><span class="status done">実装済み</span></td><td><code>lines</code>と<code>priority=all|error|warning|info</code>を検証し、完全一致許可リスト内のjournalログを中継。最大500行</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}/logs/report</code></span></td><td><span class="status done">実装済み</span></td><td>同じ条件で取得したログを<code>deckox-service-logs-{id}.json</code>としてダウンロード</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/software</code></span></td><td><span class="status done">実装済み</span></td><td>管理許可リスト内パッケージの状態を中継</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/software/installed</code></span></td><td><span class="status done">実装済み</span></td><td>ホストにインストール済みの全パッケージ(名前・バージョン・管理中かどうか)を読み取り専用で中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/install</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みパッケージをインストール</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/remove</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みパッケージを削除(purgeはしない)</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/upgrade</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、インストール済みの許可済みパッケージを最新版へ更新</td></tr>
-            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/allow</code></span></td><td><span class="status done">実装済み</span></td><td>パッケージ名を、ホストに設定済みのリポジトリで実在確認したうえで<code>/etc/deckox/agent.toml</code>の管理許可リストへ追加</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/allow</code></span></td><td><span class="status done">実装済み</span></td><td>パッケージ名を、ホストに設定済みのリポジトリまたはインストール済みパッケージの中で実在確認したうえで<code>/etc/deckox/agent.toml</code>の管理許可リストへ追加</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/disallow</code></span></td><td><span class="status done">実装済み</span></td><td>管理許可リストから削除</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>Agentのスケジュール一覧を中継</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内サービスの起動・停止・再起動を曜日・時刻指定で登録。監査ログに記録</td></tr>
@@ -101,9 +103,10 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/system/reboot</code></span></td><td><span class="status done">実装済み</span></td><td>許可時のみ<code>systemctl --no-block reboot</code>を実行</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/system/update</code></span></td><td><span class="status done">実装済み</span></td><td>許可時のみ、Serverが取得したタグ固定の<code>install.sh</code>を検証して<code>/run/deckox/update.sh</code>へ書き込み、<code>systemd-run</code>で独立ユニットとして実行</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/system/metrics</code></span></td><td><span class="status done">実装済み</span></td><td>CPU使用率・コア数・任意の温度、メモリ・Swap、ロードアベレージ、ネットワーク送受信速度、ディスク読み書き速度。追加統計が取得不能でも他の値を返却</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>ファイルシステム、形式、マウントポイント、容量・使用量、既知のシステムマウントポイント判定</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/storage</code></span></td><td><span class="status done">実装済み</span></td><td>ファイルシステム、形式、マウントポイント、容量・使用量、既知のシステムマウントポイント判定。squashfs(snapなど)・devtmpfs・efivarfsは除外。画面の全体使用率は、tmpfsやoverlayを除き、同じデバイスの複数マウントを1回だけ数える</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/storage/disks</code></span></td><td><span class="status done">実装済み</span></td><td><code>lsblk</code>のJSONから物理ディスクとその上のパーティション・LVM・暗号化デバイスを読み取り、<code>df</code>の使用量と結合。<code>lsblk</code>が使えないホストでは空配列</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/backups</code></span></td><td><span class="status done">実装済み</span></td><td><code>/var/lib/deckox/backups/</code>配下のバックアップ一覧(名前・更新前バージョン・取得日時・サイズ)。<code>root:root</code>所有のためAgent経由でのみ読み取り可能</td></tr>
-            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td>ロード済みsystemdサービス一覧と有効化状態、既知の主要ソフトウェア判定</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services</code></span></td><td><span class="status done">実装済み</span></td><td><code>list-units</code>のロード済みサービスに、<code>list-unit-files</code>にあるが未ロードのサービス(未起動・無効のもの)を加えた一覧。他のユニットが名前だけ参照しているLoadState=not-foundのユニットは、許可リストにあるもの以外は除外。有効化状態と既知の主要ソフトウェア判定を付与</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/services/{id}</code></span></td><td><span class="status done">実装済み</span></td><td>サービス詳細、Main PID、操作許可状態</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/start</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを起動</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/stop</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスを停止</td></tr>
@@ -114,10 +117,11 @@
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/allow</code></span></td><td><span class="status done">実装済み</span></td><td>サービスの存在を確認したうえで<code>/etc/deckox/agent.toml</code>の許可リストへ追加。Deckox自身の2ユニットは対象外</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/services/{id}/disallow</code></span></td><td><span class="status done">実装済み</span></td><td><code>/etc/deckox/agent.toml</code>の許可リストから削除。Deckox自身の2ユニットは対象外</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/software</code></span></td><td><span class="status done">実装済み</span></td><td>管理許可リスト内パッケージについて、ホストのパッケージマネージャー(apt/dnf/pacman/zypper)からインストール状態・バージョンを読み取り。インデックスの更新は行わない</td></tr>
+            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/software/installed</code></span></td><td><span class="status done">実装済み</span></td><td>パッケージマネージャーのローカルDB(dpkg-query / rpm -qa / pacman -Q)からインストール済みの全パッケージを読み取り。許可リストとは無関係で、操作の権限は与えない</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/install</code></span></td><td><span class="status done">実装済み</span></td><td>許可済みなら、インデックス更新後にパッケージをインストール</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/remove</code></span></td><td><span class="status done">実装済み</span></td><td>許可済みならパッケージを削除(設定・データは残す)</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/upgrade</code></span></td><td><span class="status done">実装済み</span></td><td>許可済み・インストール済みの場合だけ、インデックス更新後に最新版へ更新</td></tr>
-            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/allow</code></span></td><td><span class="status done">実装済み</span></td><td>ホストに設定済みのリポジトリでパッケージ名を実在確認したうえで<code>/etc/deckox/agent.toml</code>の<code>[software]</code>許可リストへ追加。第三者リポジトリは追加しない</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/allow</code></span></td><td><span class="status done">実装済み</span></td><td>ホストに設定済みのリポジトリ、またはインストール済みパッケージの中でパッケージ名を実在確認したうえで<code>/etc/deckox/agent.toml</code>の<code>[software]</code>許可リストへ追加。第三者リポジトリは追加しない</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/software/{id}/disallow</code></span></td><td><span class="status done">実装済み</span></td><td><code>[software]</code>許可リストから削除</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>登録済みスケジュールの一覧(サービス・操作・曜日・時刻・有効状態・前回実行結果)</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/schedules</code></span></td><td><span class="status done">実装済み</span></td><td>許可リスト内のサービスのみ登録可能。曜日(月-日)・時刻(ホストのローカル時刻)・起動/停止/再起動を指定。<code>/var/lib/deckox/schedules.json</code>へ永続化</td></tr>
@@ -178,7 +182,7 @@
         </table>
         <aside class="note"><strong>診断データの境界:</strong> 診断は固定した安全な項目だけを構築します。生の設定ファイル、環境変数、ログ、パスワード、パスワードハッシュ、セッション、Cookie、boot IDはAPI・画面・ダウンロードへ含めません。</aside>
         <aside class="note"><strong>サービス管理の境界:</strong> 専用HTTPエンドポイントと<code>ServiceAction</code>で実装されています。ログ閲覧も完全一致許可リスト、最大500行、<code>all|error|warning|info</code>だけを受け付けます。許可リストの追加・削除は<code>/etc/deckox/agent.toml</code>への直接書き込みのみで行い、サービス自体の起動・停止などとは独立した専用エンドポイントです。汎用<code>AgentCommand</code>とWebコンソールは使っていません。</aside>
-        <aside class="note"><strong>ソフトウェア管理の境界:</strong> 固定のソフトウェアカタログは持ちません。管理許可リストへ追加できるのは、そのホストに<strong>既に設定済み</strong>のパッケージリポジトリで実在確認できたパッケージ名だけです。Deckoxが新しいリポジトリやGPG鍵を追加することはありません。<code>[software]</code>許可リストは<code>[services]</code>と同じ思想の別テーブルで、書き込み時にどちらのテーブルも互いを破壊しないよう境界を区切って置換します。</aside>
+        <aside class="note"><strong>ソフトウェア管理の境界:</strong> 固定のソフトウェアカタログは持ちません。管理許可リストへ追加できるのは、そのホストに<strong>既に設定済み</strong>のパッケージリポジトリで実在確認できたパッケージ名か、すでにインストール済みのパッケージだけです。インストール済みパッケージの一覧は読み取り専用で表示でき、そこから選んで追加できます。Deckoxが新しいリポジトリやGPG鍵を追加することはありません。<code>[software]</code>許可リストは<code>[services]</code>と同じ思想の別テーブルで、書き込み時にどちらのテーブルも互いを破壊しないよう境界を区切って置換します。</aside>
       </section>
 
       <section class="section" aria-labelledby="not-title">

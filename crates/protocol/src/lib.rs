@@ -245,6 +245,40 @@ pub struct StorageMount {
     pub standard: bool,
 }
 
+/// One disk with everything stacked on it.
+///
+/// Partitions and any LVM / RAID / crypt devices built on them are flattened
+/// in tree order. Unlike [`StorageMount`], which only knows mounted file
+/// systems, a disk lists its unmounted partitions too.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageDisk {
+    /// Kernel name, for example `sda` or `nvme0n1`.
+    pub name: String,
+    pub path: String,
+    pub model: Option<String>,
+    pub size_bytes: u64,
+    /// Bus the disk is attached through (`sata`, `nvme`, `usb`, ...), when
+    /// the kernel reports one.
+    pub transport: Option<String>,
+    /// `Some(true)` for spinning disks, `Some(false)` for SSDs / flash.
+    pub rotational: Option<bool>,
+    pub removable: bool,
+    pub partitions: Vec<StoragePartition>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoragePartition {
+    pub name: String,
+    pub path: String,
+    /// `part`, `lvm`, `crypt`, `raid1`, ... — the block device type.
+    pub kind: String,
+    pub size_bytes: u64,
+    pub filesystem_type: Option<String>,
+    pub label: Option<String>,
+    /// The mounted file system's usage, when this device is mounted.
+    pub mount: Option<StorageMount>,
+}
+
 /// One pre-update snapshot the installer took under `/var/lib/deckox/backups/`.
 ///
 /// Owned `root:root`, so only the Agent (not the unprivileged Server) can
@@ -316,6 +350,17 @@ pub struct SoftwarePackage {
     /// [`DiagnosticHost::upgradable_packages`]'s read-only convention).
     pub available_version: Option<String>,
     pub upgradable: bool,
+}
+
+/// One package the host's package manager reports as installed.
+///
+/// Read-only: seeing a package here grants no permission to act on it, and
+/// `managed` says whether it is already on the management allowlist.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstalledSoftware {
+    pub name: String,
+    pub version: String,
+    pub managed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
