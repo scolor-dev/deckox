@@ -43,13 +43,13 @@ withDefaults(
 /* default: the general-weight action (refresh, close, cancel). */
 .ds-button--default {
   min-width: 68px;
-  padding: 7px 14px;
-  font-size: 13px;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-md);
 }
 .ds-button--default:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-hover); }
 
 /* action: a small inline action inside a table row. */
-.ds-button--action { padding: 5px 8px; font-size: 11px; }
+.ds-button--action { padding: var(--space-1) var(--space-2); font-size: var(--font-xs); }
 .ds-button--action:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-hover); }
 .ds-button--action.ds-button--danger { border-color: var(--danger-border); color: var(--danger-strong-border); }
 /* The non-danger action hover leans on a border-color jump (border-strong
@@ -61,7 +61,7 @@ withDefaults(
 
 /* primary: the single filled call-to-action in a confirm dialog. */
 .ds-button--primary {
-  padding: 9px 14px;
+  padding: var(--space-2) var(--space-4);
   border-color: var(--brand-primary-border);
   color: var(--text-inverse);
   background: var(--brand-primary);
@@ -72,7 +72,7 @@ withDefaults(
 .ds-button--primary.ds-button--danger:hover:not(:disabled) { background: var(--danger-strong-hover); }
 
 /* menu: the mobile hamburger toggle only — not for general use. */
-.ds-button--menu { padding: 5px 9px; font-size: 12px; }
+.ds-button--menu { padding: var(--space-1) var(--space-2); font-size: var(--font-sm); }
 .ds-button--menu:hover:not(:disabled) { border-color: var(--border-hover); background: var(--surface-hover); }
 
 /* logout: bare-text link-style button, unique to the sidebar footer. */
@@ -82,7 +82,7 @@ withDefaults(
   border: 0;
   color: var(--text-label);
   background: transparent;
-  font-size: 11px;
+  font-size: var(--font-xs);
 }
 .ds-button--logout:hover:not(:disabled) { color: var(--link); text-decoration: underline; }
 </style>

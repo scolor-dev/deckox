@@ -50,7 +50,7 @@ defineProps<{
   background: var(--border-track);
 }
 .ds-allocation-bar span { display: block; height: 100%; }
-.ds-allocation-bar span:not(:last-child) { margin-right: 2px; }
+.ds-allocation-bar span:not(:last-child) { margin-right: var(--space-0-5); }
 .ds-allocation-legend {
   display: flex;
   flex-wrap: wrap;

@@ -29,14 +29,14 @@ defineEmits<{
 .ds-popover-item {
   display: block;
   width: 100%;
-  padding: 7px 10px;
+  padding: var(--space-2) var(--space-3);
   border: 0;
   border-radius: var(--radius-sm);
   color: var(--text-strong);
   background: transparent;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--font-sm);
   text-align: left;
 }
 .ds-popover-item:hover { background: var(--surface-hover); }

@@ -36,13 +36,13 @@ defineEmits<{
 .ds-checkbox-field label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   cursor: pointer;
   color: var(--text-strong);
-  font-size: 12px;
+  font-size: var(--font-sm);
   font-weight: 600;
 }
 .ds-checkbox-field input { width: 16px; height: 16px; margin: 0; }
 .ds-checkbox-field input:disabled { cursor: not-allowed; }
-.ds-checkbox-field small { display: block; margin: 4px 0 0 24px; color: var(--text-muted); font-size: 11px; }
+.ds-checkbox-field small { display: block; margin: var(--space-1) 0 0 var(--space-6); color: var(--text-muted); font-size: var(--font-xs); }
 </style>

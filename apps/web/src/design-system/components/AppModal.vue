@@ -71,7 +71,7 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
   z-index: var(--z-overlay);
   inset: 0;
   display: grid;
-  padding: 24px;
+  padding: var(--space-6);
   background: var(--overlay-color);
   place-items: center;
 }
@@ -83,7 +83,7 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-elevated);
-  box-shadow: 0 14px 40px var(--shadow-color);
+  box-shadow: var(--shadow-overlay);
 }
 .ds-modal--small { width: min(420px, 100%); }
 .ds-modal--medium { width: min(600px, 100%); }
@@ -93,22 +93,22 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
-  padding: 16px 18px;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-default);
 }
-.ds-modal-header h2 { margin: 0; color: var(--text-heading); font-size: 15px; }
-.ds-modal-header-actions { display: flex; flex-shrink: 0; align-items: center; gap: 8px; }
-.ds-modal-body { overflow: auto; padding: 16px 18px; }
+.ds-modal-header h2 { margin: 0; color: var(--text-heading); font-size: var(--font-lg); }
+.ds-modal-header-actions { display: flex; flex-shrink: 0; align-items: center; gap: var(--space-2); }
+.ds-modal-body { overflow: auto; padding: var(--space-4) var(--space-5); }
 .ds-modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 14px 18px;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--border-default);
 }
 
 @media (max-width: 700px) {
-  .ds-modal-backdrop { padding: 10px; }
+  .ds-modal-backdrop { padding: var(--space-3); }
 }
 </style>

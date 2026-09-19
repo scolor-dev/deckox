@@ -21,7 +21,7 @@
   border: 2px solid var(--spinner-track);
   border-radius: 50%;
   border-top-color: var(--brand-primary);
-  animation: ds-spinner-spin .8s linear infinite;
+  animation: ds-spinner-spin var(--duration-spin) linear infinite;
 }
 
 @keyframes ds-spinner-spin {
@@ -29,6 +29,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ds-spinner { animation-duration: 2.4s; }
+  .ds-spinner { animation-duration: calc(var(--duration-spin) * 3); }
 }
 </style>

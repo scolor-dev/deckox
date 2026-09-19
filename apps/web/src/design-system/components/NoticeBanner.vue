@@ -21,11 +21,11 @@ const role = computed(() => (props.tone === "error" ? "alert" : "status"));
 
 <style scoped>
 .ds-notice {
-  margin-bottom: 16px;
-  padding: 10px 13px;
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-3);
   border: 1px solid;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: var(--font-md);
 }
 .ds-notice--error { border-color: var(--danger-border); color: var(--danger-text); background: var(--danger-bg); }
 .ds-notice--warning { border-color: var(--warning-border); color: var(--warning-text); background: var(--warning-bg); }

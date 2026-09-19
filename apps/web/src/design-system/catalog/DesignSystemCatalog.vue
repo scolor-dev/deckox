@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { preferences } from "../../preferences";
+import { breakpoints } from "../breakpoints";
 import AppButton from "../components/AppButton.vue";
 import AppCard from "../components/AppCard.vue";
 import AppCheckbox from "../components/AppCheckbox.vue";
@@ -36,6 +37,13 @@ import LogEntry from "../components/LogEntry.vue";
 import LogList from "../components/LogList.vue";
 import StorageAllocationBar from "../components/StorageAllocationBar.vue";
 import ToastRegion from "../components/ToastRegion.vue";
+import AppBreadcrumb from "../components/AppBreadcrumb.vue";
+import AppPagination from "../components/AppPagination.vue";
+import AppSkeleton from "../components/AppSkeleton.vue";
+import ButtonGroup from "../components/ButtonGroup.vue";
+import FileField from "../components/FileField.vue";
+import PageHeader from "../components/PageHeader.vue";
+import TextAreaField from "../components/TextAreaField.vue";
 
 const dialogOpen = ref(false);
 const modalOpen = ref(false);
@@ -64,6 +72,16 @@ const allocation = [
 ];
 
 const textValue = ref("docker.io");
+const textAreaValue = ref("Restart docker.service every night at 03:00.");
+const currentPage = ref(3);
+const pickedFile = ref("(none)");
+const breadcrumb = [
+  { label: "Settings", href: "#" },
+  { label: "Security", href: "#" },
+  { label: "Two-factor authentication" },
+];
+const shadowTokens = ["shadow-thumb", "shadow-raised", "shadow-overlay", "shadow-focus"];
+const durationTokens = ["duration-fast", "duration-base", "duration-slow"];
 const selectValue = ref("auto");
 const checkboxValue = ref(true);
 const switchValue = ref(true);
@@ -74,7 +92,7 @@ const themeOptions = [
   { value: "dark", label: "Dark" },
 ];
 
-const spaceTokens = ["space-1", "space-2", "space-3", "space-4", "space-5", "space-6", "space-8", "space-10", "space-12", "space-16"];
+const spaceTokens = ["space-0-5", "space-1", "space-2", "space-3", "space-4", "space-5", "space-6", "space-8", "space-10", "space-12", "space-16"];
 const radiusTokens = ["radius-sm", "radius-md", "radius-badge", "radius-pill"];
 const fontTokens = ["font-2xs", "font-xs", "font-sm", "font-md", "font-lg", "font-xl", "font-2xl", "font-3xl"];
 const zTokens = ["z-sticky-column", "z-popover", "z-toast", "z-overlay"];
@@ -184,6 +202,50 @@ const colorGroups: { name: string; tokens: string[] }[] = [
           >
             <span :style="{ fontSize: `var(--${token})` }">Aa</span>
             <code>--{{ token }}</code>
+          </div>
+        </div>
+      </div>
+      <div class="token-group">
+        <h3>shadow</h3>
+        <div class="token-swatches">
+          <div
+            v-for="token in shadowTokens"
+            :key="token"
+            class="token-swatch"
+          >
+            <span
+              class="radius-box"
+              :style="{ boxShadow: `var(--${token})` }"
+            />
+            <code>--{{ token }}</code>
+          </div>
+        </div>
+      </div>
+      <div class="token-group">
+        <h3>motion (hover the boxes)</h3>
+        <div class="token-swatches">
+          <div
+            v-for="token in durationTokens"
+            :key="token"
+            class="token-swatch"
+          >
+            <span
+              class="motion-box"
+              :style="{ transition: `transform var(--${token}) var(--ease-standard)` }"
+            />
+            <code>--{{ token }}</code>
+          </div>
+        </div>
+      </div>
+      <div class="token-group">
+        <h3>breakpoint (a CSS variable can't be used in @media, so this lives in breakpoints.ts)</h3>
+        <div class="token-swatches">
+          <div
+            v-for="(value, name) in breakpoints"
+            :key="name"
+            class="token-swatch"
+          >
+            <code>{{ name }} = {{ value }}px</code>
           </div>
         </div>
       </div>
@@ -672,6 +734,74 @@ const colorGroups: { name: string; tokens: string[] }[] = [
         </AppToast>
       </ToastRegion>
     </section>
+    <section class="catalog-section">
+      <h2>TextAreaField / FileField</h2>
+      <div class="row">
+        <TextAreaField
+          id="catalog-textarea"
+          v-model="textAreaValue"
+          label="Note"
+          help="Shown next to the schedule."
+        />
+        <FileField
+          id="catalog-file"
+          label="Import config"
+          accept=".toml"
+          :help="`Selected: ${pickedFile}`"
+          @select="pickedFile = $event?.name ?? '(none)'"
+        />
+      </div>
+    </section>
+
+    <section class="catalog-section">
+      <h2>PageHeader / ButtonGroup</h2>
+      <PageHeader
+        title="Services"
+        subtitle="3 of 5 services running"
+      >
+        <template #actions>
+          <ButtonGroup label="Range">
+            <AppButton>Day</AppButton>
+            <AppButton>Week</AppButton>
+            <AppButton>Month</AppButton>
+          </ButtonGroup>
+          <AppButton>Refresh</AppButton>
+        </template>
+      </PageHeader>
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppSkeleton</h2>
+      <div
+        class="row"
+        aria-busy="true"
+      >
+        <AppSkeleton variant="circle" />
+        <div class="skeleton-stack">
+          <AppSkeleton width="60%" />
+          <AppSkeleton />
+          <AppSkeleton variant="block" />
+        </div>
+      </div>
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppPagination / AppBreadcrumb</h2>
+      <AppPagination
+        v-model:page="currentPage"
+        :page-count="12"
+        label="Audit log pages"
+        prev-label="Previous page"
+        next-label="Next page"
+      />
+      <p class="hint">
+        Page {{ currentPage }} of 12
+      </p>
+      <AppBreadcrumb
+        :items="breadcrumb"
+        label="Breadcrumb"
+      />
+    </section>
   </div>
 </template>
 
@@ -709,11 +839,14 @@ const colorGroups: { name: string; tokens: string[] }[] = [
 }
 .catalog-section h2 { margin: 0 0 14px; color: var(--text-heading); font-size: 18px; }
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+.skeleton-stack { display: grid; flex: 1; min-width: 220px; gap: 8px; }
 .hint { color: var(--text-faint); font-size: 12px; }
 .token-group { margin-bottom: 16px; }
 .token-group h3 { margin: 0 0 8px; color: var(--text-label); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .token-swatches { display: flex; flex-wrap: wrap; gap: 12px; }
 .token-swatch { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+.motion-box { display: inline-block; width: 20px; height: 20px; border-radius: 4px; background: var(--brand-primary); }
+.motion-box:hover { transform: translateX(24px); }
 .space-bar { display: inline-block; height: 10px; background: var(--brand-primary); }
 .radius-box { display: inline-block; width: 28px; height: 28px; border: 1px solid var(--border-strong); background: var(--surface-elevated); }
 .swatch { display: inline-block; width: 20px; height: 20px; border: 1px solid var(--border-default); border-radius: 4px; }

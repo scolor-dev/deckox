@@ -37,20 +37,20 @@ defineProps<{
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 14px;
+  gap: var(--space-3) var(--space-4);
 }
 .ds-toolbar-search { flex: 1; }
 .ds-toolbar-search :deep(input) {
   width: min(380px, 100%);
-  padding: 7px 10px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   outline: none;
   color: var(--text-primary);
   background: var(--surface-elevated);
-  font-size: 12px;
+  font-size: var(--font-sm);
 }
-.ds-toolbar-search :deep(input:focus) { border-color: var(--brand-focus); box-shadow: 0 0 0 2px var(--brand-focus-ring); }
-.ds-toolbar-filters { display: flex; flex-wrap: wrap; gap: 8px; }
-.ds-toolbar-count { color: var(--text-faint); font-size: 11px; }
+.ds-toolbar-search :deep(input:focus) { border-color: var(--brand-focus); box-shadow: var(--shadow-focus); }
+.ds-toolbar-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ds-toolbar-count { color: var(--text-faint); font-size: var(--font-xs); }
 </style>

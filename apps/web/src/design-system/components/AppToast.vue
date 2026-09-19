@@ -41,7 +41,7 @@ defineEmits<{
   border-left-width: 4px;
   border-radius: var(--radius-sm);
   background: var(--surface-elevated);
-  box-shadow: 0 4px 14px var(--shadow-soft);
+  box-shadow: var(--shadow-raised);
   color: var(--text-strong);
   font-size: var(--font-sm);
 }

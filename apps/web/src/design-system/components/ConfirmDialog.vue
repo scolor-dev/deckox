@@ -55,27 +55,27 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
   z-index: var(--z-overlay);
   inset: 0;
   display: grid;
-  padding: 24px;
+  padding: var(--space-6);
   background: var(--overlay-color);
   place-items: center;
 }
 .ds-dialog {
   width: min(420px, 100%);
-  padding: 18px;
+  padding: var(--space-5);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-elevated);
-  box-shadow: 0 14px 40px var(--shadow-color);
+  box-shadow: var(--shadow-overlay);
 }
-.ds-dialog h2 { margin: 0 0 4px; font-size: 15px; color: var(--text-heading); }
+.ds-dialog h2 { margin: 0 0 var(--space-1); font-size: var(--font-lg); color: var(--text-heading); }
 .ds-dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 10px;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 @media (max-width: 700px) {
-  .ds-dialog-backdrop { padding: 10px; }
+  .ds-dialog-backdrop { padding: var(--space-3); }
 }
 </style>

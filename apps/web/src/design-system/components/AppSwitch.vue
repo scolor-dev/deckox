@@ -39,7 +39,7 @@ defineEmits<{
 </template>
 
 <style scoped>
-.ds-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.ds-switch { display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; }
 .ds-switch input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
 .ds-switch-track {
   position: relative;
@@ -48,7 +48,7 @@ defineEmits<{
   flex: 0 0 auto;
   border-radius: 9px;
   background: var(--border-strong);
-  transition: background .15s ease;
+  transition: background var(--duration-base) var(--ease-standard);
 }
 .ds-switch-thumb {
   position: absolute;
@@ -58,15 +58,15 @@ defineEmits<{
   height: 14px;
   border-radius: 50%;
   background: var(--surface-elevated);
-  box-shadow: 0 1px 2px var(--shadow-soft);
-  transition: transform .15s ease;
+  box-shadow: var(--shadow-thumb);
+  transition: transform var(--duration-base) var(--ease-standard);
 }
 .ds-switch input:checked + .ds-switch-track { background: var(--brand-primary); }
 .ds-switch input:checked + .ds-switch-track .ds-switch-thumb { transform: translateX(16px); }
 .ds-switch input:focus-visible + .ds-switch-track { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
 .ds-switch input:disabled ~ * { opacity: .5; }
 .ds-switch:has(input:disabled) { cursor: not-allowed; }
-.ds-switch-label { color: var(--text-strong); font-size: 12px; font-weight: 600; }
+.ds-switch-label { color: var(--text-strong); font-size: var(--font-sm); font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
   .ds-switch-track, .ds-switch-thumb { transition: none; }

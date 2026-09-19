@@ -13,7 +13,7 @@ defineProps<{
 <style scoped>
 .ds-state-badge {
   display: inline-flex;
-  gap: 6px;
+  gap: var(--space-2);
   align-items: center;
   white-space: nowrap;
 }

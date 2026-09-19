@@ -38,7 +38,7 @@ const clamped = computed(() => Math.min(100, Math.max(0, props.value)));
 
 <style scoped>
 .ds-progress { overflow: hidden; height: 5px; border-radius: 3px; background: var(--border-track); }
-.ds-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--brand-focus); transition: width .2s ease; }
+.ds-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--brand-focus); transition: width var(--duration-slow) var(--ease-standard); }
 .ds-progress-fill--critical { background: var(--danger-accent); }
 
 @media (prefers-reduced-motion: reduce) {

@@ -27,18 +27,18 @@
 }
 .ds-detail-list :deep(dt),
 .ds-detail-list :deep(dd) {
-  padding: 13px 18px;
+  padding: var(--space-3) var(--space-5);
   border-top: 1px solid var(--border-faint);
 }
 .ds-detail-list :deep(dt:nth-child(-n+2)),
 .ds-detail-list :deep(dd:nth-child(-n+2)) { border-top: 0; }
-.ds-detail-list :deep(dt) { margin: 0; color: var(--text-muted); font-size: 12px; }
+.ds-detail-list :deep(dt) { margin: 0; color: var(--text-muted); font-size: var(--font-sm); }
 .ds-detail-list :deep(dd) {
   min-width: 0;
   margin: 0;
   overflow: hidden;
   color: var(--text-strong);
-  font-size: 12px;
+  font-size: var(--font-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

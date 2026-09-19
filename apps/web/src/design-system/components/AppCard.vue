@@ -25,6 +25,6 @@ withDefaults(
   border-radius: var(--radius-md);
   background: var(--surface-elevated);
 }
-.ds-card--md { padding: 17px 18px; }
-.ds-card--sm { padding: 12px 14px; }
+.ds-card--md { padding: var(--space-4) var(--space-5); }
+.ds-card--sm { padding: var(--space-3) var(--space-4); }
 </style>

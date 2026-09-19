@@ -41,11 +41,11 @@ defineEmits<{
 </template>
 
 <style scoped>
-.ds-field { display: grid; gap: 4px; }
-.ds-field label { color: var(--text-strong); font-size: 12px; font-weight: 600; }
+.ds-field { display: grid; gap: var(--space-1); }
+.ds-field label { color: var(--text-strong); font-size: var(--font-sm); font-weight: 600; }
 .ds-field input {
   width: 100%;
-  padding: 9px 10px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   outline: none;
@@ -53,7 +53,7 @@ defineEmits<{
   background: var(--surface-elevated);
   font: inherit;
 }
-.ds-field input:focus { border-color: var(--brand-focus); box-shadow: 0 0 0 2px var(--brand-focus-ring); }
+.ds-field input:focus { border-color: var(--brand-focus); box-shadow: var(--shadow-focus); }
 .ds-field input:disabled { opacity: .6; cursor: not-allowed; }
-.ds-field small { color: var(--text-muted); font-size: 11px; }
+.ds-field small { color: var(--text-muted); font-size: var(--font-xs); }
 </style>

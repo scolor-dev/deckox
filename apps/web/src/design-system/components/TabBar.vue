@@ -40,19 +40,19 @@ defineEmits<{
 .ds-tab-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
-  margin-bottom: 8px;
+  gap: var(--space-0-5);
+  margin-bottom: var(--space-2);
   border-bottom: 1px solid var(--border-default);
 }
 .ds-tab {
-  padding: 9px 16px;
+  padding: var(--space-2) var(--space-4);
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--font-md);
   font-weight: 600;
 }
 .ds-tab:hover:not(.ds-tab--active) { color: var(--text-primary); background: var(--surface-hover); }

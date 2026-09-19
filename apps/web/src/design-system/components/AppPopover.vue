@@ -64,17 +64,17 @@ onBeforeUnmount(() => { window.removeEventListener("click", handleOutsideClick);
   z-index: var(--z-popover);
   top: calc(100% + 6px);
   min-width: 160px;
-  padding: 6px;
+  padding: var(--space-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-elevated);
-  box-shadow: 0 14px 40px var(--shadow-color);
+  box-shadow: var(--shadow-overlay);
 }
 .ds-popover-panel--start { left: 0; }
 .ds-popover-panel--end { right: 0; }
 
 .ds-popover-fade-enter-active,
-.ds-popover-fade-leave-active { transition: opacity .12s ease, transform .12s ease; }
+.ds-popover-fade-leave-active { transition: opacity var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
 .ds-popover-fade-enter-from,
 .ds-popover-fade-leave-to { opacity: 0; transform: translateY(-4px); }
 </style>

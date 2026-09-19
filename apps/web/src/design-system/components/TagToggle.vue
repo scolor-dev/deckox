@@ -25,14 +25,14 @@ defineEmits<{
 <style scoped>
 .ds-tag-toggle {
   display: inline-flex;
-  gap: 5px;
+  gap: var(--space-1);
   align-items: center;
-  padding: 4px 9px;
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--tag-toggle-border);
   border-radius: var(--radius-pill);
   color: var(--text-secondary);
   background: var(--surface-elevated);
-  font-size: 11px;
+  font-size: var(--font-xs);
   cursor: pointer;
   user-select: none;
 }

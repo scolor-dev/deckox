@@ -324,12 +324,13 @@
   --z-toast: 50;
   --z-overlay: 60;
 
-  /* spacing / font-size — a disciplined scale for NEW components. The
-   * components already built to match the real app's hand-tuned values
-   * (7px 14px button padding, 9px captions, ...) keep those literals on
-   * purpose: they must render identically when they eventually replace
-   * the real app's markup, so snapping them to this scale now would
-   * quietly change the look they're meant to reproduce. */
+  /* spacing / font-size — the scale every component builds from. Values
+   * in components are snapped to the nearest step (ties round up), not
+   * the other way around: a one-off 7px or 9px means a component is
+   * off-scale, not that the scale needs another step. Widths/heights of
+   * fixed-size controls (a 34x18 switch track) are geometry, not spacing,
+   * and stay literal. */
+  --space-0-5: 2px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -349,4 +350,21 @@
   --font-xl: 17px;
   --font-2xl: 19px;
   --font-3xl: 26px;
+
+  /* shadow — composed from the mode-dependent --shadow-color/--shadow-soft
+   * above; var() resolves per theme where these are used, so one
+   * definition works for light and dark. */
+  --shadow-overlay: 0 14px 40px var(--shadow-color);
+  --shadow-raised: 0 4px 14px var(--shadow-soft);
+  --shadow-thumb: 0 1px 2px var(--shadow-soft);
+  --shadow-focus: 0 0 0 2px var(--brand-focus-ring);
+
+  /* motion — three tiers by how much the thing moves: fast for small
+   * surfaces appearing (popover), base for state changes (switch, tooltip),
+   * slow for value changes that should read as travel (progress fill). */
+  --duration-fast: 120ms;
+  --duration-base: 150ms;
+  --duration-slow: 200ms;
+  --duration-spin: 800ms;
+  --ease-standard: ease;
 }

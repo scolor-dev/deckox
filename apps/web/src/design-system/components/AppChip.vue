@@ -39,12 +39,12 @@ defineEmits<{
 .ds-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
   color: var(--text-secondary);
   background: var(--surface-elevated);
-  font-size: 11px;
+  font-size: var(--font-xs);
 }
 </style>

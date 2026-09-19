@@ -15,7 +15,7 @@ defineProps<{
 </template>
 
 <style scoped>
-.ds-empty-state { padding: 42px 18px; color: var(--text-faint); text-align: center; }
+.ds-empty-state { padding: var(--space-10) var(--space-5); color: var(--text-faint); text-align: center; }
 .ds-empty-state p { margin: 0; }
-.ds-empty-state:has(> :not(p)) p { margin-bottom: 12px; }
+.ds-empty-state:has(> :not(p)) p { margin-bottom: var(--space-3); }
 </style>

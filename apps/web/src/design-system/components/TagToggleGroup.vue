@@ -17,5 +17,5 @@ defineProps<{
 </template>
 
 <style scoped>
-.ds-tag-toggles { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; border: 0; margin: 0; }
+.ds-tag-toggles { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; border: 0; margin: 0; }
 </style>

@@ -42,8 +42,8 @@ defineEmits<{
   cursor: pointer;
   line-height: 1;
 }
-.ds-icon-button--md { width: 24px; height: 24px; border-radius: var(--radius-sm); font-size: 18px; }
-.ds-icon-button--sm { width: 14px; height: 14px; border-radius: 50%; font-size: 12px; color: var(--text-faint); }
+.ds-icon-button--md { width: 24px; height: 24px; border-radius: var(--radius-sm); font-size: var(--font-2xl); }
+.ds-icon-button--sm { width: 14px; height: 14px; border-radius: 50%; font-size: var(--font-sm); color: var(--text-faint); }
 .ds-icon-button:hover { color: var(--text-primary); background: var(--surface-hover); }
 .ds-icon-button--danger:hover { color: var(--danger-accent); background: var(--danger-bg); }
 </style>

@@ -29,15 +29,15 @@ withDefaults(
   position: absolute;
   left: 50%;
   z-index: var(--z-popover);
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   color: var(--surface-elevated);
   background: var(--text-heading-strong);
-  font-size: 11px;
+  font-size: var(--font-xs);
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity .15s ease, transform .15s ease;
+  transition: opacity var(--duration-base) var(--ease-standard), transform var(--duration-base) var(--ease-standard);
 }
 .ds-tooltip-bubble--top { bottom: calc(100% + 6px); transform: translateX(-50%) translateY(4px); }
 .ds-tooltip-bubble--bottom { top: calc(100% + 6px); transform: translateX(-50%) translateY(-4px); }
