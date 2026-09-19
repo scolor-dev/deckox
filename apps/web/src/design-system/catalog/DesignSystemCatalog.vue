@@ -31,6 +31,11 @@ import TagToggle from "../components/TagToggle.vue";
 import TagToggleGroup from "../components/TagToggleGroup.vue";
 import TextField from "../components/TextField.vue";
 import AppTooltip from "../components/AppTooltip.vue";
+import AppToast from "../components/AppToast.vue";
+import LogEntry from "../components/LogEntry.vue";
+import LogList from "../components/LogList.vue";
+import StorageAllocationBar from "../components/StorageAllocationBar.vue";
+import ToastRegion from "../components/ToastRegion.vue";
 
 const dialogOpen = ref(false);
 const modalOpen = ref(false);
@@ -45,6 +50,19 @@ const tabs = [
 
 const tagState = ref({ standard: true, deckox: true, product: false });
 
+let toastSeq = 0;
+const toasts = ref<{ id: number; tone: "success" | "warning" | "error"; text: string }[]>([]);
+function pushToast(tone: "success" | "warning" | "error", text: string) {
+  toasts.value.push({ id: (toastSeq += 1), tone, text });
+}
+
+const allocation = [
+  { key: "root", label: "/", percent: 46, color: "#2a78d6", value: "46%" },
+  { key: "home", label: "/home", percent: 22, color: "#eb6834", value: "22%" },
+  { key: "var", label: "/var", percent: 12, color: "#1baf7a", value: "12%" },
+  { key: "free", label: "Free", percent: 20, color: "var(--border-strong)", value: "20%" },
+];
+
 const textValue = ref("docker.io");
 const selectValue = ref("auto");
 const checkboxValue = ref(true);
@@ -55,6 +73,11 @@ const themeOptions = [
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
 ];
+
+const spaceTokens = ["space-1", "space-2", "space-3", "space-4", "space-5", "space-6", "space-8", "space-10", "space-12", "space-16"];
+const radiusTokens = ["radius-sm", "radius-md", "radius-badge", "radius-pill"];
+const fontTokens = ["font-2xs", "font-xs", "font-sm", "font-md", "font-lg", "font-xl", "font-2xl", "font-3xl"];
+const zTokens = ["z-sticky-column", "z-popover", "z-toast", "z-overlay"];
 
 const colorGroups: { name: string; tokens: string[] }[] = [
   { name: "surface", tokens: ["surface-page", "surface-elevated", "surface-subtle", "surface-muted", "surface-hover"] },
@@ -111,6 +134,67 @@ const colorGroups: { name: string; tokens: string[] }[] = [
               class="swatch"
               :style="{ background: `var(--${token})` }"
             />
+            <code>--{{ token }}</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="catalog-section">
+      <h2>Scale tokens</h2>
+      <div class="token-group">
+        <h3>spacing</h3>
+        <div class="token-swatches">
+          <div
+            v-for="token in spaceTokens"
+            :key="token"
+            class="token-swatch"
+          >
+            <span
+              class="space-bar"
+              :style="{ width: `var(--${token})` }"
+            />
+            <code>--{{ token }}</code>
+          </div>
+        </div>
+      </div>
+      <div class="token-group">
+        <h3>radius</h3>
+        <div class="token-swatches">
+          <div
+            v-for="token in radiusTokens"
+            :key="token"
+            class="token-swatch"
+          >
+            <span
+              class="radius-box"
+              :style="{ borderRadius: `var(--${token})` }"
+            />
+            <code>--{{ token }}</code>
+          </div>
+        </div>
+      </div>
+      <div class="token-group">
+        <h3>font size</h3>
+        <div class="token-swatches">
+          <div
+            v-for="token in fontTokens"
+            :key="token"
+            class="token-swatch"
+          >
+            <span :style="{ fontSize: `var(--${token})` }">Aa</span>
+            <code>--{{ token }}</code>
+          </div>
+        </div>
+      </div>
+      <div class="token-group">
+        <h3>z-index (stacking order)</h3>
+        <div class="token-swatches">
+          <div
+            v-for="token in zTokens"
+            :key="token"
+            class="token-swatch"
+          >
             <code>--{{ token }}</code>
           </div>
         </div>
@@ -525,6 +609,69 @@ const colorGroups: { name: string; tokens: string[] }[] = [
       <p>Content below</p>
       <AppEmptyState message="No schedules configured." />
     </section>
+    <section class="catalog-section">
+      <h2>LogList / LogEntry</h2>
+      <LogList>
+        <LogEntry
+          priority="error"
+          priority-label="Error"
+          timestamp="09/18 04:12:03"
+          process="docker"
+          :pid="1042"
+          message="failed to start containerd: connection refused"
+        />
+        <LogEntry
+          priority="warning"
+          priority-label="Warning"
+          timestamp="09/18 04:12:04"
+          process="docker"
+          :pid="1042"
+          message="Configured runtime differs from the default"
+        />
+        <LogEntry
+          priority="info"
+          priority-label="Info"
+          timestamp="09/18 04:12:05"
+          process="docker"
+          :pid="1042"
+          message="API listening on /run/docker.sock"
+        />
+      </LogList>
+    </section>
+
+    <section class="catalog-section">
+      <h2>StorageAllocationBar</h2>
+      <StorageAllocationBar
+        label="Disk usage by mount"
+        :segments="allocation"
+      />
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppToast / ToastRegion</h2>
+      <div class="row">
+        <AppButton @click="pushToast('success', 'nginx.service restarted.')">
+          Success toast
+        </AppButton>
+        <AppButton @click="pushToast('warning', 'Swap usage is above 80%.')">
+          Warning toast
+        </AppButton>
+        <AppButton @click="pushToast('error', 'Could not reach the Agent.')">
+          Error toast
+        </AppButton>
+      </div>
+      <ToastRegion>
+        <AppToast
+          v-for="toast in toasts"
+          :key="toast.id"
+          :tone="toast.tone"
+          dismiss-label="Dismiss"
+          @dismiss="toasts = toasts.filter((t) => t.id !== toast.id)"
+        >
+          {{ toast.text }}
+        </AppToast>
+      </ToastRegion>
+    </section>
   </div>
 </template>
 
@@ -567,5 +714,7 @@ const colorGroups: { name: string; tokens: string[] }[] = [
 .token-group h3 { margin: 0 0 8px; color: var(--text-label); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .token-swatches { display: flex; flex-wrap: wrap; gap: 12px; }
 .token-swatch { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+.space-bar { display: inline-block; height: 10px; background: var(--brand-primary); }
+.radius-box { display: inline-block; width: 28px; height: 28px; border: 1px solid var(--border-strong); background: var(--surface-elevated); }
 .swatch { display: inline-block; width: 20px; height: 20px; border: 1px solid var(--border-default); border-radius: 4px; }
 </style>

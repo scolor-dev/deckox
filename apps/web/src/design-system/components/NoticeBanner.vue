@@ -24,7 +24,7 @@ const role = computed(() => (props.tone === "error" ? "alert" : "status"));
   margin-bottom: 16px;
   padding: 10px 13px;
   border: 1px solid;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
 }
 .ds-notice--error { border-color: var(--danger-border); color: var(--danger-text); background: var(--danger-bg); }

@@ -29,7 +29,7 @@ defineEmits<{
   align-items: center;
   padding: 4px 9px;
   border: 1px solid var(--tag-toggle-border);
-  border-radius: 12px;
+  border-radius: var(--radius-pill);
   color: var(--text-secondary);
   background: var(--surface-elevated);
   font-size: 11px;

@@ -15,7 +15,7 @@
   margin-top: 12px;
   padding: 10px 12px;
   border: 1px solid var(--info-border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--info-text);
   background: var(--info-bg);
   font-size: 11px;

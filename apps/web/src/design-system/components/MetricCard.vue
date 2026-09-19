@@ -51,7 +51,7 @@ withDefaults(
   min-width: 0;
   padding: 17px 18px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--surface-elevated);
 }
 .ds-metric-card--warning { border-color: var(--metric-warning-border); background: var(--warning-bg); }

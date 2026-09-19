@@ -50,7 +50,7 @@ defineProps<{
   margin-top: 18px;
   overflow: hidden;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--surface-elevated);
 }
 .ds-table-toolbar {
@@ -86,14 +86,14 @@ defineProps<{
 .ds-table-scroll :deep(td) { color: var(--text-secondary); font-size: 12px; }
 
 @media (max-width: 700px) {
-  .ds-table-panel { border-radius: 4px; }
+  .ds-table-panel { border-radius: var(--radius-sm); }
   .ds-table-scroll :deep(th),
   .ds-table-scroll :deep(td) { padding: 11px 12px; }
   .ds-table-scroll :deep(th:first-child),
   .ds-table-scroll :deep(td:first-child) {
     position: sticky;
     left: 0;
-    z-index: 1;
+    z-index: var(--z-sticky-column);
     background: var(--surface-elevated);
   }
   .ds-table-scroll :deep(th:first-child) { background: var(--surface-subtle); }

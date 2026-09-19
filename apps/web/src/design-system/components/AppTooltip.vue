@@ -28,9 +28,9 @@ withDefaults(
 .ds-tooltip-bubble {
   position: absolute;
   left: 50%;
-  z-index: 40;
+  z-index: var(--z-popover);
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--surface-elevated);
   background: var(--text-heading-strong);
   font-size: 11px;

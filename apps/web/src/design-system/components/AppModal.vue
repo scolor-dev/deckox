@@ -68,7 +68,7 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
 <style scoped>
 .ds-modal-backdrop {
   position: fixed;
-  z-index: 60;
+  z-index: var(--z-overlay);
   inset: 0;
   display: grid;
   padding: 24px;
@@ -81,7 +81,7 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--surface-elevated);
   box-shadow: 0 14px 40px var(--shadow-color);
 }

@@ -61,12 +61,12 @@ onBeforeUnmount(() => { window.removeEventListener("click", handleOutsideClick);
 .ds-popover-anchor { position: relative; display: inline-block; }
 .ds-popover-panel {
   position: absolute;
-  z-index: 40;
+  z-index: var(--z-popover);
   top: calc(100% + 6px);
   min-width: 160px;
   padding: 6px;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--surface-elevated);
   box-shadow: 0 14px 40px var(--shadow-color);
 }

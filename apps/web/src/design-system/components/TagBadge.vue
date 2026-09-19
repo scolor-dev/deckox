@@ -17,7 +17,7 @@ defineProps<{
 .ds-tag-badge {
   display: inline-block;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-badge);
   font-size: 9px;
   font-weight: 600;
   line-height: 1.6;

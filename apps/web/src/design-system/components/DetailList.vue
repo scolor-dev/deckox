@@ -22,7 +22,7 @@
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--surface-elevated);
 }
 .ds-detail-list :deep(dt),

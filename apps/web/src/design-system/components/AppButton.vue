@@ -32,7 +32,7 @@ withDefaults(
 <style scoped>
 .ds-button {
   border: 1px solid var(--border-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--surface-elevated);
   color: var(--text-strong);
   cursor: pointer;

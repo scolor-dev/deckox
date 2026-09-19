@@ -42,7 +42,7 @@ defineEmits<{
   gap: 4px;
   padding: 3px 10px;
   border: 1px solid var(--border-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-pill);
   color: var(--text-secondary);
   background: var(--surface-elevated);
   font-size: 11px;
