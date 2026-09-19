@@ -30,10 +30,32 @@ pub struct SystemConfig {
     pub allow_update: bool,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct SoftwareConfig {
     #[serde(default)]
     pub allowed: Vec<String>,
+    /// When `true` (the default), packages the admin installed on purpose are
+    /// managed without being listed in `allowed`.
+    #[serde(default = "default_auto_adopt")]
+    pub auto_adopt: bool,
+    /// Packages the admin removed from management by hand; they are never
+    /// adopted automatically again.
+    #[serde(default)]
+    pub dismissed: Vec<String>,
+}
+
+const fn default_auto_adopt() -> bool {
+    true
+}
+
+impl Default for SoftwareConfig {
+    fn default() -> Self {
+        Self {
+            allowed: Vec::new(),
+            auto_adopt: true,
+            dismissed: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -123,7 +145,7 @@ pub fn write_allowed_services(path: &Path, allowed: &[String]) -> Result<(), Age
 /// only up to the next `[...]` header instead of assuming the rest of the
 /// file belongs to this table. Writes via a temp file plus a rename, same as
 /// [`write_allowed_services`].
-pub fn write_allowed_software(path: &Path, allowed: &[String]) -> Result<(), AgentError> {
+pub fn write_software_settings(path: &Path, settings: &SoftwareConfig) -> Result<(), AgentError> {
     let original = match std::fs::read_to_string(path) {
         Ok(content) => content,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -135,7 +157,8 @@ pub fn write_allowed_software(path: &Path, allowed: &[String]) -> Result<(), Age
         }
     };
 
-    let updated = replace_bounded_section(&original, "software", &render_software_section(allowed));
+    let updated =
+        replace_bounded_section(&original, "software", &render_software_section(settings));
 
     let temp_path = path.with_extension("software.toml.tmp");
     std::fs::write(&temp_path, updated).map_err(|error| {
@@ -152,28 +175,36 @@ pub fn write_allowed_software(path: &Path, allowed: &[String]) -> Result<(), Age
 /// Each entry here has already been confirmed, at the time it was added, to
 /// resolve from the host's own already-configured package repositories —
 /// there is no fixed catalog to cross-reference.
-fn render_software_section(allowed: &[String]) -> String {
-    let mut sorted = allowed.to_vec();
+fn render_string_list(section: &mut String, key: &str, values: &[String]) {
+    let mut sorted = values.to_vec();
     sorted.sort();
-
-    let mut section = String::from(
-        "# Package state can always be read. Install, remove, and upgrade are permitted\n\
-         # only for package names listed here. Each name was confirmed, when added, to\n\
-         # resolve from this host's own configured package repositories (never a newly\n\
-         # added third-party one). Managed from the web admin's Software screen; hand\n\
-         # edits are kept as long as this table is followed only by [services] (or\n\
-         # nothing).\n\
-         [software]\n",
-    );
+    sorted.dedup();
     if sorted.is_empty() {
-        section.push_str("allowed = []\n");
+        let _ = writeln!(section, "{key} = []");
     } else {
-        section.push_str("allowed = [\n");
+        let _ = writeln!(section, "{key} = [");
         for id in &sorted {
             let _ = writeln!(section, "  \"{id}\",");
         }
         section.push_str("]\n");
     }
+}
+
+fn render_software_section(settings: &SoftwareConfig) -> String {
+    let mut section = String::from(
+        "# Package state can always be read. Install, remove, and upgrade are permitted\n\
+         # only for package names that are managed: those listed in `allowed`, plus (when\n\
+         # `auto_adopt` is true) packages installed on purpose that are not in\n\
+         # `dismissed`. Names in `allowed` were confirmed, when added, to resolve from\n\
+         # this host's own configured package repositories or to be installed already\n\
+         # (never a newly added third-party repository). Managed from the web admin's\n\
+         # Software screen; hand edits are kept as long as this table is followed only\n\
+         # by [services] (or nothing).\n\
+         [software]\n",
+    );
+    let _ = writeln!(section, "auto_adopt = {}", settings.auto_adopt);
+    render_string_list(&mut section, "allowed", &settings.allowed);
+    render_string_list(&mut section, "dismissed", &settings.dismissed);
     section
 }
 
@@ -251,9 +282,16 @@ fn replace_services_section(original: &str, new_section: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentConfig, render_services_section, render_software_section, replace_bounded_section,
-        replace_services_section,
+        AgentConfig, SoftwareConfig, render_services_section, render_software_section,
+        replace_bounded_section, replace_services_section,
     };
+
+    fn settings(allowed: &[String]) -> SoftwareConfig {
+        SoftwareConfig {
+            allowed: allowed.to_vec(),
+            ..SoftwareConfig::default()
+        }
+    }
 
     #[test]
     fn parses_allowed_services() {
@@ -348,7 +386,7 @@ allowed = ["nginx.service", "postgresql.service"]
         let updated = replace_bounded_section(
             original,
             "software",
-            &render_software_section(&["nginx".to_owned()]),
+            &render_software_section(&settings(&["nginx".to_owned()])),
         );
 
         assert!(updated.contains("allow_reboot = true"));
@@ -371,7 +409,7 @@ allowed = ["nginx.service", "postgresql.service"]
         let updated = replace_bounded_section(
             "socket = \"/tmp/deckox.sock\"\n",
             "software",
-            &render_software_section(&[]),
+            &render_software_section(&settings(&[])),
         );
 
         assert!(updated.starts_with("socket = \"/tmp/deckox.sock\""));
@@ -386,7 +424,7 @@ allowed = ["nginx.service", "postgresql.service"]
         let updated = replace_bounded_section(
             original,
             "software",
-            &render_software_section(&["docker".to_owned(), "nginx".to_owned()]),
+            &render_software_section(&settings(&["docker".to_owned(), "nginx".to_owned()])),
         );
 
         assert!(updated.contains("\"docker\""));
@@ -394,8 +432,29 @@ allowed = ["nginx.service", "postgresql.service"]
     }
 
     #[test]
+    fn software_settings_round_trip_including_auto_adopt_and_dismissed() {
+        let rendered = render_software_section(&SoftwareConfig {
+            allowed: vec!["nginx".to_owned()],
+            auto_adopt: false,
+            dismissed: vec!["docker-ce-cli".to_owned(), "docker-ce-cli".to_owned()],
+        });
+        let parsed: AgentConfig = toml::from_str(&rendered).expect("rendered section parses");
+        assert_eq!(parsed.software.allowed, vec!["nginx".to_owned()]);
+        assert!(!parsed.software.auto_adopt);
+        assert_eq!(parsed.software.dismissed, vec!["docker-ce-cli".to_owned()]);
+    }
+
+    #[test]
+    fn software_auto_adopt_defaults_to_on() {
+        let parsed: AgentConfig = toml::from_str("[software]\nallowed = []\n").expect("parses");
+        assert!(parsed.software.auto_adopt);
+        assert!(parsed.software.dismissed.is_empty());
+    }
+
+    #[test]
     fn render_software_section_sorts_and_quotes_ids() {
-        let rendered = render_software_section(&["nginx".to_owned(), "docker".to_owned()]);
+        let rendered =
+            render_software_section(&settings(&["nginx".to_owned(), "docker".to_owned()]));
         let docker_index = rendered.find("\"docker\"").expect("docker listed");
         let nginx_index = rendered.find("\"nginx\"").expect("nginx listed");
         assert!(docker_index < nginx_index, "allowlist should be sorted");

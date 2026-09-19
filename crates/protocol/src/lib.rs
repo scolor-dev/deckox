@@ -350,6 +350,10 @@ pub struct SoftwarePackage {
     /// [`DiagnosticHost::upgradable_packages`]'s read-only convention).
     pub available_version: Option<String>,
     pub upgradable: bool,
+    /// `true` when the package is managed only because it was detected as
+    /// installed on purpose (`auto_adopt`), not because it was added by hand.
+    #[serde(default)]
+    pub auto: bool,
 }
 
 /// One package the host's package manager reports as installed.

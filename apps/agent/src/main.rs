@@ -98,7 +98,7 @@ async fn build_state() -> (AppState, PathBuf) {
         });
     let package_manager = software::detect_package_manager().await;
     let software = SoftwareManager::new(
-        config.software.allowed,
+        config.software,
         AgentConfig::resolve_path(),
         package_manager,
     )

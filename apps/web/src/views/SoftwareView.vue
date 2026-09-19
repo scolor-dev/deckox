@@ -14,6 +14,7 @@ import {
   StateBadge,
   TableToolbar,
   TablePanel,
+  TagBadge,
   TagToggle,
   TagToggleGroup,
   TextField,
@@ -265,7 +266,20 @@ onMounted(() => {
             :key="pkg.name"
           >
             <td>
-              <strong class="service-name">{{ pkg.name }}</strong>
+              <AppStack
+                direction="row"
+                gap="2"
+                align="center"
+                wrap
+              >
+                <strong class="service-name">{{ pkg.name }}</strong>
+                <TagBadge
+                  v-if="pkg.auto"
+                  category="deckox"
+                >
+                  {{ t("software.autoDetected") }}
+                </TagBadge>
+              </AppStack>
             </td>
             <td>
               <StateBadge :state="pkg.installed ? 'active' : 'inactive'">

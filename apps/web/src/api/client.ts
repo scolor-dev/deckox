@@ -140,6 +140,7 @@ export interface ServiceSummary {
 }
 
 export interface SoftwarePackage {
+  auto?: boolean;
   name: string;
   installed: boolean;
   installed_version: string | null;
