@@ -151,23 +151,26 @@ impl ServiceManager {
         ids.extend(unlisted.iter().cloned());
         // The extra unit-file rows are a best-effort addition: if reading
         // their properties fails, the loaded services still list normally.
-        let properties = match read_unit_properties(&ids).await {
-            Ok(properties) => properties,
-            Err(_) => {
-                unlisted.clear();
-                read_unit_properties(&listed_ids).await?
-            }
+        let properties = if let Ok(properties) = read_unit_properties(&ids).await {
+            properties
+        } else {
+            unlisted.clear();
+            read_unit_properties(&listed_ids).await?
         };
         let fragment_paths = fragment_paths_of(&properties);
-        let allowed = self.allowed.read().await;
 
-        let mut services = parse_service_list(&output, &enabled_states, &fragment_paths, &allowed);
-        services.extend(unlisted_services(
-            &unlisted,
-            &properties,
-            &enabled_states,
-            &allowed,
-        ));
+        let mut services = {
+            let allowed = self.allowed.read().await;
+            let mut rows = parse_service_list(&output, &enabled_states, &fragment_paths, &allowed);
+            rows.extend(unlisted_services(
+                &unlisted,
+                &properties,
+                &enabled_states,
+                &allowed,
+            ));
+            drop(allowed);
+            rows
+        };
         services.sort_by(|a, b| a.id.cmp(&b.id));
         Ok(services)
     }
