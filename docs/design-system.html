@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Deckoxのデザインシステム:トークン、コンポーネント、品質ルール">
+  <title>Deckox Docs — デザインシステム</title>
+  <link rel="stylesheet" href="assets/docs.css">
+  <script src="assets/docs.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">本文へ移動</a>
+  <div class="mobile-header">
+    <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Docs</small></span></a>
+    <button class="menu-button" type="button" data-menu-button aria-expanded="false" aria-label="ナビゲーションを開く">Menu</button>
+  </div>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="index.html"><span class="brand-mark">D</span><span class="brand-copy"><strong>Deckox</strong><small>Project docs</small></span></a>
+      <p class="nav-label">Documentation</p>
+      <nav class="nav" aria-label="ドキュメント">
+        <a href="index.html"><span class="nav-icon">⌂</span>概要</a>
+        <a href="architecture.html"><span class="nav-icon">◇</span>設計</a>
+        <a href="features.html"><span class="nav-icon">✓</span>機能</a>
+        <a href="installation.html"><span class="nav-icon">↓</span>インストール</a>
+        <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
+        <a href="design-system.html"><span class="nav-icon">◐</span>デザインシステム</a>
+      </nav>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.6.3</div>
+    </aside>
+    <main class="content" id="main">
+      <header class="page-head">
+        <p class="eyebrow">Design system</p>
+        <h1>画面の見た目を、部品とトークンで揃える。</h1>
+        <p class="lead">Web UIの色・間隔・部品は<code>apps/web/src/design-system/</code>に集約されています。ライト/ダークの両テーマに対応し、キーボード操作とコントラストはテストで固定しています。</p>
+      </header>
+
+      <section class="section" aria-labelledby="layout-title">
+        <h2 id="layout-title">構成</h2>
+        <pre><code>apps/web/src/design-system/
+├── tokens.css          # 色・間隔・角丸・文字・影・動き・z-indexのトークン
+├── theme.ts            # テーマ(自動/ライト/ダーク)の解決と適用
+├── breakpoints.ts      # CSS変数にできないブレークポイント
+├── components/
+│   ├── index.ts        # 全コンポーネントのバレル
+│   └── AppButton/      # コンポーネントごとのフォルダ
+│       ├── AppButton.vue
+│       └── AppButton.md   # AI向けの使い方(英語)
+├── composables/        # フォーカストラップ、Escapeで閉じる処理
+├── catalog/            # 開発用カタログ(本番ビルドに含めない)
+└── README.md           # 「どの部品を使うか」の早見表</code></pre>
+      </section>
+
+      <section class="section" aria-labelledby="tokens-title">
+        <h2 id="tokens-title">トークンとテーマ</h2>
+        <p><code>tokens.css</code>は三層で定義します。素の<code>:root</code>がライト、<code>prefers-color-scheme: dark</code>のブロックがOS追従のダーク(明示的にライトを選んだ場合は除外)、<code>:root[data-theme="dark"]</code>が明示的なダークです。<code>data-theme</code>は<code>&lt;html&gt;</code>に付き、設定画面の「テーマ」(自動/ライト/ダーク)と初期描画前のインラインスクリプトが制御します。</p>
+        <p>色以外(角丸・z-index・間隔・文字サイズ・影・動き)はテーマに依存せず、値を共有します。間隔と文字サイズはスケールの段階値で、直値は書きません。</p>
+        <aside class="note"><strong>ルール:</strong> Vue/CSSに色・間隔・角丸などの直値を書かず、必ずトークンを使います。新しい色トークンはライト・自動ダーク・明示ダークの3か所に定義します。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="components-title">
+        <h2 id="components-title">コンポーネント</h2>
+        <p>各コンポーネントの詳細(props・イベント・スロット・アクセシビリティ・注意点・移行手順)は、同じフォルダの<code>.md</code>にあります。</p>
+        <table class="status-table">
+          <thead><tr><th>コンポーネント</th><th>用途</th></tr></thead>
+          <tbody>
+          <tr><th colspan="2" scope="colgroup">操作</th></tr>
+          <tr><td><code>AppButton</code></td><td>テキストボタン</td></tr>
+          <tr><td><code>AppIcon</code></td><td>文字色に追従するインラインSVGアイコン</td></tr>
+          <tr><td><code>AppIconButton</code></td><td>アイコンだけの小さなボタン</td></tr>
+          <tr><td><code>ButtonGroup</code></td><td>ボタンを一つの連結コントロールにまとめる</td></tr>
+          <tr><th colspan="2" scope="colgroup">フォーム</th></tr>
+          <tr><td><code>AppCheckbox</code></td><td>ラベル付きチェックボックス</td></tr>
+          <tr><td><code>AppSwitch</code></td><td>即時反映される設定のオン/オフ</td></tr>
+          <tr><td><code>FileField</code></td><td>ラベル付きファイル選択</td></tr>
+          <tr><td><code>RadioGroup</code></td><td>一つだけ選ぶラジオ群</td></tr>
+          <tr><td><code>SelectField</code></td><td>ラベル付きドロップダウン</td></tr>
+          <tr><td><code>TextAreaField</code></td><td>ラベル付き複数行入力</td></tr>
+          <tr><td><code>TextField</code></td><td>ラベル付き1行入力</td></tr>
+          <tr><th colspan="2" scope="colgroup">フィードバック</th></tr>
+          <tr><td><code>AppEmptyState</code></td><td>「まだ何もない」領域の表示</td></tr>
+          <tr><td><code>AppSkeleton</code></td><td>読み込み中のプレースホルダー</td></tr>
+          <tr><td><code>AppSpinner</code></td><td>小さな読み込みスピナー</td></tr>
+          <tr><td><code>AppToast</code></td><td>画面上に浮かんで消える通知</td></tr>
+          <tr><td><code>InfoNote</code></td><td>フォームや表の下の補足テキスト</td></tr>
+          <tr><td><code>NoticeBanner</code></td><td>操作結果を伝えるインライン通知</td></tr>
+          <tr><td><code>ProgressBar</code></td><td>1つの値を示すバー</td></tr>
+          <tr><td><code>StateBadge</code></td><td>リソースの状態を示す点付きバッジ</td></tr>
+          <tr><th colspan="2" scope="colgroup">オーバーレイ</th></tr>
+          <tr><td><code>AppModal</code></td><td>ヘッダー・スクロール本文・フッターを持つ汎用ダイアログ</td></tr>
+          <tr><td><code>AppPopover</code></td><td>トリガーの下に出るメニュー</td></tr>
+          <tr><td><code>AppTooltip</code></td><td>ホバー/フォーカスで出る1行ラベル</td></tr>
+          <tr><td><code>ConfirmDialog</code></td><td>はい/いいえを尋ねる小型ダイアログ</td></tr>
+          <tr><th colspan="2" scope="colgroup">ナビゲーション</th></tr>
+          <tr><td><code>AppBreadcrumb</code></td><td>階層内の現在位置</td></tr>
+          <tr><td><code>AppPagination</code></td><td>ページ番号と前後ボタン</td></tr>
+          <tr><td><code>TabBar</code></td><td>タブ切り替え</td></tr>
+          <tr><th colspan="2" scope="colgroup">レイアウト</th></tr>
+          <tr><td><code>AppCard</code></td><td>枠付きの汎用パネル</td></tr>
+          <tr><td><code>AppDivider</code></td><td>ブロック間の区切り線</td></tr>
+          <tr><td><code>AppGrid</code></td><td>幅に応じて列数が変わるグリッド</td></tr>
+          <tr><td><code>PageHeader</code></td><td>各画面の先頭行(見出し・サブタイトル・操作)</td></tr>
+          <tr><td><code>AppStack</code></td><td>スケール間隔付きのflex行/列</td></tr>
+          <tr><th colspan="2" scope="colgroup">データ表示</th></tr>
+          <tr><td><code>AppDataTable</code></td><td>ソートと行選択に対応した表</td></tr>
+          <tr><td><code>AppChip</code></td><td>削除可能な値のピル</td></tr>
+          <tr><td><code>DetailList</code></td><td>ラベルと値の2列リスト</td></tr>
+          <tr><td><code>LogList</code></td><td>ジャーナル行のスクロールリスト</td></tr>
+          <tr><td><code>MetricCard</code></td><td>1つの指標のタイル</td></tr>
+          <tr><td><code>StorageAllocationBar</code></td><td>複数の割合を積み上げるバー</td></tr>
+          <tr><td><code>TablePanel</code></td><td>表を包むカード兼スクロール枠</td></tr>
+          <tr><td><code>TagBadge</code></td><td>リソース種別を示す静的ピル</td></tr>
+          <tr><td><code>TagToggle</code></td><td>種別の表示/非表示を切り替えるピル</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section" aria-labelledby="a11y-title">
+        <h2 id="a11y-title">アクセシビリティ</h2>
+        <ul>
+          <li><strong>フォーカス:</strong> ダイアログはフォーカストラップを持ち、開くとダイアログ(または<code>data-autofocus</code>の要素)へ移動、閉じると元の要素へ戻ります。操作可能な部品はグローバルCSSに頼らず自前の<code>:focus-visible</code>を持ちます。</li>
+          <li><strong>キーボード:</strong> タブは矢印・Home・Endで移動(roving tabindex)、メニューは矢印で項目を移動しEscapeで閉じてトリガーへ戻ります。</li>
+          <li><strong>コントラスト:</strong> 文字・バッジ・ボタンの配色はライト/ダークとも WCAG AA(本文4.5:1、補助テキスト3:1)を満たすことをテストで検査します。</li>
+          <li><strong>動き:</strong> アニメーションを持つ部品は<code>prefers-reduced-motion</code>に対応します。</li>
+          <li><strong>自動検査:</strong> axe-coreでカタログ全体と開いたオーバーレイを検査します。</li>
+        </ul>
+        <aside class="note warning"><strong>既知の例外:</strong> 入力欄の枠線(<code>--border-strong</code>)は非テキストコントラスト3:1に届いていません。ラベルと背景で識別できるため現状は許容し、テストの対象外にしています。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="workflow-title">
+        <h2 id="workflow-title">開発の流れ</h2>
+        <pre><code>cd apps/web
+npm run dev              # /design-system.html で全コンポーネントを操作して確認
+npm run test             # ドキュメントの整合・コントラスト・キーボード・axe
+npm run build:catalog    # 単一HTMLのカタログを dist-catalog/ に生成(Artifact公開用)</code></pre>
+        <p>コンポーネントを変更したら同じフォルダの<code>.md</code>も更新します。props・イベント・スロット・使用トークンの記述が実装とずれると、テストが失敗します。新しいコンポーネントは<code>components/index.ts</code>と<code>README.md</code>への追加が必要です。</p>
+      </section>
+
+      <footer class="footer">Deckox Docs · Design system</footer>
+    </main>
+  </div>
+</body>
+</html>

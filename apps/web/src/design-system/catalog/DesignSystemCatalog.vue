@@ -9,8 +9,10 @@ import {
   AppCard,
   AppCheckbox,
   AppChip,
+  AppDataTable,
   AppDivider,
   AppEmptyState,
+  AppGrid,
   AppIcon,
   AppIconButton,
   AppModal,
@@ -19,6 +21,7 @@ import {
   AppPopoverItem,
   AppSkeleton,
   AppSpinner,
+  AppStack,
   AppSwitch,
   AppToast,
   AppTooltip,
@@ -74,6 +77,25 @@ const allocation = [
   { key: "var", label: "/var", percent: 12, color: "#1baf7a", value: "12%" },
   { key: "free", label: "Free", percent: 20, color: "var(--border-strong)", value: "20%" },
 ];
+
+const serviceRows = [
+  { name: "nginx", memory: 120, state: "running" },
+  { name: "docker", memory: 912, state: "running" },
+  { name: "cron", memory: 4, state: "stopped" },
+  { name: "sshd", memory: 18, state: "running" },
+];
+const serviceColumns = [
+  { key: "name", label: "Name", sortable: true },
+  { key: "memory", label: "Memory (MiB)", sortable: true, align: "end" as const },
+  { key: "state", label: "State" },
+];
+const sortKey = ref<string | null>("name");
+const sortDirection = ref<"asc" | "desc">("asc");
+const selectedServices = ref<string[]>(["docker"]);
+function onSort(key: string, direction: "asc" | "desc") {
+  sortKey.value = key;
+  sortDirection.value = direction;
+}
 
 const textValue = ref("docker.io");
 const textAreaValue = ref("Restart docker.service every night at 03:00.");
@@ -542,6 +564,71 @@ const colorGroups: { name: string; tokens: string[] }[] = [
           </AppButton>
         </AppTooltip>
       </div>
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppDataTable</h2>
+      <TablePanel>
+        <AppDataTable
+          v-model:selected="selectedServices"
+          caption="Services"
+          row-key="name"
+          :columns="serviceColumns"
+          :rows="serviceRows"
+          :sort-key="sortKey"
+          :sort-direction="sortDirection"
+          selectable
+          @sort="onSort"
+        >
+          <template #cell-state="{ value }">
+            <StateBadge :state="value === 'running' ? 'active' : 'inactive'">
+              {{ value }}
+            </StateBadge>
+          </template>
+        </AppDataTable>
+      </TablePanel>
+      <p class="hint">
+        Selected: {{ selectedServices.join(", ") || "(none)" }}
+      </p>
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppStack / AppGrid</h2>
+      <AppStack gap="4">
+        <AppStack
+          direction="row"
+          gap="2"
+          align="center"
+          wrap
+        >
+          <AppButton variant="primary">
+            Save
+          </AppButton>
+          <AppButton>Cancel</AppButton>
+          <span class="hint">gap 2, row, centered</span>
+        </AppStack>
+        <AppGrid
+          min="sm"
+          gap="3"
+        >
+          <MetricCard
+            label="CPU"
+            value="18%"
+          />
+          <MetricCard
+            label="Memory"
+            value="41%"
+          />
+          <MetricCard
+            label="Disk"
+            value="62%"
+          />
+          <MetricCard
+            label="Swap"
+            value="4%"
+          />
+        </AppGrid>
+      </AppStack>
     </section>
 
     <section class="catalog-section">

@@ -5,7 +5,7 @@ import typescriptEslint from "typescript-eslint";
 
 export default typescriptEslint.config(
   {
-    ignores: ["**/*.d.ts", "dist", "node_modules"],
+    ignores: ["**/*.d.ts", "dist", "dist-catalog", "node_modules"],
   },
   {
     files: ["**/*.{ts,vue}"],

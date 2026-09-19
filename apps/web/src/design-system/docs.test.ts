@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import indexSource from "./components/index.ts?raw";
 import readme from "./README.md?raw";
+import docsPage from "../../../../docs/design-system.html?raw";
 
 const sfcModules = import.meta.glob("./components/*/*.vue", { query: "?raw", import: "default", eager: true });
 const tokenModules = import.meta.glob("./tokens.css", { query: "?raw", import: "default", eager: true });
@@ -112,7 +113,9 @@ function parseEmits(source: string): Map<string, string> {
 function parseSlots(source: string): Set<string> {
   const slots = new Set<string>();
   for (const match of source.matchAll(/<slot\b([^>]*)>/g)) {
-    slots.add(/\bname="([^"]+)"/.exec(match[1])?.[1] ?? "default");
+    const dynamic = /:name="`([^`]+)`"/.exec(match[1])?.[1];
+    const fixed = /(?<![:\w])name="([^"]+)"/.exec(match[1])?.[1];
+    slots.add(dynamic?.replace(/\$\{[^}]+\}/g, "{key}") ?? fixed ?? "default");
   }
   return slots;
 }
@@ -242,6 +245,13 @@ describe("component docs", () => {
     } else {
       expect(migration.match(/```/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
     }
+  });
+});
+
+describe("docs/design-system.html", () => {
+  it("lists every component folder", () => {
+    const missing = folders.filter((folder) => !docsPage.includes(`<code>${folder}</code>`));
+    expect(missing).toEqual([]);
   });
 });
 

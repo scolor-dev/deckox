@@ -44,6 +44,7 @@ Tokens, components and a dev-only catalog. Nothing here is wired into the real s
 | Show one percentage | `ProgressBar` | `StorageAllocationBar` |
 | Show shares of one whole | `StorageAllocationBar` | `ProgressBar` |
 | Show a table | `TablePanel` | `AppCard` |
+| Let users sort or select table rows | `AppDataTable` inside `TablePanel` | a hand-written `table` |
 | Show label/value pairs | `DetailList` | `TablePanel` |
 | Show one metric | `MetricCard` | `AppCard` |
 | Show journal lines | `LogList` | `TablePanel` |
@@ -53,6 +54,8 @@ Tokens, components and a dev-only catalog. Nothing here is wired into the real s
 | Open a screen | `PageHeader` | a plain heading |
 | Group content in a bordered panel | `AppCard` | `TablePanel` |
 | Separate two blocks | `AppDivider` | a `gap` between cards |
+| Space siblings in a row or column | `AppStack` | ad-hoc `display: flex` |
+| Flow cards into as many columns as fit | `AppGrid` | fixed-column CSS grids |
 | Show an empty region | `AppEmptyState` | an empty table row |
 
 ## Components
@@ -86,8 +89,11 @@ Tokens, components and a dev-only catalog. Nothing here is wired into the real s
 | [`AppPagination`](components/AppPagination/AppPagination.md) | navigation | Page number strip with previous and next buttons. |
 | [`TabBar`](components/TabBar/TabBar.md) | navigation | Tab strip. |
 | [`AppCard`](components/AppCard/AppCard.md) | layout | Bare bordered panel for arbitrary content. |
+| [`AppDataTable`](components/AppDataTable/AppDataTable.md) | data | Table with sortable headers and optional row selection. |
 | [`AppDivider`](components/AppDivider/AppDivider.md) | layout | Horizontal rule between blocks of content. |
+| [`AppGrid`](components/AppGrid/AppGrid.md) | layout | Responsive grid that fits equal columns to the width. |
 | [`PageHeader`](components/PageHeader/PageHeader.md) | layout | The title row every screen opens with: heading and subtitle left, screen-level actions right. |
+| [`AppStack`](components/AppStack/AppStack.md) | layout | Flex row or column with a scale-based gap. |
 | [`AppChip`](components/AppChip/AppChip.md) | data | Pill for a discrete value, optionally removable. |
 | [`DetailList`](components/DetailList/DetailList.md) | data | Two-column label/value grid. |
 | [`LogList`](components/LogList/LogList.md) | data | Scrolling list of journal lines. |

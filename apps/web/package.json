@@ -10,7 +10,8 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "test": "vitest run",
     "typecheck": "vue-tsc -b",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:catalog": "node scripts/build-catalog.mjs"
   },
   "dependencies": {
     "vue": "^3.5.0",
