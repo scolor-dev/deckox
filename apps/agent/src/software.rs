@@ -589,7 +589,7 @@ fn ensure_linux() -> Result<(), AgentError> {
 /// single argument — but it rejects obviously-wrong input (spaces, path
 /// separators, empty strings) with a clear error before anything is shelled
 /// out to.
-pub fn validate_package_name(name: &str) -> Result<(), AgentError> {
+fn validate_package_name(name: &str) -> Result<(), AgentError> {
     let valid = !name.is_empty()
         && name.len() <= 100
         && name

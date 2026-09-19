@@ -19,7 +19,7 @@ use tokio::{io::AsyncReadExt, process::Command, sync::RwLock};
 use crate::{config, error::AgentError};
 
 static COMMAND_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-pub const PROTECTED_SERVICES: [&str; 2] = ["deckox-agent.service", "deckox-server.service"];
+const PROTECTED_SERVICES: [&str; 2] = ["deckox-agent.service", "deckox-server.service"];
 /// Unit file directories owned by the OS/package manager. A service whose
 /// `FragmentPath` lives here ships with the distro or an installed package
 /// rather than being written locally, so it is tagged `standard_system`.
@@ -329,7 +329,7 @@ fn ensure_linux() -> Result<(), AgentError> {
     }
 }
 
-pub fn validate_service_id(service_id: &str) -> Result<(), AgentError> {
+fn validate_service_id(service_id: &str) -> Result<(), AgentError> {
     let valid = !service_id.is_empty()
         && service_id.len() <= 256
         && service_id.ends_with(".service")

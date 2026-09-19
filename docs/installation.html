@@ -186,22 +186,6 @@ Environment=DECKOX_WEBHOOK_URL=https://example.com/webhook</code></pre>
         <p>v0.3.3ではWebコンソールを削除しました。更新時は旧<code>deckox-terminal.service</code>をDeckox管理のユニットだと確認してから停止・無効化し、ユニットとバイナリを削除します。</p>
         <p>旧アカウントのホーム・nologinシェル・主グループがDeckoxの作成条件と一致する場合だけ、<code>deckox-terminal</code>ユーザーとグループを削除します。<code>/var/lib/deckox-terminal</code>が空でなければデータ保護のため残し、インストーラーへ警告を表示します。</p>
       </section>
-      <section class="section" aria-labelledby="config-command-title">
-        <h2 id="config-command-title">設定コマンド</h2>
-        <p><code>/etc/deckox/agent.toml</code>は、手で編集せずにコマンドで書き換えられます。表(<code>[system]</code>・<code>[software]</code>・<code>[services]</code>)ごとに安全に書き換えるので、ほかの表は壊れません。変更は、Agentを再起動すると反映されます。</p>
-        <pre><code>sudo deckox-agent config show                          # 現在の設定を表示
-sudo deckox-agent config set allow_reboot true         # 再起動を許可(false で無効)
-sudo deckox-agent config set allow_update true         # 管理画面からの更新を許可
-sudo deckox-agent config set auto_adopt false          # 自動追加を止める
-sudo deckox-agent config allow-service nginx.service   # サービスの操作を許可
-sudo deckox-agent config deny-service nginx.service
-sudo deckox-agent config allow-software docker-ce      # ソフトウェアを管理対象に
-sudo deckox-agent config deny-software docker-ce       # 管理をやめ、自動追加もしない
-sudo deckox-agent config repair                        # 標準の形に書き直し、欠けた表を復元
-sudo systemctl restart deckox-agent</code></pre>
-        <p><code>repair</code>は、現在の値を保ったまま、ファイル全体を標準の並びで書き直します。元のファイルは<code>agent.toml.bak</code>として残ります。Deckoxが知らないキーは引き継がれません。</p>
-      </section>
-
       <footer class="footer">Deckox Docs · Installation</footer>
     </main>
   </div>
