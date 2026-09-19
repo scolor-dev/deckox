@@ -520,6 +520,14 @@ fn parse_service_list(
             let active_state = fields.next()?.to_owned();
             let sub_state = fields.next()?.to_owned();
             let description = fields.collect::<Vec<_>>().join(" ");
+            // `list-units --all` also reports units that other units merely
+            // reference but that are not installed (LoadState `not-found`).
+            // They can never be controlled, so hide them — unless they are
+            // still on the allowlist, where the admin needs to see them to
+            // revoke the stale entry.
+            if load_state == "not-found" && !allowed.contains(&id) {
+                return None;
+            }
             let standard_system = fragment_paths
                 .get(&id)
                 .is_some_and(|path| is_standard_system(path));
@@ -679,6 +687,19 @@ mod tests {
             "a locally installed unit is not vendor-provided"
         );
         assert!(services[1].deckox_managed);
+    }
+
+    #[test]
+    fn hides_units_systemd_only_references_unless_still_allowed() {
+        let allowed = HashSet::from(["stale.service".to_owned()]);
+        let services = parse_service_list(
+            "auditd.service not-found inactive dead auditd.service\nstale.service not-found inactive dead stale.service\nkbd.service masked inactive dead kbd.service\n",
+            &HashMap::new(),
+            &HashMap::new(),
+            &allowed,
+        );
+        let ids: Vec<&str> = services.iter().map(|service| service.id.as_str()).collect();
+        assert_eq!(ids, ["stale.service", "kbd.service"]);
     }
 
     #[test]

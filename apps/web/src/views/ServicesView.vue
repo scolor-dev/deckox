@@ -579,15 +579,23 @@ onMounted(() => {
                   </AppButton>
                 </template>
                 <template v-else>
-                  <AppButton
-                    v-if="!service.deckox_managed"
-                    variant="action"
-                    :disabled="pending !== null"
-                    @click="runAction(service, 'allow')"
+                  <AppStack
+                    direction="row"
+                    gap="2"
+                    align="center"
                   >
-                    {{ t("services.allow") }}
-                  </AppButton>
-                  <span class="locked">{{ t("services.readOnly") }}</span>
+                    <TagBadge category="standard">
+                      {{ t("services.readOnly") }}
+                    </TagBadge>
+                    <AppButton
+                      v-if="!service.deckox_managed"
+                      variant="action"
+                      :disabled="pending !== null"
+                      @click="runAction(service, 'allow')"
+                    >
+                      {{ t("services.allow") }}
+                    </AppButton>
+                  </AppStack>
                 </template>
               </AppStack>
             </td>

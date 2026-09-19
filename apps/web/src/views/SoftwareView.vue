@@ -89,7 +89,6 @@ async function refresh() {
 }
 
 const INSTALLED_LIMIT = 100;
-const installedOpen = ref(false);
 const installedLoading = ref(false);
 const installedError = ref<string | null>(null);
 const installedPackages = ref<InstalledSoftware[]>([]);
@@ -114,11 +113,6 @@ async function loadInstalled() {
   } finally {
     installedLoading.value = false;
   }
-}
-
-async function toggleInstalled() {
-  installedOpen.value = !installedOpen.value;
-  if (installedOpen.value && installedPackages.value.length === 0) await loadInstalled();
 }
 
 async function manageInstalled(pkg: InstalledSoftware) {
@@ -202,6 +196,7 @@ async function confirmAction(password: string) {
 }
 
 onMounted(() => {
+  void loadInstalled();
   void refresh();
 });
 </script>
@@ -367,17 +362,6 @@ onMounted(() => {
     <AppStack gap="3">
       <h2>{{ t("software.installedTitle") }}</h2>
       <InfoNote>{{ t("software.installedHelp") }}</InfoNote>
-      <AppStack
-        direction="row"
-        gap="2"
-      >
-        <AppButton
-          :disabled="installedLoading"
-          @click="toggleInstalled"
-        >
-          {{ installedOpen ? t("software.installedHide") : t("software.installedShow") }}
-        </AppButton>
-      </AppStack>
       <NoticeBanner
         v-if="installedError"
         tone="error"
@@ -385,7 +369,6 @@ onMounted(() => {
         {{ installedError }}
       </NoticeBanner>
       <TablePanel
-        v-if="installedOpen"
         :loading="installedLoading"
         :empty="installedShown.length === 0"
         :empty-message="t('software.installedEmpty')"
