@@ -12,7 +12,7 @@ use crate::error::AgentError;
 const DEFAULT_CONFIG_PATH: &str = "/etc/deckox/agent.toml";
 const DEFAULT_SOCKET_PATH: &str = "/run/deckox/agent.sock";
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
 pub struct AgentConfig {
     pub socket: Option<PathBuf>,
     #[serde(default)]
@@ -23,7 +23,7 @@ pub struct AgentConfig {
     pub services: ServicesConfig,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
 pub struct SystemConfig {
     #[serde(default)]
     pub allow_reboot: bool,
@@ -59,7 +59,7 @@ impl Default for SoftwareConfig {
     }
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
 pub struct ServicesConfig {
     #[serde(default)]
     pub allowed: Vec<String>,
@@ -132,6 +132,73 @@ pub fn write_software_settings(path: &Path, settings: &SoftwareConfig) -> Result
     })
 }
 
+fn render_system_section(system: &SystemConfig) -> String {
+    format!(
+        "# Reboot stays disabled until explicitly enabled. The Web UI also requires the\n\
+         # administrator password again before calling the fixed reboot operation.\n\
+         #\n\
+         # Self-update from the Web UI is likewise disabled until explicitly enabled.\n\
+         # The Web UI requires the administrator password again before requesting it;\n\
+         # the Server then fetches the installer for the release it already reported\n\
+         # as available and hands it to the Agent, which runs it as an independent\n\
+         # systemd unit.\n\
+         [system]\n\
+         allow_reboot = {}\n\
+         allow_update = {}\n",
+        system.allow_reboot, system.allow_update
+    )
+}
+
+pub fn write_system_settings(path: &Path, system: &SystemConfig) -> Result<(), AgentError> {
+    rewrite_config(path, "system.toml.tmp", |original| {
+        replace_bounded_section(original, "system", &render_system_section(system))
+    })
+}
+
+/// Reads the config file exactly as written — no environment overrides —
+/// so the `config` commands edit the file, not the process environment.
+pub fn read_file_config(path: &Path) -> Result<AgentConfig, AgentError> {
+    match std::fs::read_to_string(path) {
+        Ok(content) => toml::from_str(&content).map_err(|error| {
+            AgentError::internal(format!("invalid config {}: {error}", path.display()))
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(AgentConfig::default()),
+        Err(error) => Err(AgentError::internal(format!(
+            "failed to read config {}: {error}",
+            path.display()
+        ))),
+    }
+}
+
+/// Rewrites the whole file in its canonical layout from the values it
+/// currently holds, restoring any table that went missing with its defaults.
+/// The previous file is kept next to it as `agent.toml.bak`. Keys Deckox does
+/// not know are not carried over.
+pub fn repair_config(path: &Path) -> Result<(), AgentError> {
+    let config = read_file_config(path)?;
+    if path.exists() {
+        std::fs::copy(path, path.with_extension("toml.bak")).map_err(|error| {
+            AgentError::internal(format!("failed to back up {}: {error}", path.display()))
+        })?;
+    }
+    let socket = config.socket.as_ref().map_or_else(
+        || DEFAULT_SOCKET_PATH.to_owned(),
+        |path| path.display().to_string(),
+    );
+    let mut content = format!(
+        "# Deckox Agent configuration\n\
+         # The Agent listens only on this local Unix socket.\n\
+         socket = {}\n\n",
+        toml::Value::String(socket)
+    );
+    content.push_str(&render_system_section(&config.system));
+    content.push('\n');
+    content.push_str(&render_software_section(&config.software));
+    content.push('\n');
+    content.push_str(&render_services_section(&config.services.allowed));
+    rewrite_config(path, "repair.toml.tmp", |_| content.clone())
+}
+
 /// Reads the config, applies `transform`, and swaps the result in through a
 /// temp file plus a rename. The file's mode and owner are carried over so a
 /// rewrite by the Agent never loosens the permissions the installer set.
@@ -194,8 +261,7 @@ fn render_software_section(settings: &SoftwareConfig) -> String {
          # `dismissed`. Names in `allowed` were confirmed, when added, to resolve from\n\
          # this host's own configured package repositories or to be installed already\n\
          # (never a newly added third-party repository). Managed from the web admin's\n\
-         # Software screen; hand edits are kept as long as this table is followed only\n\
-         # by [services] (or nothing).\n\
+         # Software screen and `deckox-agent config`.\n\
          [software]\n",
     );
     let _ = writeln!(section, "auto_adopt = {}", settings.auto_adopt);
@@ -244,8 +310,7 @@ fn render_services_section(allowed: &[String]) -> String {
     let mut section = String::from(
         "# Service state can always be read. Start, stop, and restart are permitted only\n\
          # for service IDs listed here. Deckox's own services are always rejected.\n\
-         # Managed from the web admin's Services screen; hand edits are kept as long as\n\
-         # this stays the last table in the file.\n\
+         # Managed from the web admin's Services screen and `deckox-agent config`.\n\
          [services]\n",
     );
     if sorted.is_empty() {
@@ -261,14 +326,7 @@ fn render_services_section(allowed: &[String]) -> String {
 }
 
 fn replace_services_section(original: &str, new_section: &str) -> String {
-    let prefix =
-        table_header_offset(original, "services").map_or(original, |index| &original[..index]);
-    let mut prefix = strip_trailing_comment_block(prefix);
-    if !prefix.is_empty() {
-        prefix.push_str("\n\n");
-    }
-    prefix.push_str(new_section);
-    prefix
+    replace_bounded_section(original, "services", new_section)
 }
 
 /// Byte offset of the line that is the `[name]` table header. Matching whole

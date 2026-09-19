@@ -35,6 +35,7 @@ use crate::{
 
 mod backups;
 mod config;
+mod config_cli;
 mod diagnostics;
 mod error;
 mod power;
@@ -129,6 +130,11 @@ async fn build_state() -> (AppState, PathBuf) {
 
 #[tokio::main]
 async fn main() {
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    if config_cli::dispatch(&arguments) {
+        return;
+    }
+
     init_tracing();
 
     let (state, socket_path) = build_state().await;

@@ -27,8 +27,7 @@ allow_update = false
 # were confirmed, when added, to resolve from this host's own configured
 # package repositories (apt, dnf, pacman, or zypper) or to be installed
 # already — Deckox never adds a new third-party repository or signing key to
-# install something. This table must stay before [services] so the Web UI's
-# allowlist edits to each table never clobber the other.
+# install something. Edit it with `sudo deckox-agent config ...` or the Web UI.
 [software]
 auto_adopt = true
 allowed = []
