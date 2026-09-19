@@ -245,9 +245,10 @@ pub struct StorageMount {
     pub standard: bool,
 }
 
-/// One physical (or virtual) disk with everything stacked on it: partitions,
-/// and any LVM / RAID / crypt devices built on those partitions, flattened in
-/// tree order. Unlike [`StorageMount`], which only knows mounted file
+/// One disk with everything stacked on it.
+///
+/// Partitions and any LVM / RAID / crypt devices built on them are flattened
+/// in tree order. Unlike [`StorageMount`], which only knows mounted file
 /// systems, a disk lists its unmounted partitions too.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageDisk {
@@ -351,10 +352,10 @@ pub struct SoftwarePackage {
     pub upgradable: bool,
 }
 
-/// One package the host's package manager reports as installed, whether or
-/// not Deckox manages it. Read-only: seeing a package here grants no
-/// permission to act on it — `managed` says whether it is already on the
-/// management allowlist.
+/// One package the host's package manager reports as installed.
+///
+/// Read-only: seeing a package here grants no permission to act on it, and
+/// `managed` says whether it is already on the management allowlist.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledSoftware {
     pub name: String,
