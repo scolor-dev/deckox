@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from "../AppIcon/AppIcon.vue";
 import AppIconButton from "../AppIconButton/AppIconButton.vue";
 
 withDefaults(
@@ -27,7 +28,10 @@ defineEmits<{
       :label="removeLabel"
       @click="$emit('remove')"
     >
-      ×
+      <AppIcon
+        name="close"
+        size="sm"
+      />
     </AppIconButton>
   </span>
 </template>

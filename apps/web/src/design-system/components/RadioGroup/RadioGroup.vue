@@ -44,4 +44,5 @@ defineEmits<{
 .ds-radio { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; color: var(--text-secondary); font-size: var(--font-md); }
 .ds-radio input { width: 15px; height: 15px; margin: 0; accent-color: var(--brand-primary); }
 .ds-radio-group small { color: var(--text-muted); font-size: var(--font-xs); }
+.ds-radio input:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
 </style>

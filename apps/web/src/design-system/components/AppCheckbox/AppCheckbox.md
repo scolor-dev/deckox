@@ -54,7 +54,7 @@ None.
 
 ## Tokens
 
-`--font-sm`, `--font-xs`, `--space-1`, `--space-2`, `--space-6`, `--text-muted`, `--text-strong`
+`--brand-primary`, `--font-sm`, `--font-xs`, `--space-1`, `--space-2`, `--space-6`, `--text-muted`, `--text-strong`
 
 ## Gotchas
 

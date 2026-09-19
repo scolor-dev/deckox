@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from "../AppIcon/AppIcon.vue";
 import { computed } from "vue";
 
 const props = defineProps<{
@@ -46,7 +47,7 @@ function go(target: number) {
       :aria-label="prevLabel"
       @click="go(page - 1)"
     >
-      ‹
+      <AppIcon name="chevron-left" />
     </button>
     <template
       v-for="item in items"
@@ -74,7 +75,7 @@ function go(target: number) {
       :aria-label="nextLabel"
       @click="go(page + 1)"
     >
-      ›
+      <AppIcon name="chevron-right" />
     </button>
   </nav>
 </template>
@@ -104,4 +105,6 @@ function go(target: number) {
 }
 .ds-pagination-step:disabled { opacity: .48; cursor: not-allowed; }
 .ds-pagination-gap { min-width: var(--space-6); color: var(--text-faint); text-align: center; }
+.ds-pagination-step:focus-visible,
+.ds-pagination-page:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
 </style>

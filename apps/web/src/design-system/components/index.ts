@@ -5,6 +5,7 @@ export { default as AppCheckbox } from "./AppCheckbox/AppCheckbox.vue";
 export { default as AppChip } from "./AppChip/AppChip.vue";
 export { default as AppDivider } from "./AppDivider/AppDivider.vue";
 export { default as AppEmptyState } from "./AppEmptyState/AppEmptyState.vue";
+export { default as AppIcon } from "./AppIcon/AppIcon.vue";
 export { default as AppIconButton } from "./AppIconButton/AppIconButton.vue";
 export { default as AppModal } from "./AppModal/AppModal.vue";
 export { default as AppPagination } from "./AppPagination/AppPagination.vue";

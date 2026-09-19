@@ -58,7 +58,7 @@ Small icon-only button. Used inside AppModal (close), AppChip (remove) and AppTo
 
 ## Tokens
 
-`--danger-accent`, `--danger-bg`, `--font-2xl`, `--font-sm`, `--radius-sm`, `--surface-hover`, `--text-faint`, `--text-muted`, `--text-primary`
+`--brand-primary`, `--danger-accent`, `--danger-bg`, `--font-2xl`, `--font-sm`, `--radius-sm`, `--surface-hover`, `--text-faint`, `--text-muted`, `--text-primary`
 
 ## Gotchas
 

@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useEscapeToClose } from "../../composables/useEscapeToClose";
+import { useFocusTrap } from "../../composables/useFocusTrap";
+import AppIcon from "../AppIcon/AppIcon.vue";
 import AppIconButton from "../AppIconButton/AppIconButton.vue";
 
 const props = withDefaults(
@@ -25,6 +28,8 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+const dialogRef = ref<HTMLElement | null>(null);
+useFocusTrap(dialogRef, () => props.open);
 useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOnEscape);
 </script>
 
@@ -35,6 +40,8 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
     @click.self="closeOnBackdrop ? emit('close') : undefined"
   >
     <section
+      ref="dialogRef"
+      tabindex="-1"
       :class="['ds-modal', `ds-modal--${size}`]"
       role="dialog"
       aria-modal="true"
@@ -48,7 +55,7 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
             :label="closeLabel"
             @click="emit('close')"
           >
-            ×
+            <AppIcon name="close" />
           </AppIconButton>
         </div>
       </header>
@@ -111,4 +118,5 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
 @media (max-width: 700px) {
   .ds-modal-backdrop { padding: var(--space-3); }
 }
+.ds-modal:focus { outline: none; }
 </style>

@@ -26,6 +26,7 @@ Tokens, components and a dev-only catalog. Nothing here is wired into the real s
 | Explain an icon or terse button on hover | `AppTooltip` | `AppPopover` |
 | Press something with a text label | `AppButton` | `AppIconButton` |
 | Press something shown only as a glyph | `AppIconButton` | `AppButton` |
+| Show a symbol next to text or inside a control | `AppIcon` | a text character such as `×` |
 | Join related buttons into one control | `ButtonGroup` | separate `AppButton`s |
 | Type one line of text | `TextField` | `TextAreaField` |
 | Type several lines of text | `TextAreaField` | `TextField` |
@@ -59,6 +60,7 @@ Tokens, components and a dev-only catalog. Nothing here is wired into the real s
 | Component | Category | Summary |
 |---|---|---|
 | [`AppButton`](components/AppButton/AppButton.md) | actions | Text button. |
+| [`AppIcon`](components/AppIcon/AppIcon.md) | actions | Inline SVG icon that inherits the surrounding text color. |
 | [`AppIconButton`](components/AppIconButton/AppIconButton.md) | actions | Small icon-only button. |
 | [`ButtonGroup`](components/ButtonGroup/ButtonGroup.md) | actions | Joins AppButtons into one segmented control. |
 | [`AppCheckbox`](components/AppCheckbox/AppCheckbox.md) | forms | Labeled checkbox with optional help text. |

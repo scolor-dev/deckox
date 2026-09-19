@@ -43,4 +43,8 @@ withDefaults(
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-tooltip-bubble { transition: none; }
+}
 </style>

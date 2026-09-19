@@ -29,7 +29,7 @@ Single value against a track.
 |---|---|---|---|
 | `value` | `number` | required | 0 to 100. Out-of-range values are clamped. |
 | `critical` | `boolean` | `false` | Colors the fill as danger, for example at or above 90%. |
-| `label` | `string \| null` | `null` | Accessible name of the bar. |
+| `label` | `string` | required | Accessible name of the bar; a progressbar without a name fails accessibility checks. |
 
 **Events**
 
@@ -48,7 +48,7 @@ None.
 ## Accessibility
 
 - `role="progressbar"` with `aria-valuenow`, `aria-valuemin` and `aria-valuemax`.
-- Without `label` the bar has no accessible name; pass one.
+- `label` is required and becomes the `aria-label` of the progressbar.
 
 ## Tokens
 

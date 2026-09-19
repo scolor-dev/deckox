@@ -17,6 +17,7 @@ defineEmits<{
   <button
     type="button"
     role="menuitem"
+    tabindex="-1"
     :class="['ds-popover-item', { 'ds-popover-item--danger': danger }]"
     @click="$emit('click')"
   >
@@ -41,4 +42,5 @@ defineEmits<{
 .ds-popover-item:hover { background: var(--surface-hover); }
 .ds-popover-item--danger { color: var(--danger-strong-border); }
 .ds-popover-item--danger:hover { background: var(--danger-bg); }
+.ds-popover-item:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: -2px; }
 </style>

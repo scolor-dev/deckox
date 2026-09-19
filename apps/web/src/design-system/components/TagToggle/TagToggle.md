@@ -75,7 +75,7 @@ None.
 
 ## Tokens
 
-`--border-hover`, `--font-xs`, `--radius-pill`, `--space-1`, `--space-2`, `--surface-elevated`, `--surface-hover`, `--tag-deckox-border`, `--tag-deckox-text`, `--tag-off-bg`, `--tag-off-text`, `--tag-product-border`, `--tag-product-text`, `--tag-standard-border`, `--tag-toggle-border`, `--text-secondary`
+`--border-hover`, `--brand-primary`, `--font-xs`, `--radius-pill`, `--space-1`, `--space-2`, `--surface-elevated`, `--surface-hover`, `--tag-deckox-border`, `--tag-deckox-text`, `--tag-off-bg`, `--tag-off-text`, `--tag-product-border`, `--tag-product-text`, `--tag-standard-border`, `--tag-toggle-border`, `--text-secondary`
 
 ## Gotchas
 

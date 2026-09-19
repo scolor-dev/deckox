@@ -63,6 +63,7 @@ General dialog with a header, scrolling body and optional footer.
 
 - `role="dialog"` and `aria-modal="true"`, named by `title`.
 - Escape closes it (through `close`).
+- Focus moves to the dialog on open (or to a descendant marked `data-autofocus`), Tab and Shift+Tab wrap inside it, and focus returns to the previously focused element on close. With several overlays open only the topmost traps focus.
 
 ## Tokens
 
@@ -70,7 +71,7 @@ General dialog with a header, scrolling body and optional footer.
 
 ## Gotchas
 
-- It does not trap focus: Tab can move to the page behind the modal.
+- Put `data-autofocus` on the control that should receive focus first (for example the main input); otherwise the dialog itself receives focus.
 - It is rendered in place, not teleported. Avoid ancestors with a CSS `transform` or `filter`.
 - Height is capped at 760px or the viewport height minus 48px; the body scrolls, the header and footer do not.
 

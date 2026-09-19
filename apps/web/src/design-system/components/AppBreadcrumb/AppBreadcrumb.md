@@ -49,7 +49,7 @@ None.
 
 ## Tokens
 
-`--font-sm`, `--link`, `--space-2`, `--text-faint`, `--text-primary`
+`--brand-primary`, `--font-sm`, `--link`, `--space-2`, `--text-faint`, `--text-primary`
 
 ## Gotchas
 

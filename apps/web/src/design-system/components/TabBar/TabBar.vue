@@ -1,13 +1,30 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   tabs: { key: string; label: string }[];
   modelValue: string;
   label: string;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   "update:modelValue": [key: string];
 }>();
+
+const MOVES: Partial<Record<string, (index: number, count: number) => number>> = {
+  ArrowRight: (index, count) => (index + 1) % count,
+  ArrowLeft: (index, count) => (index - 1 + count) % count,
+  Home: () => 0,
+  End: (_index, count) => count - 1,
+};
+
+function handleKeydown(event: KeyboardEvent, index: number) {
+  const move = MOVES[event.key];
+  if (!move) return;
+  event.preventDefault();
+  const target = props.tabs[move(index, props.tabs.length)];
+  emit("update:modelValue", target.key);
+  const buttons = (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>("[role='tab']");
+  buttons?.[props.tabs.indexOf(target)]?.focus();
+}
 </script>
 
 <template>
@@ -17,13 +34,15 @@ defineEmits<{
     :aria-label="label"
   >
     <button
-      v-for="tab in tabs"
+      v-for="(tab, index) in tabs"
       :key="tab.key"
       type="button"
       role="tab"
       :class="['ds-tab', { 'ds-tab--active': tab.key === modelValue }]"
       :aria-selected="tab.key === modelValue"
-      @click="$emit('update:modelValue', tab.key)"
+      :tabindex="tab.key === modelValue ? 0 : -1"
+      @click="emit('update:modelValue', tab.key)"
+      @keydown="handleKeydown($event, index)"
     >
       {{ tab.label }}
     </button>
@@ -51,4 +70,5 @@ defineEmits<{
 }
 .ds-tab:hover:not(.ds-tab--active) { color: var(--text-primary); background: var(--surface-hover); }
 .ds-tab--active { color: var(--link); border-bottom-color: var(--brand-primary); }
+.ds-tab:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: -2px; }
 </style>

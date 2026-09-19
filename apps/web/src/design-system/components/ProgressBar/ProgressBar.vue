@@ -5,11 +5,10 @@ const props = withDefaults(
   defineProps<{
     value: number;
     critical?: boolean;
-    label?: string | null;
+    label: string;
   }>(),
   {
     critical: false,
-    label: null,
   },
 );
 
@@ -23,7 +22,7 @@ const clamped = computed(() => Math.min(100, Math.max(0, props.value)));
     :aria-valuenow="clamped"
     aria-valuemin="0"
     aria-valuemax="100"
-    :aria-label="label ?? undefined"
+    :aria-label="label"
   >
     <span
       :class="{ 'ds-progress-fill--critical': critical }"

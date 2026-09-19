@@ -45,4 +45,5 @@ defineEmits<{
 .ds-checkbox-field input { width: 16px; height: 16px; margin: 0; }
 .ds-checkbox-field input:disabled { cursor: not-allowed; }
 .ds-checkbox-field small { display: block; margin: var(--space-1) 0 0 var(--space-6); color: var(--text-muted); font-size: var(--font-xs); }
+.ds-checkbox-field input:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
 </style>

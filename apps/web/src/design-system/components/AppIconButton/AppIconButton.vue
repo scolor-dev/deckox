@@ -44,4 +44,5 @@ defineEmits<{
 .ds-icon-button--sm { width: 14px; height: 14px; border-radius: 50%; font-size: var(--font-sm); color: var(--text-faint); }
 .ds-icon-button:hover { color: var(--text-primary); background: var(--surface-hover); }
 .ds-icon-button--danger:hover { color: var(--danger-accent); background: var(--danger-bg); }
+.ds-icon-button:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
 </style>

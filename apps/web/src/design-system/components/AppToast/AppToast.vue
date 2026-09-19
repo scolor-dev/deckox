@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppIcon from "../AppIcon/AppIcon.vue";
 import AppIconButton from "../AppIconButton/AppIconButton.vue";
 
 defineProps<{
@@ -22,7 +23,10 @@ defineEmits<{
       :label="dismissLabel"
       @click="$emit('dismiss')"
     >
-      ×
+      <AppIcon
+        name="close"
+        size="sm"
+      />
     </AppIconButton>
   </div>
 </template>

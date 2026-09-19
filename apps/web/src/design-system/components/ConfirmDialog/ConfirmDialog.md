@@ -61,6 +61,7 @@ Small fixed-width dialog that asks one yes/no question.
 
 - `role="dialog"` and `aria-modal="true"`, named by `title`.
 - Escape closes it (through `close`).
+- Focus moves to the dialog on open (or to a descendant marked `data-autofocus`), Tab and Shift+Tab wrap inside it, and focus returns to the previously focused element on close. With several overlays open only the topmost traps focus.
 
 ## Tokens
 
@@ -68,7 +69,7 @@ Small fixed-width dialog that asks one yes/no question.
 
 ## Gotchas
 
-- It does not trap focus: Tab can move to the page behind the dialog.
+- Put `data-autofocus` on the least destructive action when the dialog confirms something irreversible; otherwise the dialog itself receives focus.
 - It is rendered in place, not teleported. Do not place it inside an ancestor with a CSS `transform` or `filter`, or `position: fixed` will anchor to that ancestor.
 - It has no close button; provide one in `actions`.
 

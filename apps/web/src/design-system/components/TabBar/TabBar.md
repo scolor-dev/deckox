@@ -51,7 +51,8 @@ None.
 
 - `role="tablist"` and `role="tab"` with `aria-selected`.
 - Each panel you render should have `role="tabpanel"`.
-- There is no arrow-key navigation and no `aria-controls` link between tab and panel.
+- Roving tabindex: only the selected tab is in the Tab order. Left/Right Arrow move to the previous/next tab with wrap-around, Home/End jump to the first/last tab, and moving selects the tab immediately.
+- There is no `aria-controls` link between tab and panel.
 
 ## Tokens
 

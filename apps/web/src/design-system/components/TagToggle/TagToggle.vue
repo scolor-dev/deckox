@@ -41,4 +41,5 @@ defineEmits<{
 .ds-tag-toggle--standard:not(.ds-tag-toggle--off) { border-color: var(--tag-standard-border); }
 .ds-tag-toggle--deckox:not(.ds-tag-toggle--off) { border-color: var(--tag-deckox-border); color: var(--tag-deckox-text); }
 .ds-tag-toggle--product:not(.ds-tag-toggle--off) { border-color: var(--tag-product-border); color: var(--tag-product-text); }
+.ds-tag-toggle:has(input:focus-visible) { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
 </style>

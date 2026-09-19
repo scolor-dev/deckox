@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useEscapeToClose } from "../../composables/useEscapeToClose";
+import { useFocusTrap } from "../../composables/useFocusTrap";
 
 const props = withDefaults(
   defineProps<{
@@ -20,6 +22,8 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+const dialogRef = ref<HTMLElement | null>(null);
+useFocusTrap(dialogRef, () => props.open);
 useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOnEscape);
 </script>
 
@@ -30,6 +34,8 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
     @click.self="closeOnBackdrop ? emit('close') : undefined"
   >
     <section
+      ref="dialogRef"
+      tabindex="-1"
       class="ds-dialog"
       role="dialog"
       aria-modal="true"
@@ -76,4 +82,5 @@ useEscapeToClose(() => props.open, () => { emit("close"); }, () => props.closeOn
 @media (max-width: 700px) {
   .ds-dialog-backdrop { padding: var(--space-3); }
 }
+.ds-dialog:focus { outline: none; }
 </style>

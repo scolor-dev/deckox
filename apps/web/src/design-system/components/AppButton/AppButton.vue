@@ -71,4 +71,5 @@ withDefaults(
   font-size: var(--font-xs);
 }
 .ds-button--logout:hover:not(:disabled) { color: var(--link); text-decoration: underline; }
+.ds-button:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
 </style>

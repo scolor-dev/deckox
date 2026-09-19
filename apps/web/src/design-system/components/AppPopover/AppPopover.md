@@ -78,11 +78,13 @@ Floating panel anchored under a trigger, used as a dropdown menu. AppPopoverItem
 ## Accessibility
 
 - The panel has `role="menu"` and items have `role="menuitem"`.
-- There is no arrow-key navigation between items; Tab moves between them.
+- Opening moves focus to the first item. Up/Down Arrow cycle through items with wrap-around and Home/End jump to the ends.
+- Escape closes and returns focus to the element that was focused when the panel opened. Tab closes and hands focus back to that element so Tab continues from it.
+- Items are `tabindex="-1"`; they are reached with arrow keys, not Tab.
 
 ## Tokens
 
-`--border-strong`, `--danger-bg`, `--danger-strong-border`, `--duration-fast`, `--ease-standard`, `--font-sm`, `--radius-md`, `--radius-sm`, `--shadow-overlay`, `--space-2`, `--space-3`, `--surface-elevated`, `--surface-hover`, `--text-strong`, `--z-popover`
+`--border-strong`, `--brand-primary`, `--danger-bg`, `--danger-strong-border`, `--duration-fast`, `--ease-standard`, `--font-sm`, `--radius-md`, `--radius-sm`, `--shadow-overlay`, `--space-2`, `--space-3`, `--surface-elevated`, `--surface-hover`, `--text-strong`, `--z-popover`
 
 ## Gotchas
 

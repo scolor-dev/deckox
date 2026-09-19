@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { preferences } from "../../preferences";
 import { breakpoints } from "../breakpoints";
+import { ICON_PATHS } from "../components/AppIcon/icons";
 import {
   AppBreadcrumb,
   AppButton,
@@ -10,6 +11,7 @@ import {
   AppChip,
   AppDivider,
   AppEmptyState,
+  AppIcon,
   AppIconButton,
   AppModal,
   AppPagination,
@@ -632,7 +634,10 @@ const colorGroups: { name: string; tokens: string[] }[] = [
           value="41%"
           footer="3.1 GiB used"
         >
-          <ProgressBar :value="41" />
+          <ProgressBar
+            :value="41"
+            label="Memory in use"
+          />
         </MetricCard>
         <MetricCard
           label="Swap"
@@ -643,6 +648,7 @@ const colorGroups: { name: string; tokens: string[] }[] = [
         >
           <ProgressBar
             :value="86"
+            label="Swap in use"
             critical
           />
         </MetricCard>
@@ -654,15 +660,52 @@ const colorGroups: { name: string; tokens: string[] }[] = [
       <div class="row">
         <AppSpinner />
         <AppIconButton label="Close">
-          ×
+          <AppIcon name="close" />
         </AppIconButton>
         <AppIconButton
           label="Remove"
           size="sm"
           danger
         >
-          ×
+          <AppIcon
+            name="close"
+            size="sm"
+          />
         </AppIconButton>
+      </div>
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppIcon</h2>
+      <div class="icon-grid">
+        <div
+          v-for="name in Object.keys(ICON_PATHS) as (keyof typeof ICON_PATHS)[]"
+          :key="name"
+          class="icon-tile"
+        >
+          <AppIcon
+            :name="name"
+            size="lg"
+          />
+          <code>{{ name }}</code>
+        </div>
+      </div>
+      <div class="row">
+        <AppIcon
+          name="check"
+          size="sm"
+        />
+        <AppIcon name="check" />
+        <AppIcon
+          name="check"
+          size="lg"
+        />
+        <AppButton>
+          <AppIcon
+            name="refresh"
+            size="sm"
+          /> Refresh
+        </AppButton>
       </div>
     </section>
 
@@ -851,5 +894,7 @@ const colorGroups: { name: string; tokens: string[] }[] = [
 .motion-box:hover { transform: translateX(24px); }
 .space-bar { display: inline-block; height: 10px; background: var(--brand-primary); }
 .radius-box { display: inline-block; width: 28px; height: 28px; border: 1px solid var(--border-strong); background: var(--surface-elevated); }
+.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.icon-tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface-elevated); color: var(--text-primary); font-size: 11px; }
 .swatch { display: inline-block; width: 20px; height: 20px; border: 1px solid var(--border-default); border-radius: 4px; }
 </style>
