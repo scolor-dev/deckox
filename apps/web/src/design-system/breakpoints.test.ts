@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { breakpoints } from "./breakpoints";
 
-const components = import.meta.glob("./components/*.vue", {
+const components = import.meta.glob("./components/*/*.vue", {
   query: "?raw",
   import: "default",
   eager: true,

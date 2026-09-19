@@ -1,0 +1,51 @@
+<script setup lang="ts">
+defineProps<{
+  count?: string | null;
+}>();
+</script>
+
+<template>
+  <div class="ds-toolbar-row">
+    <div
+      v-if="$slots.search"
+      class="ds-toolbar-search"
+    >
+      <slot name="search" />
+    </div>
+    <div
+      v-if="$slots.filters"
+      class="ds-toolbar-filters"
+    >
+      <slot name="filters" />
+    </div>
+    <span
+      v-if="count"
+      class="ds-toolbar-count"
+    >{{ count }}</span>
+  </div>
+</template>
+
+<style scoped>
+.ds-toolbar-row {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+}
+.ds-toolbar-search { flex: 1; }
+.ds-toolbar-search :deep(input) {
+  width: min(380px, 100%);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+  color: var(--text-primary);
+  background: var(--surface-elevated);
+  font-size: var(--font-sm);
+}
+.ds-toolbar-search :deep(input:focus) { border-color: var(--brand-focus); box-shadow: var(--shadow-focus); }
+.ds-toolbar-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ds-toolbar-count { color: var(--text-faint); font-size: var(--font-xs); }
+</style>

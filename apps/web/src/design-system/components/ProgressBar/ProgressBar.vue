@@ -1,0 +1,44 @@
+<script setup lang="ts">
+import { computed } from "vue";
+
+const props = withDefaults(
+  defineProps<{
+    value: number;
+    critical?: boolean;
+    label?: string | null;
+  }>(),
+  {
+    critical: false,
+    label: null,
+  },
+);
+
+const clamped = computed(() => Math.min(100, Math.max(0, props.value)));
+</script>
+
+<template>
+  <div
+    class="ds-progress"
+    role="progressbar"
+    :aria-valuenow="clamped"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    :aria-label="label ?? undefined"
+  >
+    <span
+      :class="{ 'ds-progress-fill--critical': critical }"
+      class="ds-progress-fill"
+      :style="{ width: clamped + '%' }"
+    />
+  </div>
+</template>
+
+<style scoped>
+.ds-progress { overflow: hidden; height: 5px; border-radius: 3px; background: var(--border-track); }
+.ds-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--brand-focus); transition: width var(--duration-slow) var(--ease-standard); }
+.ds-progress-fill--critical { background: var(--danger-accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-progress-fill { transition: none; }
+}
+</style>

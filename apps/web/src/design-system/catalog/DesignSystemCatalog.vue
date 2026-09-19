@@ -2,48 +2,50 @@
 import { ref } from "vue";
 import { preferences } from "../../preferences";
 import { breakpoints } from "../breakpoints";
-import AppButton from "../components/AppButton.vue";
-import AppCard from "../components/AppCard.vue";
-import AppCheckbox from "../components/AppCheckbox.vue";
-import AppChip from "../components/AppChip.vue";
-import AppDivider from "../components/AppDivider.vue";
-import AppEmptyState from "../components/AppEmptyState.vue";
-import AppIconButton from "../components/AppIconButton.vue";
-import ConfirmDialog from "../components/ConfirmDialog.vue";
-import DetailList from "../components/DetailList.vue";
-import DetailRow from "../components/DetailRow.vue";
-import InfoNote from "../components/InfoNote.vue";
-import MetricCard from "../components/MetricCard.vue";
-import AppModal from "../components/AppModal.vue";
-import NoticeBanner from "../components/NoticeBanner.vue";
-import AppPopover from "../components/AppPopover.vue";
-import AppPopoverItem from "../components/AppPopoverItem.vue";
-import ProgressBar from "../components/ProgressBar.vue";
-import RadioGroup from "../components/RadioGroup.vue";
-import SelectField from "../components/SelectField.vue";
-import AppSpinner from "../components/AppSpinner.vue";
-import StateBadge from "../components/StateBadge.vue";
-import AppSwitch from "../components/AppSwitch.vue";
-import TabBar from "../components/TabBar.vue";
-import TableToolbar from "../components/TableToolbar.vue";
-import TablePanel from "../components/TablePanel.vue";
-import TagBadge from "../components/TagBadge.vue";
-import TagToggle from "../components/TagToggle.vue";
-import TagToggleGroup from "../components/TagToggleGroup.vue";
-import TextField from "../components/TextField.vue";
-import AppTooltip from "../components/AppTooltip.vue";
-import AppToast from "../components/AppToast.vue";
-import LogEntry from "../components/LogEntry.vue";
-import LogList from "../components/LogList.vue";
-import StorageAllocationBar from "../components/StorageAllocationBar.vue";
-import ToastRegion from "../components/ToastRegion.vue";
-import AppBreadcrumb from "../components/AppBreadcrumb.vue";
-import AppPagination from "../components/AppPagination.vue";
-import AppSkeleton from "../components/AppSkeleton.vue";
-import ButtonGroup from "../components/ButtonGroup.vue";
-import FileField from "../components/FileField.vue";
-import PageHeader from "../components/PageHeader.vue";
-import TextAreaField from "../components/TextAreaField.vue";
+import {
+  AppBreadcrumb,
+  AppButton,
+  AppCard,
+  AppCheckbox,
+  AppChip,
+  AppDivider,
+  AppEmptyState,
+  AppIconButton,
+  AppModal,
+  AppPagination,
+  AppPopover,
+  AppPopoverItem,
+  AppSkeleton,
+  AppSpinner,
+  AppSwitch,
+  AppToast,
+  AppTooltip,
+  ButtonGroup,
+  ConfirmDialog,
+  DetailList,
+  DetailRow,
+  FileField,
+  InfoNote,
+  LogEntry,
+  LogList,
+  MetricCard,
+  NoticeBanner,
+  PageHeader,
+  ProgressBar,
+  RadioGroup,
+  SelectField,
+  StateBadge,
+  StorageAllocationBar,
+  TabBar,
+  TablePanel,
+  TableToolbar,
+  TagBadge,
+  TagToggle,
+  TagToggleGroup,
+  TextAreaField,
+  TextField,
+  ToastRegion,
+} from "../components";
 
 const dialogOpen = ref(false);
 const modalOpen = ref(false);
