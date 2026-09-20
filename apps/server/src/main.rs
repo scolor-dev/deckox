@@ -34,6 +34,7 @@ mod audit;
 mod auth;
 mod cli;
 mod diagnostics;
+mod doctor;
 mod fsutil;
 mod metrics_stream;
 mod notifier;

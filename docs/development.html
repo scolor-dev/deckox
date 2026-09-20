@@ -112,6 +112,8 @@ npm run build</code></pre>
             <tr><td><code>hash-password</code></td><td>標準入力のパスワードをArgon2idハッシュへ変換して標準出力へ表示。開発・Docker Compose用で、<code>DECKOX_ADMIN_PASSWORD_HASH(_FILE)</code>の初期値を作るために使う。本番のパスワード変更には<code>reset-password</code>を使い、このコマンドは不要</td></tr>
             <tr><td><code>reset-password</code></td><td>標準入力の新しいパスワードで<code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code>のパスワードだけを更新。TOTP設定は変更しない。監査ログへ<code>password_reset_cli</code>を記録</td></tr>
             <tr><td><code>disable-totp</code></td><td>対話確認後、アカウントのTOTP設定とリカバリーコードを削除。監査ログへ<code>totp_disabled_cli</code>を記録</td></tr>
+            <tr><td><code>doctor</code></td><td>Web画面に入れないときの診断。バージョン整合、systemdユニット、Agent接続、<code>agent.toml</code>の構文と表、Web画面のファイル、管理者アカウントを<code>[ OK ]</code>/<code>[WARN]</code>/<code>[FAIL]</code>で表示。失敗があると終了コード2</td></tr>
+            <tr><td><code>totp-status</code></td><td>管理者アカウントの二段階認証が有効か、残りのリカバリーコード数を表示(読み取り専用)</td></tr>
             <tr><td><code>access-url</code></td><td>Agentに<code>/v1/system</code>を問い合わせ、LAN上のIPv4アドレスと<code>DECKOX_LISTEN_ADDR</code>のポートから<code>http://IP:port</code>形式のアクセスURLを表示。Agentに接続できない場合もポート番号だけは表示する</td></tr>
           </tbody>
         </table>
