@@ -250,6 +250,7 @@ pub fn check_agent_config(path: &Path) -> Vec<Check> {
             } else {
                 "off"
             },
+            disabled_modules,
         ),
     )];
     for table in ["system", "software", "services"] {
