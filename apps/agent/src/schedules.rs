@@ -26,6 +26,7 @@ use tracing::{info, warn};
 use crate::{
     error::AgentError,
     events::{EventBus, EventDraft},
+    operations::Operations,
     services::ServiceManager,
 };
 
@@ -191,11 +192,16 @@ impl ScheduleStore {
 /// Spawns the tick loop that fires due schedules. Cheap to run even with no
 /// schedules configured, so it is always started rather than gated behind a
 /// config flag like reboot/update.
-pub fn spawn(store: ScheduleStore, services: ServiceManager, events: EventBus) {
+pub fn spawn(
+    store: ScheduleStore,
+    services: ServiceManager,
+    events: EventBus,
+    operations: Operations,
+) {
     tokio::spawn(async move {
         let mut fired: HashMap<String, i64> = HashMap::new();
         loop {
-            tick(&store, &services, &events, &mut fired).await;
+            tick(&store, &services, &events, &operations, &mut fired).await;
             tokio::time::sleep(TICK_INTERVAL).await;
         }
     });
@@ -205,6 +211,7 @@ async fn tick(
     store: &ScheduleStore,
     services: &ServiceManager,
     events: &EventBus,
+    operations: &Operations,
     fired: &mut HashMap<String, i64>,
 ) {
     let now = Local::now();
@@ -228,7 +235,7 @@ async fn tick(
 
     for schedule in due {
         fired.insert(schedule.id.clone(), minute_bucket);
-        run_schedule(store, services, events, &schedule).await;
+        run_schedule(store, services, events, operations, &schedule).await;
     }
 
     fired.retain(|_, bucket| minute_bucket - *bucket <= FIRED_MEMORY_MINUTES);
@@ -238,6 +245,7 @@ async fn run_schedule(
     store: &ScheduleStore,
     services: &ServiceManager,
     events: &EventBus,
+    operations: &Operations,
     schedule: &ServiceSchedule,
 ) {
     let action = match schedule.action {
@@ -245,7 +253,12 @@ async fn run_schedule(
         ScheduleAction::Stop => ServiceAction::Stop,
         ScheduleAction::Restart => ServiceAction::Restart,
     };
-    let result = services.control(&schedule.service_id, action).await;
+    let result = operations
+        .exclusive(
+            &format!("service:{}", schedule.service_id),
+            services.control(&schedule.service_id, action),
+        )
+        .await;
     match result {
         Ok(_) => {
             info!(

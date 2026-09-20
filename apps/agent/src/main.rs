@@ -8,6 +8,7 @@ use axum::{
     Extension, Json, Router,
     extract::{Path as AxumPath, Query, State},
     middleware,
+    response::IntoResponse,
     routing::{get, post},
 };
 use deckox_protocol::{
@@ -39,6 +40,7 @@ mod config;
 mod diagnostics;
 mod error;
 mod events;
+mod operations;
 mod power;
 mod request_context;
 mod schedules;
@@ -57,6 +59,14 @@ struct AppState {
     runtime_config: RuntimeConfigSummary,
     schedules: ScheduleStore,
     events: events::EventBus,
+    operations: operations::Operations,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct OperationQuery {
+    /// `?async=true` returns a job at once instead of waiting for the result.
+    #[serde(default, rename = "async")]
+    run_async: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,7 +133,13 @@ async fn build_state() -> (AppState, PathBuf) {
             std::process::exit(2);
         });
     let events = events::EventBus::new();
-    schedules::spawn(schedule_store.clone(), services.clone(), events.clone());
+    let operations = operations::Operations::new(events.clone());
+    schedules::spawn(
+        schedule_store.clone(),
+        services.clone(),
+        events.clone(),
+        operations.clone(),
+    );
 
     (
         AppState {
@@ -134,6 +150,7 @@ async fn build_state() -> (AppState, PathBuf) {
             runtime_config,
             schedules: schedule_store,
             events,
+            operations,
         },
         socket_path,
     )
@@ -167,6 +184,8 @@ async fn main() {
         .route("/v1/health", get(health))
         .route("/v1/info", get(agent_info))
         .route("/v1/events", get(agent_events))
+        .route("/v1/jobs", get(list_jobs))
+        .route("/v1/jobs/{job_id}", get(get_job))
         .route("/v1/status", get(agent_status))
         .route("/v1/diagnostics", get(agent_diagnostics))
         .route("/v1/system", get(system_info))
@@ -296,6 +315,40 @@ async fn system_capabilities(State(state): State<AppState>) -> Json<SystemCapabi
     })
 }
 
+/// Runs a mutating operation under its resource lock. With `?async=true` it
+/// starts a background job and answers `202` with the [`Job`](deckox_protocol::Job);
+/// otherwise it waits and answers with the command result as before.
+async fn run_operation(
+    state: &AppState,
+    spec: operations::OperationSpec,
+    run_async: bool,
+    work: impl std::future::Future<Output = Result<CommandResult, AgentError>> + Send + 'static,
+) -> Result<axum::response::Response, AgentError> {
+    if run_async {
+        let job = state.operations.submit(spec, work);
+        return Ok((axum::http::StatusCode::ACCEPTED, Json(job)).into_response());
+    }
+    let result = state.operations.exclusive(&spec.key, work).await;
+    let request_id = request_context::RequestId(spec.request_id.unwrap_or_default());
+    log_command_result(&state.events, spec.kind, &request_id, &spec.subject, result)
+        .map(IntoResponse::into_response)
+}
+
+async fn list_jobs(State(state): State<AppState>) -> Json<Vec<deckox_protocol::Job>> {
+    Json(state.operations.jobs())
+}
+
+async fn get_job(
+    State(state): State<AppState>,
+    AxumPath(job_id): AxumPath<String>,
+) -> Result<Json<deckox_protocol::Job>, AgentError> {
+    state
+        .operations
+        .job(&job_id)
+        .map(Json)
+        .ok_or_else(|| AgentError::not_found(format!("job not found: {job_id}")))
+}
+
 /// Logs the outcome of an Agent-side command and passes the result through
 /// unchanged. `event` names the operation for log filtering; `detail` carries
 /// whatever per-call context matters (empty when there is none) as a single
@@ -352,13 +405,11 @@ async fn reboot_system(
     State(state): State<AppState>,
     Extension(request_id): Extension<request_context::RequestId>,
 ) -> Result<Json<CommandResult>, AgentError> {
-    log_command_result(
-        &state.events,
-        "system_reboot",
-        &request_id,
-        "",
-        state.power.reboot().await,
-    )
+    let result = state
+        .operations
+        .exclusive("host", state.power.reboot())
+        .await;
+    log_command_result(&state.events, "system_reboot", &request_id, "", result)
 }
 
 async fn update_system(
@@ -367,8 +418,13 @@ async fn update_system(
     Json(payload): Json<AgentUpdateRequest>,
 ) -> Result<Json<CommandResult>, AgentError> {
     let result = state
-        .update
-        .trigger(&payload.target_version, &payload.install_script)
+        .operations
+        .exclusive(
+            "host",
+            state
+                .update
+                .trigger(&payload.target_version, &payload.install_script),
+        )
         .await;
     log_command_result(
         &state.events,
@@ -411,41 +467,81 @@ async fn service_details(
 async fn start_service(
     State(state): State<AppState>,
     AxumPath(service_id): AxumPath<String>,
+    Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
-) -> Result<Json<CommandResult>, AgentError> {
-    control_service(state, service_id, ServiceAction::Start, request_id).await
+) -> Result<axum::response::Response, AgentError> {
+    control_service(
+        state,
+        service_id,
+        ServiceAction::Start,
+        operation.run_async,
+        request_id,
+    )
+    .await
 }
 
 async fn stop_service(
     State(state): State<AppState>,
     AxumPath(service_id): AxumPath<String>,
+    Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
-) -> Result<Json<CommandResult>, AgentError> {
-    control_service(state, service_id, ServiceAction::Stop, request_id).await
+) -> Result<axum::response::Response, AgentError> {
+    control_service(
+        state,
+        service_id,
+        ServiceAction::Stop,
+        operation.run_async,
+        request_id,
+    )
+    .await
 }
 
 async fn restart_service(
     State(state): State<AppState>,
     AxumPath(service_id): AxumPath<String>,
+    Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
-) -> Result<Json<CommandResult>, AgentError> {
-    control_service(state, service_id, ServiceAction::Restart, request_id).await
+) -> Result<axum::response::Response, AgentError> {
+    control_service(
+        state,
+        service_id,
+        ServiceAction::Restart,
+        operation.run_async,
+        request_id,
+    )
+    .await
 }
 
 async fn enable_service(
     State(state): State<AppState>,
     AxumPath(service_id): AxumPath<String>,
+    Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
-) -> Result<Json<CommandResult>, AgentError> {
-    control_service(state, service_id, ServiceAction::Enable, request_id).await
+) -> Result<axum::response::Response, AgentError> {
+    control_service(
+        state,
+        service_id,
+        ServiceAction::Enable,
+        operation.run_async,
+        request_id,
+    )
+    .await
 }
 
 async fn disable_service(
     State(state): State<AppState>,
     AxumPath(service_id): AxumPath<String>,
+    Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
-) -> Result<Json<CommandResult>, AgentError> {
-    control_service(state, service_id, ServiceAction::Disable, request_id).await
+) -> Result<axum::response::Response, AgentError> {
+    control_service(
+        state,
+        service_id,
+        ServiceAction::Disable,
+        operation.run_async,
+        request_id,
+    )
+    .await
 }
 
 async fn allow_service(
@@ -508,46 +604,67 @@ async fn agent_events(
 async fn install_software(
     State(state): State<AppState>,
     AxumPath(software_id): AxumPath<String>,
+    Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
-) -> Result<Json<CommandResult>, AgentError> {
-    let result = state.software.install(&software_id).await;
-    log_command_result(
-        &state.events,
-        "software_action",
-        &request_id,
-        &format!("software={software_id} action=install"),
-        result,
+) -> Result<axum::response::Response, AgentError> {
+    let software = state.software.clone();
+    let name = software_id.clone();
+    run_operation(
+        &state,
+        operations::OperationSpec {
+            kind: "software_action",
+            subject: format!("software={software_id} action=install"),
+            key: "packages".to_owned(),
+            request_id: Some(request_id.0),
+        },
+        operation.run_async,
+        async move { software.install(&name).await },
     )
+    .await
 }
 
 async fn remove_software(
     State(state): State<AppState>,
     AxumPath(software_id): AxumPath<String>,
+    Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
-) -> Result<Json<CommandResult>, AgentError> {
-    let result = state.software.remove(&software_id).await;
-    log_command_result(
-        &state.events,
-        "software_action",
-        &request_id,
-        &format!("software={software_id} action=remove"),
-        result,
+) -> Result<axum::response::Response, AgentError> {
+    let software = state.software.clone();
+    let name = software_id.clone();
+    run_operation(
+        &state,
+        operations::OperationSpec {
+            kind: "software_action",
+            subject: format!("software={software_id} action=remove"),
+            key: "packages".to_owned(),
+            request_id: Some(request_id.0),
+        },
+        operation.run_async,
+        async move { software.remove(&name).await },
     )
+    .await
 }
 
 async fn upgrade_software(
     State(state): State<AppState>,
     AxumPath(software_id): AxumPath<String>,
+    Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
-) -> Result<Json<CommandResult>, AgentError> {
-    let result = state.software.upgrade(&software_id).await;
-    log_command_result(
-        &state.events,
-        "software_action",
-        &request_id,
-        &format!("software={software_id} action=upgrade"),
-        result,
+) -> Result<axum::response::Response, AgentError> {
+    let software = state.software.clone();
+    let name = software_id.clone();
+    run_operation(
+        &state,
+        operations::OperationSpec {
+            kind: "software_action",
+            subject: format!("software={software_id} action=upgrade"),
+            key: "packages".to_owned(),
+            request_id: Some(request_id.0),
+        },
+        operation.run_async,
+        async move { software.upgrade(&name).await },
     )
+    .await
 }
 
 async fn allow_software(
@@ -660,8 +777,9 @@ async fn control_service(
     state: AppState,
     service_id: String,
     action: ServiceAction,
+    run_async: bool,
     request_id: request_context::RequestId,
-) -> Result<Json<CommandResult>, AgentError> {
+) -> Result<axum::response::Response, AgentError> {
     let action_name = match &action {
         ServiceAction::Start => "start",
         ServiceAction::Stop => "stop",
@@ -669,14 +787,20 @@ async fn control_service(
         ServiceAction::Enable => "enable",
         ServiceAction::Disable => "disable",
     };
-    let result = state.services.control(&service_id, action).await;
-    log_command_result(
-        &state.events,
-        "service_action",
-        &request_id,
-        &format!("service={service_id} action={action_name}"),
-        result,
+    let services = state.services.clone();
+    let id = service_id.clone();
+    run_operation(
+        &state,
+        operations::OperationSpec {
+            kind: "service_action",
+            subject: format!("service={service_id} action={action_name}"),
+            key: format!("service:{service_id}"),
+            request_id: Some(request_id.0),
+        },
+        run_async,
+        async move { services.control(&id, action).await },
     )
+    .await
 }
 
 async fn shutdown_signal() {

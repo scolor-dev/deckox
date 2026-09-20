@@ -219,6 +219,8 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
     let protected_api = Router::new()
         .route("/status", get(status))
         .route("/events", get(event_feed))
+        .route("/jobs", get(proxy_jobs))
+        .route("/jobs/{job_id}", get(proxy_job))
         .route("/diagnostics", get(diagnostics))
         .route("/diagnostics/report", get(diagnostics_report))
         .route("/audit", get(audit_events))
@@ -332,6 +334,35 @@ async fn health(State(state): State<AppState>) -> Json<ServerHealth> {
 struct EventFeedQuery {
     #[serde(default)]
     after: u64,
+}
+
+async fn proxy_jobs(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    proxy_agent(&state.agent, "GET", "/v1/jobs", &request_id).await
+}
+
+async fn proxy_job(
+    State(state): State<AppState>,
+    Path(job_id): Path<String>,
+    Extension(request_id): Extension<RequestId>,
+) -> Response {
+    if job_id.is_empty()
+        || job_id.len() > 64
+        || !job_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    {
+        return (StatusCode::BAD_REQUEST, "invalid job id").into_response();
+    }
+    proxy_agent(
+        &state.agent,
+        "GET",
+        &format!("/v1/jobs/{job_id}"),
+        &request_id,
+    )
+    .await
 }
 
 async fn event_feed(

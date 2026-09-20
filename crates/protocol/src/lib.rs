@@ -553,3 +553,30 @@ pub struct EventBatch {
     /// Pass this as `after` on the next request.
     pub next_after: u64,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JobState {
+    /// Waiting for another operation on the same resource to finish.
+    Queued,
+    Running,
+    Succeeded,
+    Failed,
+}
+
+/// A long-running operation started with `?async=true`.
+///
+/// The request returns at once with the job; its progress is read from
+/// `GET /v1/jobs/{id}` and its end is also announced as an event.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Job {
+    pub id: String,
+    pub kind: String,
+    pub subject: String,
+    pub state: JobState,
+    pub created_ms: u64,
+    pub started_ms: Option<u64>,
+    pub finished_ms: Option<u64>,
+    pub message: Option<String>,
+    pub request_id: Option<String>,
+}
