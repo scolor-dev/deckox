@@ -35,6 +35,7 @@ mod auth;
 mod cli;
 mod diagnostics;
 mod doctor;
+mod events;
 mod fsutil;
 mod metrics_stream;
 mod notifier;
@@ -52,6 +53,7 @@ struct AppState {
     auth: AuthManager,
     audit: AuditLog,
     metrics: MetricsHub,
+    events: events::EventFeed,
     updates: update::UpdateChecker,
     webhook_url: Option<String>,
     instance_id: String,
@@ -172,14 +174,18 @@ async fn main() {
         updates.clone(),
         webhook_url.clone(),
     );
+    let instance_id = format!("{:016x}", rand::random::<u64>());
+    let events = events::EventFeed::new(&instance_id);
+    events::spawn(agent.clone(), events.clone());
     let state = AppState {
         agent: agent.clone(),
         auth: auth.clone(),
         audit,
         metrics: MetricsHub::new(agent),
+        events,
         updates,
         webhook_url,
-        instance_id: format!("{:016x}", rand::random::<u64>()),
+        instance_id,
         listen_port: listen_addr.port(),
     };
 
@@ -212,6 +218,7 @@ async fn main() {
 fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) -> Router {
     let protected_api = Router::new()
         .route("/status", get(status))
+        .route("/events", get(event_feed))
         .route("/diagnostics", get(diagnostics))
         .route("/diagnostics/report", get(diagnostics_report))
         .route("/audit", get(audit_events))
@@ -319,6 +326,19 @@ async fn health(State(state): State<AppState>) -> Json<ServerHealth> {
         status: "ok",
         instance_id: state.instance_id,
     })
+}
+
+#[derive(Deserialize)]
+struct EventFeedQuery {
+    #[serde(default)]
+    after: u64,
+}
+
+async fn event_feed(
+    State(state): State<AppState>,
+    Query(query): Query<EventFeedQuery>,
+) -> Json<events::FeedBatch> {
+    Json(state.events.since(query.after))
 }
 
 async fn status(

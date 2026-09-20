@@ -499,3 +499,57 @@ pub struct AuditPage {
     pub events: Vec<AuditEvent>,
     pub has_more: bool,
 }
+
+/// Version of the Server–Agent contract.
+///
+/// It changes only when a request or response shape changes incompatibly, so
+/// a Server and an Agent from different releases can tell whether they
+/// understand each other.
+pub const PROTOCOL_VERSION: u32 = 1;
+
+/// Answer to `GET /v1/info`: who the Agent is and what it speaks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentInfo {
+    pub protocol_version: u32,
+    pub agent_version: String,
+    /// Identifies this Agent process. It changes on every restart, which
+    /// tells an event consumer that event numbers started over.
+    pub epoch: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EventResult {
+    Accepted,
+    Rejected,
+    Completed,
+    Failed,
+}
+
+/// Something that happened on the host, reported by the Agent.
+///
+/// Events describe the past and are never used to decide what is allowed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentEvent {
+    /// Position in this Agent process's event stream, starting at 1.
+    pub seq: u64,
+    pub timestamp_ms: u64,
+    /// Machine-readable kind such as `service_action` or `schedule_run`.
+    pub kind: String,
+    pub result: EventResult,
+    /// What the event is about, for example `service=nginx.service action=restart`.
+    pub subject: String,
+    /// The request that caused it, when there was one.
+    pub request_id: Option<String>,
+    pub command_id: Option<String>,
+    pub message: Option<String>,
+}
+
+/// Answer to `GET /v1/events`: the events after the requested position.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventBatch {
+    pub epoch: String,
+    pub events: Vec<AgentEvent>,
+    /// Pass this as `after` on the next request.
+    pub next_after: u64,
+}

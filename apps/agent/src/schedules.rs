@@ -17,11 +17,17 @@ use std::{
 };
 
 use chrono::{Datelike, Local, Timelike};
-use deckox_protocol::{CreateScheduleRequest, ScheduleAction, ServiceAction, ServiceSchedule};
+use deckox_protocol::{
+    CreateScheduleRequest, EventResult, ScheduleAction, ServiceAction, ServiceSchedule,
+};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
-use crate::{error::AgentError, services::ServiceManager};
+use crate::{
+    error::AgentError,
+    events::{EventBus, EventDraft},
+    services::ServiceManager,
+};
 
 const DEFAULT_SCHEDULES_PATH: &str = "/var/lib/deckox/schedules.json";
 const MAX_SCHEDULES: usize = 100;
@@ -185,17 +191,22 @@ impl ScheduleStore {
 /// Spawns the tick loop that fires due schedules. Cheap to run even with no
 /// schedules configured, so it is always started rather than gated behind a
 /// config flag like reboot/update.
-pub fn spawn(store: ScheduleStore, services: ServiceManager) {
+pub fn spawn(store: ScheduleStore, services: ServiceManager, events: EventBus) {
     tokio::spawn(async move {
         let mut fired: HashMap<String, i64> = HashMap::new();
         loop {
-            tick(&store, &services, &mut fired).await;
+            tick(&store, &services, &events, &mut fired).await;
             tokio::time::sleep(TICK_INTERVAL).await;
         }
     });
 }
 
-async fn tick(store: &ScheduleStore, services: &ServiceManager, fired: &mut HashMap<String, i64>) {
+async fn tick(
+    store: &ScheduleStore,
+    services: &ServiceManager,
+    events: &EventBus,
+    fired: &mut HashMap<String, i64>,
+) {
     let now = Local::now();
     let minute_bucket = now.timestamp() / 60;
     let weekday = iso_weekday(now.weekday());
@@ -217,7 +228,7 @@ async fn tick(store: &ScheduleStore, services: &ServiceManager, fired: &mut Hash
 
     for schedule in due {
         fired.insert(schedule.id.clone(), minute_bucket);
-        run_schedule(store, services, &schedule).await;
+        run_schedule(store, services, events, &schedule).await;
     }
 
     fired.retain(|_, bucket| minute_bucket - *bucket <= FIRED_MEMORY_MINUTES);
@@ -226,6 +237,7 @@ async fn tick(store: &ScheduleStore, services: &ServiceManager, fired: &mut Hash
 async fn run_schedule(
     store: &ScheduleStore,
     services: &ServiceManager,
+    events: &EventBus,
     schedule: &ServiceSchedule,
 ) {
     let action = match schedule.action {
@@ -241,6 +253,7 @@ async fn run_schedule(
                 service = schedule.service_id,
                 "scheduled service action completed"
             );
+            publish_run(events, schedule, EventResult::Completed, None);
             store.record_run(&schedule.id, "success".to_owned()).await;
         }
         Err(error) => {
@@ -250,11 +263,42 @@ async fn run_schedule(
                 error = ?error,
                 "scheduled service action failed"
             );
+            publish_run(
+                events,
+                schedule,
+                EventResult::Failed,
+                Some(error.message().to_owned()),
+            );
             store
                 .record_run(&schedule.id, format!("failed: {}", error.message()))
                 .await;
         }
     }
+}
+
+fn publish_run(
+    events: &EventBus,
+    schedule: &ServiceSchedule,
+    result: EventResult,
+    message: Option<String>,
+) {
+    events.publish(EventDraft {
+        kind: "schedule_run",
+        result,
+        subject: format!(
+            "schedule={} service={} action={}",
+            schedule.id,
+            schedule.service_id,
+            match schedule.action {
+                ScheduleAction::Start => "start",
+                ScheduleAction::Stop => "stop",
+                ScheduleAction::Restart => "restart",
+            }
+        ),
+        request_id: None,
+        command_id: None,
+        message,
+    });
 }
 
 fn iso_weekday(weekday: chrono::Weekday) -> u8 {

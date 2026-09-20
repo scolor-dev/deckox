@@ -11,10 +11,11 @@ use axum::{
     routing::{get, post},
 };
 use deckox_protocol::{
-    AgentDiagnostics, AgentStatus, AgentUpdateRequest, BackupSummary, CommandResult,
-    CreateScheduleRequest, HealthResponse, RuntimeConfigSummary, ServiceAction, ServiceDetails,
-    ServiceLogPriority, ServiceLogs, ServiceSchedule, ServiceSummary, SoftwarePackage,
-    StorageMount, SystemCapabilities, SystemInfo, SystemMetrics,
+    AgentDiagnostics, AgentInfo, AgentStatus, AgentUpdateRequest, BackupSummary, CommandResult,
+    CreateScheduleRequest, EventBatch, EventResult, HealthResponse, PROTOCOL_VERSION,
+    RuntimeConfigSummary, ServiceAction, ServiceDetails, ServiceLogPriority, ServiceLogs,
+    ServiceSchedule, ServiceSummary, SoftwarePackage, StorageMount, SystemCapabilities, SystemInfo,
+    SystemMetrics,
 };
 use serde::Deserialize;
 use tokio::net::UnixListener;
@@ -37,6 +38,7 @@ mod backups;
 mod config;
 mod diagnostics;
 mod error;
+mod events;
 mod power;
 mod request_context;
 mod schedules;
@@ -54,6 +56,14 @@ struct AppState {
     update: UpdateManager,
     runtime_config: RuntimeConfigSummary,
     schedules: ScheduleStore,
+    events: events::EventBus,
+}
+
+#[derive(Debug, Deserialize)]
+struct EventsQuery {
+    #[serde(default)]
+    after: u64,
+    epoch: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -112,7 +122,8 @@ async fn build_state() -> (AppState, PathBuf) {
             eprintln!("failed to load schedules: {error:?}");
             std::process::exit(2);
         });
-    schedules::spawn(schedule_store.clone(), services.clone());
+    let events = events::EventBus::new();
+    schedules::spawn(schedule_store.clone(), services.clone(), events.clone());
 
     (
         AppState {
@@ -122,6 +133,7 @@ async fn build_state() -> (AppState, PathBuf) {
             update,
             runtime_config,
             schedules: schedule_store,
+            events,
         },
         socket_path,
     )
@@ -153,6 +165,8 @@ async fn main() {
 
     let app = Router::new()
         .route("/v1/health", get(health))
+        .route("/v1/info", get(agent_info))
+        .route("/v1/events", get(agent_events))
         .route("/v1/status", get(agent_status))
         .route("/v1/diagnostics", get(agent_diagnostics))
         .route("/v1/system", get(system_info))
@@ -289,11 +303,30 @@ async fn system_capabilities(State(state): State<AppState>) -> Json<SystemCapabi
 /// and the three operations that use this (reboot, self-update, service
 /// actions) each carry different extra context.
 fn log_command_result(
+    events: &events::EventBus,
     event: &'static str,
     request_id: &request_context::RequestId,
     detail: &str,
     result: Result<CommandResult, AgentError>,
 ) -> Result<Json<CommandResult>, AgentError> {
+    events.publish(events::EventDraft {
+        kind: event,
+        result: if result.is_ok() {
+            EventResult::Accepted
+        } else {
+            EventResult::Rejected
+        },
+        subject: detail.to_owned(),
+        request_id: Some(request_id.0.clone()),
+        command_id: result
+            .as_ref()
+            .ok()
+            .map(|command| command.command_id.clone()),
+        message: result
+            .as_ref()
+            .err()
+            .map(|error| error.message().to_owned()),
+    });
     match &result {
         Ok(command) => info!(
             event,
@@ -319,7 +352,13 @@ async fn reboot_system(
     State(state): State<AppState>,
     Extension(request_id): Extension<request_context::RequestId>,
 ) -> Result<Json<CommandResult>, AgentError> {
-    log_command_result("system_reboot", &request_id, "", state.power.reboot().await)
+    log_command_result(
+        &state.events,
+        "system_reboot",
+        &request_id,
+        "",
+        state.power.reboot().await,
+    )
 }
 
 async fn update_system(
@@ -332,6 +371,7 @@ async fn update_system(
         .trigger(&payload.target_version, &payload.install_script)
         .await;
     log_command_result(
+        &state.events,
         "system_update",
         &request_id,
         &format!("target_version={}", payload.target_version),
@@ -415,6 +455,7 @@ async fn allow_service(
 ) -> Result<Json<CommandResult>, AgentError> {
     let result = state.services.allow(&service_id).await;
     log_command_result(
+        &state.events,
         "service_allowlist",
         &request_id,
         &format!("service={service_id} action=allow"),
@@ -429,6 +470,7 @@ async fn disallow_service(
 ) -> Result<Json<CommandResult>, AgentError> {
     let result = state.services.disallow(&service_id).await;
     log_command_result(
+        &state.events,
         "service_allowlist",
         &request_id,
         &format!("service={service_id} action=disallow"),
@@ -448,6 +490,21 @@ async fn list_installed_software(
     state.software.list_installed().await.map(Json)
 }
 
+async fn agent_info(State(state): State<AppState>) -> Json<AgentInfo> {
+    Json(AgentInfo {
+        protocol_version: PROTOCOL_VERSION,
+        agent_version: env!("CARGO_PKG_VERSION").to_owned(),
+        epoch: state.events.epoch().to_owned(),
+    })
+}
+
+async fn agent_events(
+    State(state): State<AppState>,
+    Query(query): Query<EventsQuery>,
+) -> Json<EventBatch> {
+    Json(state.events.since(query.epoch.as_deref(), query.after))
+}
+
 async fn install_software(
     State(state): State<AppState>,
     AxumPath(software_id): AxumPath<String>,
@@ -455,6 +512,7 @@ async fn install_software(
 ) -> Result<Json<CommandResult>, AgentError> {
     let result = state.software.install(&software_id).await;
     log_command_result(
+        &state.events,
         "software_action",
         &request_id,
         &format!("software={software_id} action=install"),
@@ -469,6 +527,7 @@ async fn remove_software(
 ) -> Result<Json<CommandResult>, AgentError> {
     let result = state.software.remove(&software_id).await;
     log_command_result(
+        &state.events,
         "software_action",
         &request_id,
         &format!("software={software_id} action=remove"),
@@ -483,6 +542,7 @@ async fn upgrade_software(
 ) -> Result<Json<CommandResult>, AgentError> {
     let result = state.software.upgrade(&software_id).await;
     log_command_result(
+        &state.events,
         "software_action",
         &request_id,
         &format!("software={software_id} action=upgrade"),
@@ -497,6 +557,7 @@ async fn allow_software(
 ) -> Result<Json<CommandResult>, AgentError> {
     let result = state.software.allow(&software_id).await;
     log_command_result(
+        &state.events,
         "software_allowlist",
         &request_id,
         &format!("software={software_id} action=allow"),
@@ -511,6 +572,7 @@ async fn disallow_software(
 ) -> Result<Json<CommandResult>, AgentError> {
     let result = state.software.disallow(&software_id).await;
     log_command_result(
+        &state.events,
         "software_allowlist",
         &request_id,
         &format!("software={software_id} action=disallow"),
@@ -609,6 +671,7 @@ async fn control_service(
     };
     let result = state.services.control(&service_id, action).await;
     log_command_result(
+        &state.events,
         "service_action",
         &request_id,
         &format!("service={service_id} action={action_name}"),
