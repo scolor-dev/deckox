@@ -310,10 +310,10 @@ mod tests {
 
     #[test]
     fn version_marker_must_match_the_binary() {
-        assert_eq!(check_version("0.6.8", Some("0.6.8\n")).level, Level::Ok);
-        assert_eq!(check_version("0.6.8", Some("v0.6.8")).level, Level::Ok);
-        assert_eq!(check_version("0.6.8", Some("0.6.7")).level, Level::Warn);
-        assert_eq!(check_version("0.6.8", None).level, Level::Warn);
+        assert_eq!(check_version("2.0.0", Some("2.0.0\n")).level, Level::Ok);
+        assert_eq!(check_version("2.0.0", Some("v2.0.0")).level, Level::Ok);
+        assert_eq!(check_version("2.0.0", Some("1.9.9")).level, Level::Warn);
+        assert_eq!(check_version("2.0.0", None).level, Level::Warn);
     }
 
     #[test]
