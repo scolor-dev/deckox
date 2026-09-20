@@ -26,6 +26,8 @@ pub async fn dispatch(argument: Option<&str>) -> bool {
         Some("reset-password") => reset_password().await,
         Some("disable-totp") => disable_totp().await,
         Some("access-url") => access_url().await,
+        Some("totp-status") => totp_status(),
+        Some("doctor") => crate::doctor::run().await,
         _ => return false,
     };
     if let Err(error) = result {
@@ -93,6 +95,21 @@ async fn disable_totp() -> Result<(), String> {
 /// LAN-facing IPv4 addresses Agent reports for the host's physical network
 /// interfaces. Best-effort: if Agent can't be reached or reports no
 /// address, still prints the port so there is something to go on.
+/// `totp-status` — whether two-factor authentication is on for the admin
+/// account, and how many recovery codes are left. Read-only.
+fn totp_status() -> Result<(), String> {
+    let account_path = require_account_path("TOTP status cannot be read")?;
+    let account = auth::load_admin_account(&account_path)?;
+    match account.totp {
+        None => println!("Two-factor authentication: disabled"),
+        Some(totp) => println!(
+            "Two-factor authentication: enabled ({} recovery code(s) remaining)",
+            totp.recovery_code_hashes.len()
+        ),
+    }
+    Ok(())
+}
+
 async fn access_url() -> Result<(), String> {
     let listen_addr = env::var("DECKOX_LISTEN_ADDR")
         .unwrap_or_else(|_| crate::DEFAULT_LISTEN_ADDR.to_owned())

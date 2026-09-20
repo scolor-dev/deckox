@@ -26,7 +26,7 @@
         <a href="development.html"><span class="nav-icon">⌘</span>開発</a>
         <a href="design-system.html"><span class="nav-icon">◐</span>デザインシステム</a>
       </nav>
-      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.6.7</div>
+      <div class="sidebar-meta">実装済みのコードを基準に記載<br>Version 0.6.8</div>
     </aside>
     <main class="content" id="main">
       <header class="page-head">
@@ -57,9 +57,9 @@
       <section class="section" aria-labelledby="release-title">
         <h2 id="release-title">Releaseの作成</h2>
         <p><code>v*</code>タグのpushでRelease Workflowが起動します。</p>
-        <pre><code>git tag v0.6.7
+        <pre><code>git tag v0.6.8
 git push origin main
-git push origin v0.6.7</code></pre>
+git push origin v0.6.8</code></pre>
         <aside class="note"><strong>実行条件:</strong> インストールコマンドを利用するには、対象タグのGitHub Releaseと4つの配布ファイルが公開済みである必要があります。</aside>
       </section>
 
@@ -77,13 +77,13 @@ sudo sh install.sh</code></pre>
         <p>特定バージョンを選ぶ場合:</p>
         <pre><code>curl -fsSL \
   https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
-  | sudo DECKOX_VERSION=v0.6.7 sh</code></pre>
+  | sudo DECKOX_VERSION=v0.6.8 sh</code></pre>
         <p>ダウンロードや変更を行わずに予定を確認する場合:</p>
         <pre><code>sh install.sh --dry-run
 sh install.sh --version</code></pre>
         <p>管理対象ファイルだけを削除する場合:</p>
         <pre><code>sudo sh install.sh --uninstall</code></pre>
-        <p>アンインストール後も<code>/etc/deckox</code>、<code>/var/lib/deckox</code>、バックアップ、<code>deckox</code>ユーザーとグループは保持されます。</p>
+        <p>アンインストール後も<code>/etc/deckox</code>、<code>/var/lib/deckox</code>、バックアップ、<code>deckox</code>ユーザーとグループは保持されます。すべて消す場合は、後述の「完全削除」を参照してください。</p>
         <p>ローカル配布物を検証する場合は、アーカイブと同じ場所に<code>.sha256</code>ファイルを置いて指定します。</p>
         <pre><code>sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
   sh install.sh</code></pre>
@@ -186,6 +186,103 @@ Environment=DECKOX_WEBHOOK_URL=https://example.com/webhook</code></pre>
         <p>v0.3.3ではWebコンソールを削除しました。更新時は旧<code>deckox-terminal.service</code>をDeckox管理のユニットだと確認してから停止・無効化し、ユニットとバイナリを削除します。</p>
         <p>旧アカウントのホーム・nologinシェル・主グループがDeckoxの作成条件と一致する場合だけ、<code>deckox-terminal</code>ユーザーとグループを削除します。<code>/var/lib/deckox-terminal</code>が空でなければデータ保護のため残し、インストーラーへ警告を表示します。</p>
       </section>
+      <section class="section" aria-labelledby="doctor-title">
+        <h2 id="doctor-title">状態の確認(診断コマンド)</h2>
+        <p>Web画面に入れないときは、SSHから1コマンドで状態を確認できます。</p>
+        <pre><code>sudo -u deckox deckox-server doctor
+sudo -u deckox deckox-server totp-status</code></pre>
+        <p><code>doctor</code>は、次の項目を <code>[ OK ]</code>・<code>[WARN]</code>・<code>[FAIL]</code> で1行ずつ表示します。<code>[FAIL]</code>があると終了コードが2になります。</p>
+        <table class="status-table">
+          <thead><tr><th>項目</th><th>確認内容</th></tr></thead>
+          <tbody>
+            <tr><td>version</td><td>実行中のバイナリと、インストールされた版情報が一致するか(更新が途中で止まった、または再起動していないと警告)</td></tr>
+            <tr><td>agent unit / server unit</td><td>systemdユニットが<code>active</code>か</td></tr>
+            <tr><td>agent</td><td>AgentのUnixソケットに接続でき、ホスト情報を返すか</td></tr>
+            <tr><td>agent.toml</td><td>TOMLとして読めるか(構文エラーだとAgentは起動しません)。<code>[system]</code>・<code>[software]</code>・<code>[services]</code>が揃っているか。再起動・更新の許可、許可サービス数、管理パッケージ数、自動追加の状態</td></tr>
+            <tr><td>web files</td><td>Web画面のファイル(<code>index.html</code>)があるか</td></tr>
+            <tr><td>account</td><td>管理者アカウントを読めるか。二段階認証の有効・無効と、残りのリカバリーコード数</td></tr>
+          </tbody>
+        </table>
+        <p><code>totp-status</code>は、二段階認証が有効か、リカバリーコードがあと何個かだけを表示します(読み取り専用)。<code>/etc/deckox/agent.toml</code>を読むため、<code>deckox</code>ユーザー(またはroot)で実行してください。</p>
+      </section>
+
+      <section class="section" aria-labelledby="rollback-title">
+        <h2 id="rollback-title">前の版へ戻す</h2>
+        <p>更新でおかしくなったときは、前の版を指定して入れ直すのが最も簡単です。設定とデータは保持されます。</p>
+        <pre><code>curl -fsSL https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh \
+  | sudo DECKOX_VERSION=v0.6.6 sh</code></pre>
+        <p>ネットワークに繋がらないなど、ダウンロードできないときは、更新のたびに保存される更新前バックアップから戻します。</p>
+        <pre><code>ls /var/lib/deckox/backups/          # 例: 20260919T120000Z-0.6.6(日時-更新前の版)
+B=/var/lib/deckox/backups/20260919T120000Z-0.6.6
+
+sudo systemctl stop deckox-server deckox-agent
+sudo cp -p $B/deckox-agent $B/deckox-server /usr/local/bin/
+sudo cp -p $B/deckox-agent.service $B/deckox-server.service /etc/systemd/system/
+sudo cp -p $B/VERSION /usr/local/share/deckox/VERSION
+sudo rm -rf /usr/local/share/deckox/web
+sudo cp -R $B/web /usr/local/share/deckox/web
+sudo systemctl daemon-reload
+sudo systemctl start deckox-agent deckox-server
+sudo -u deckox deckox-server doctor</code></pre>
+        <p>バックアップに含まれるのは、バイナリ2つ、systemdユニット、Web画面、版情報です。設定(<code>/etc/deckox</code>)とデータ(<code>/var/lib/deckox</code>)は、更新でも書き換えずに保持されるため、戻す対象に含まれません。設定の巻き戻しは「設定のバックアップと復旧」を参照してください。</p>
+      </section>
+
+      <section class="section" aria-labelledby="config-recovery-title">
+        <h2 id="config-recovery-title">設定のバックアップと復旧</h2>
+        <p>Agentは、管理画面の操作で<code>/etc/deckox/agent.toml</code>を書き換えるたびに、直前の内容を<code>agent.toml.bak.1</code>(最新)から<code>agent.toml.bak.3</code>まで、3世代保存します。</p>
+        <pre><code>ls -l /etc/deckox/</code></pre>
+        <p>設定がおかしくなったら、直前の状態へ戻します。</p>
+        <pre><code>sudo cp -p /etc/deckox/agent.toml.bak.1 /etc/deckox/agent.toml
+sudo systemctl restart deckox-agent</code></pre>
+        <p>手で編集する前は、自分でもバックアップを取ります。編集後は、構文を確認してから再起動してください(Python 3.11以降)。</p>
+        <pre><code>sudo cp -p /etc/deckox/agent.toml /etc/deckox/agent.toml.manual.bak
+sudoedit /etc/deckox/agent.toml
+sudo python3 -c "import tomllib; tomllib.load(open('/etc/deckox/agent.toml','rb')); print('OK')"
+sudo systemctl restart deckox-agent</code></pre>
+        <p>バックアップも失われた場合は、標準の設定を作り直します。許可していたサービスやソフトウェアは、必要に応じて足してください。</p>
+        <pre><code>sudo tee /etc/deckox/agent.toml &gt;/dev/null &lt;&lt;'EOF'
+socket = "/run/deckox/agent.sock"
+
+[system]
+allow_reboot = false
+allow_update = false
+
+[software]
+auto_adopt = true
+allowed = []
+dismissed = []
+
+[services]
+allowed = []
+EOF
+sudo chown root:deckox /etc/deckox/agent.toml
+sudo chmod 640 /etc/deckox/agent.toml
+sudo systemctl restart deckox-agent</code></pre>
+        <aside class="note warning"><strong>v0.6.6以前の注意:</strong> これらの版は、サービスやソフトウェアの許可・解除の書き込みで、<code>[software]</code>などの表が消えることがありました。v0.6.8以降へ更新してから復旧してください。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="purge-title">
+        <h2 id="purge-title">完全削除(データも含めてすべて消す)</h2>
+        <p><code>--uninstall</code>は、バイナリ・Web画面・systemdユニット・版情報だけを削除します。設定、管理者アカウント、監査ログ、スケジュール、更新前バックアップ、<code>deckox</code>ユーザーは残ります。これらまで消すには、アンインストールの後に次を実行します。</p>
+        <pre><code>curl -fsSL https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh -o install.sh
+sudo sh install.sh --uninstall
+
+sudo rm -rf /etc/deckox /var/lib/deckox /run/deckox
+sudo userdel deckox
+getent group deckox &gt;/dev/null &amp;&amp; sudo groupdel deckox</code></pre>
+        <table class="status-table">
+          <thead><tr><th>場所</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td><code>/etc/deckox</code></td><td>設定(<code>agent.toml</code>、<code>server.toml</code>)とそのバックアップ</td></tr>
+            <tr><td><code>/var/lib/deckox</code></td><td>管理者のパスワードハッシュと二段階認証、監査ログ(<code>audit.log</code>)、スケジュール(<code>schedules.json</code>)、更新前バックアップ(<code>backups/</code>)</td></tr>
+            <tr><td><code>/run/deckox</code></td><td>Agentのソケット(再起動で消える一時領域)</td></tr>
+            <tr><td><code>deckox</code>ユーザーとグループ</td><td>Serverの実行アカウント</td></tr>
+          </tbody>
+        </table>
+        <aside class="note warning"><strong>元に戻せません:</strong> パスワード、二段階認証、監査ログ、バックアップも消えます。再インストールすると初期状態になり、管理者パスワードの設定から始まります。必要なものは、先に別の場所へコピーしてください。</aside>
+        <p>systemdのログ(<code>journalctl</code>)はDeckoxの管理外です。消す場合は<code>sudo journalctl --vacuum-time=1s</code>を使います(ホスト全体のログが対象になります)。</p>
+      </section>
+
       <footer class="footer">Deckox Docs · Installation</footer>
     </main>
   </div>
