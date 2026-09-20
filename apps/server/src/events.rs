@@ -82,6 +82,14 @@ impl EventFeed {
         }
     }
 
+    pub fn link(&self) -> AgentLink {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .link
+            .clone()
+    }
+
     pub fn since(&self, after: u64) -> FeedBatch {
         let inner = self
             .inner

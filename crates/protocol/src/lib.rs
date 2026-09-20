@@ -580,3 +580,21 @@ pub struct Job {
     pub message: Option<String>,
     pub request_id: Option<String>,
 }
+
+/// One switchable feature of the Agent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModuleInfo {
+    pub id: String,
+    /// Other modules that must be enabled for this one to work.
+    pub requires: Vec<String>,
+    /// Whether it is switched on in `agent.toml`.
+    pub enabled: bool,
+    /// The request path prefixes the module owns, for example `/v1/services`.
+    pub routes: Vec<String>,
+}
+
+/// Answer to `GET /v1/modules`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModuleManifest {
+    pub modules: Vec<ModuleInfo>,
+}

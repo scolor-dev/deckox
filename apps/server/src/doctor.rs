@@ -215,11 +215,24 @@ pub fn check_agent_config(path: &Path) -> Vec<Check> {
             .and_then(toml::Value::as_bool)
             .unwrap_or(default)
     };
+    let disabled_modules = value
+        .get("modules")
+        .and_then(|table| table.get("disabled"))
+        .and_then(toml::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(toml::Value::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .filter(|text| !text.is_empty())
+        .unwrap_or_else(|| "none".to_owned());
     let mut checks = vec![Check::new(
         Level::Ok,
         "agent.toml",
         format!(
-            "reboot {}, update {}, {} allowed service(s), {} managed package(s), auto_adopt {}",
+            "reboot {}, update {}, {} allowed service(s), {} managed package(s), auto_adopt {}, modules off: {}",
             if flag("system", "allow_reboot", false) {
                 "allowed"
             } else {

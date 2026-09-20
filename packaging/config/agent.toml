@@ -29,6 +29,13 @@ allow_update = false
 # already — Deckox never adds a new third-party repository or signing key to
 # install something. This table must stay before [services] so the Web UI's
 # allowlist edits to each table never clobber the other.
+# Every module is on unless listed here. Known modules: system, power, update,
+# storage, diagnostics, backups, services, schedules (needs services), software.
+# A module that is switched off answers 404 and starts none of its background
+# work. Restart the Agent after editing.
+[modules]
+disabled = []
+
 [software]
 auto_adopt = true
 allowed = []

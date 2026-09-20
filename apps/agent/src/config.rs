@@ -22,6 +22,8 @@ pub struct AgentConfig {
     pub software: SoftwareConfig,
     #[serde(default)]
     pub services: ServicesConfig,
+    #[serde(default)]
+    pub modules: ModulesConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -60,7 +62,15 @@ impl Default for SoftwareConfig {
     }
 }
 
-#[derive(Debug, Default, Deserialize)]
+/// Which modules are switched off. Everything is on unless listed, so an
+/// upgrade never silently removes a feature.
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct ModulesConfig {
+    #[serde(default)]
+    pub disabled: Vec<String>,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
 pub struct ServicesConfig {
     #[serde(default)]
     pub allowed: Vec<String>,

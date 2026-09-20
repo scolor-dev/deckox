@@ -186,6 +186,13 @@ async fn run_sampler(inner: Arc<MetricsHubInner>) {
                 metrics: Some(metrics),
                 error_code: None,
             },
+            Err(error) if error.contains("HTTP 404") => RealtimeMetricsEvent {
+                sequence,
+                timestamp_ms: unix_timestamp_ms(),
+                agent_online: true,
+                metrics: None,
+                error_code: Some("module_disabled".to_owned()),
+            },
             Err(error) => {
                 warn!(%error, "failed to sample real-time metrics");
                 RealtimeMetricsEvent {

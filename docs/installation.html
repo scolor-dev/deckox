@@ -186,6 +186,28 @@ Environment=DECKOX_WEBHOOK_URL=https://example.com/webhook</code></pre>
         <p>v0.3.3ではWebコンソールを削除しました。更新時は旧<code>deckox-terminal.service</code>をDeckox管理のユニットだと確認してから停止・無効化し、ユニットとバイナリを削除します。</p>
         <p>旧アカウントのホーム・nologinシェル・主グループがDeckoxの作成条件と一致する場合だけ、<code>deckox-terminal</code>ユーザーとグループを削除します。<code>/var/lib/deckox-terminal</code>が空でなければデータ保護のため残し、インストーラーへ警告を表示します。</p>
       </section>
+      <section class="section" aria-labelledby="modules-title">
+        <h2 id="modules-title">使わない機能を止める(モジュール)</h2>
+        <p>Agentの機能は、モジュール単位で無効にできます。初期状態では、すべて有効です。<code>/etc/deckox/agent.toml</code>の<code>[modules]</code>に、止めたいモジュールを書いて、Agentを再起動します。</p>
+        <pre><code>[modules]
+disabled = ["software", "power"]</code></pre>
+        <table class="status-table">
+          <thead><tr><th>モジュール</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td><code>system</code></td><td>システム情報とメトリクス</td></tr>
+            <tr><td><code>power</code></td><td>ホストの再起動</td></tr>
+            <tr><td><code>update</code></td><td>管理画面からのセルフアップデート</td></tr>
+            <tr><td><code>storage</code></td><td>マウントとディスクの一覧</td></tr>
+            <tr><td><code>diagnostics</code></td><td>診断</td></tr>
+            <tr><td><code>backups</code></td><td>更新前バックアップの一覧</td></tr>
+            <tr><td><code>services</code></td><td>サービスの一覧・操作・ログ</td></tr>
+            <tr><td><code>schedules</code></td><td>サービスの定期実行(<code>services</code>が必要)</td></tr>
+            <tr><td><code>software</code></td><td>ソフトウェアの管理</td></tr>
+          </tbody>
+        </table>
+        <p>止めたモジュールの経路は<code>404</code>を返し、そのモジュールだけが使う常駐処理は起動しません。書き間違いや、依存先(例: <code>schedules</code>に対する<code>services</code>)だけを止める設定は、Agentが理由を表示して起動を拒否します。状態は<code>sudo -u deckox deckox-server doctor</code>の<code>agent.toml</code>の行で確認できます。</p>
+      </section>
+
       <section class="section" aria-labelledby="doctor-title">
         <h2 id="doctor-title">状態の確認(診断コマンド)</h2>
         <p>Web画面に入れないときは、SSHから1コマンドで状態を確認できます。</p>

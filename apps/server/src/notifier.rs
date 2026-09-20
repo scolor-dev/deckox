@@ -76,15 +76,23 @@ async fn tick(
         hex::encode(rand::random::<[u8; 16]>())
     ));
 
-    let services = agent
-        .get_json::<Vec<ServiceSummary>>("/v1/services", &request_id)
-        .await;
-    let metrics = agent
-        .get_json::<SystemMetrics>("/v1/system/metrics", &request_id)
-        .await;
-    let storage = agent
-        .get_json::<Vec<StorageMount>>("/v1/storage", &request_id)
-        .await;
+    // A module that is switched off on the Agent answers 404; that means "not
+    // monitored here", not "Agent unreachable".
+    let services = optional(
+        agent
+            .get_json::<Vec<ServiceSummary>>("/v1/services", &request_id)
+            .await,
+    );
+    let metrics = optional(
+        agent
+            .get_json::<SystemMetrics>("/v1/system/metrics", &request_id)
+            .await,
+    );
+    let storage = optional(
+        agent
+            .get_json::<Vec<StorageMount>>("/v1/storage", &request_id)
+            .await,
+    );
 
     let (Ok(services), Ok(metrics), Ok(storage)) = (services, metrics, storage) else {
         if !state.agent_unreachable {
@@ -112,9 +120,24 @@ async fn tick(
         .await;
     }
 
-    check_swap(&metrics, client, webhook_url, audit, state).await;
-    check_disk(&storage, client, webhook_url, audit, state).await;
-    check_services(&services, client, webhook_url, audit, state).await;
+    if let Some(metrics) = &metrics {
+        check_swap(metrics, client, webhook_url, audit, state).await;
+    }
+    if let Some(storage) = &storage {
+        check_disk(storage, client, webhook_url, audit, state).await;
+    }
+    if let Some(services) = &services {
+        check_services(services, client, webhook_url, audit, state).await;
+    }
+}
+
+/// `Ok(None)` when the Agent answered 404 because the module is switched off.
+fn optional<T>(result: Result<T, String>) -> Result<Option<T>, String> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if error.contains("HTTP 404") => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 /// `None` when `percent` has not crossed `threshold` since `was_high`;
@@ -401,6 +424,18 @@ fn now_ms() -> u64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_disabled_module_is_not_an_unreachable_agent() {
+        use super::optional;
+
+        assert_eq!(optional::<u8>(Ok(1)), Ok(Some(1)));
+        assert_eq!(
+            optional::<u8>(Err("Agent API returned HTTP 404".to_owned())),
+            Ok(None)
+        );
+        assert!(optional::<u8>(Err("agent unavailable: refused".to_owned())).is_err());
+    }
+
     use super::*;
 
     #[test]

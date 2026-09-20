@@ -40,6 +40,7 @@ mod config;
 mod diagnostics;
 mod error;
 mod events;
+mod modules;
 mod operations;
 mod power;
 mod request_context;
@@ -60,6 +61,7 @@ struct AppState {
     schedules: ScheduleStore,
     events: events::EventBus,
     operations: operations::Operations,
+    modules: modules::ModuleRegistry,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -132,14 +134,21 @@ async fn build_state() -> (AppState, PathBuf) {
             eprintln!("failed to load schedules: {error:?}");
             std::process::exit(2);
         });
+    let module_registry =
+        modules::ModuleRegistry::new(&config.modules.disabled).unwrap_or_else(|error| {
+            eprintln!("invalid [modules] configuration: {error}");
+            std::process::exit(2);
+        });
     let events = events::EventBus::new();
     let operations = operations::Operations::new(events.clone());
-    schedules::spawn(
-        schedule_store.clone(),
-        services.clone(),
-        events.clone(),
-        operations.clone(),
-    );
+    if module_registry.is_enabled("schedules") {
+        schedules::spawn(
+            schedule_store.clone(),
+            services.clone(),
+            events.clone(),
+            operations.clone(),
+        );
+    }
 
     (
         AppState {
@@ -151,6 +160,7 @@ async fn build_state() -> (AppState, PathBuf) {
             schedules: schedule_store,
             events,
             operations,
+            modules: module_registry,
         },
         socket_path,
     )
@@ -184,6 +194,7 @@ async fn main() {
         .route("/v1/health", get(health))
         .route("/v1/info", get(agent_info))
         .route("/v1/events", get(agent_events))
+        .route("/v1/modules", get(list_modules))
         .route("/v1/jobs", get(list_jobs))
         .route("/v1/jobs/{job_id}", get(get_job))
         .route("/v1/status", get(agent_status))
@@ -226,6 +237,10 @@ async fn main() {
             "/v1/schedules/{schedule_id}/disable",
             post(disable_schedule),
         )
+        .layer(middleware::from_fn_with_state(
+            state.modules.clone(),
+            modules::gate,
+        ))
         .with_state(state)
         .layer(middleware::from_fn(request_context::assign_request_id));
 
@@ -332,6 +347,10 @@ async fn run_operation(
     let request_id = request_context::RequestId(spec.request_id.unwrap_or_default());
     log_command_result(&state.events, spec.kind, &request_id, &spec.subject, result)
         .map(IntoResponse::into_response)
+}
+
+async fn list_modules(State(state): State<AppState>) -> Json<deckox_protocol::ModuleManifest> {
+    Json(state.modules.manifest())
 }
 
 async fn list_jobs(State(state): State<AppState>) -> Json<Vec<deckox_protocol::Job>> {

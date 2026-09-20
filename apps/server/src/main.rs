@@ -219,6 +219,7 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
     let protected_api = Router::new()
         .route("/status", get(status))
         .route("/events", get(event_feed))
+        .route("/modules", get(module_list))
         .route("/jobs", get(proxy_jobs))
         .route("/jobs/{job_id}", get(proxy_job))
         .route("/diagnostics", get(diagnostics))
@@ -334,6 +335,28 @@ async fn health(State(state): State<AppState>) -> Json<ServerHealth> {
 struct EventFeedQuery {
     #[serde(default)]
     after: u64,
+}
+
+#[derive(Serialize)]
+struct ModuleList {
+    agent: events::AgentLink,
+    modules: Vec<deckox_protocol::ModuleInfo>,
+}
+
+/// The Agent's modules and whether each is switched on, with the Agent's
+/// connection state so the Web can tell "off" from "unreachable".
+async fn module_list(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+) -> Json<ModuleList> {
+    let agent = state.events.link();
+    let modules = state
+        .agent
+        .get_json::<deckox_protocol::ModuleManifest>("/v1/modules", &request_id)
+        .await
+        .map(|manifest| manifest.modules)
+        .unwrap_or_default();
+    Json(ModuleList { agent, modules })
 }
 
 async fn proxy_jobs(
