@@ -6,6 +6,7 @@ use std::{
 };
 
 use serde::Deserialize;
+use tracing::warn;
 
 use crate::error::AgentError;
 
@@ -132,6 +133,33 @@ pub fn write_software_settings(path: &Path, settings: &SoftwareConfig) -> Result
     })
 }
 
+const CONFIG_BACKUPS: usize = 3;
+
+/// Keeps the last few versions of the config as `agent.toml.bak.1` (newest)
+/// to `agent.toml.bak.3` before it is rewritten, so a bad write can be undone
+/// with a single `cp`. A failed backup is logged and does not block the
+/// change the admin asked for.
+fn rotate_config_backups(path: &Path, original: &str, metadata: Option<&std::fs::Metadata>) {
+    if original.is_empty() {
+        return;
+    }
+    let backup = |number: usize| PathBuf::from(format!("{}.bak.{number}", path.display()));
+    for number in (1..CONFIG_BACKUPS).rev() {
+        if backup(number).exists() {
+            let _ = std::fs::rename(backup(number), backup(number + 1));
+        }
+    }
+    let newest = backup(1);
+    if let Err(error) = std::fs::write(&newest, original) {
+        warn!(%error, path = %newest.display(), "failed to back up the config before rewriting it");
+        return;
+    }
+    if let Some(metadata) = metadata {
+        let _ = std::fs::set_permissions(&newest, metadata.permissions());
+        let _ = std::os::unix::fs::chown(&newest, Some(metadata.uid()), Some(metadata.gid()));
+    }
+}
+
 /// Reads the config, applies `transform`, and swaps the result in through a
 /// temp file plus a rename. The file's mode and owner are carried over so a
 /// rewrite by the Agent never loosens the permissions the installer set.
@@ -151,6 +179,7 @@ fn rewrite_config(
         }
     };
     let metadata = std::fs::metadata(path).ok();
+    rotate_config_backups(path, &original, metadata.as_ref());
 
     let temp_path = path.with_extension(temp_extension);
     std::fs::write(&temp_path, transform(&original)).map_err(|error| {
@@ -581,6 +610,39 @@ allowed = ["nginx.service", "postgresql.service"]
             .mode()
             & 0o777;
         assert_eq!(mode, 0o640);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn keeps_the_last_three_versions_before_each_rewrite() {
+        let dir = std::env::temp_dir().join(format!("deckox-config-backup-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("agent.toml");
+        std::fs::write(&path, SHIPPED_CONFIG).expect("write config");
+
+        for round in 1..=5 {
+            let before = std::fs::read_to_string(&path).expect("read");
+            super::write_allowed_services(&path, &[format!("svc{round}.service")])
+                .expect("rewrite");
+            let newest =
+                std::fs::read_to_string(dir.join("agent.toml.bak.1")).expect("newest backup");
+            assert_eq!(
+                newest, before,
+                "round {round}: .bak.1 holds the previous version"
+            );
+        }
+
+        assert!(dir.join("agent.toml.bak.2").exists());
+        assert!(dir.join("agent.toml.bak.3").exists());
+        assert!(
+            !dir.join("agent.toml.bak.4").exists(),
+            "only three are kept"
+        );
+        let oldest = std::fs::read_to_string(dir.join("agent.toml.bak.3")).expect("oldest");
+        assert!(
+            oldest.contains("svc2.service"),
+            "bak.3 is three writes back: {oldest}"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

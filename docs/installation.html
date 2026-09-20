@@ -83,7 +83,7 @@ sudo sh install.sh</code></pre>
 sh install.sh --version</code></pre>
         <p>管理対象ファイルだけを削除する場合:</p>
         <pre><code>sudo sh install.sh --uninstall</code></pre>
-        <p>アンインストール後も<code>/etc/deckox</code>、<code>/var/lib/deckox</code>、バックアップ、<code>deckox</code>ユーザーとグループは保持されます。</p>
+        <p>アンインストール後も<code>/etc/deckox</code>、<code>/var/lib/deckox</code>、バックアップ、<code>deckox</code>ユーザーとグループは保持されます。すべて消す場合は、後述の「完全削除」を参照してください。</p>
         <p>ローカル配布物を検証する場合は、アーカイブと同じ場所に<code>.sha256</code>ファイルを置いて指定します。</p>
         <pre><code>sudo DECKOX_ARCHIVE=/tmp/deckox-aarch64-unknown-linux-musl.tar.gz \
   sh install.sh</code></pre>
@@ -186,6 +186,62 @@ Environment=DECKOX_WEBHOOK_URL=https://example.com/webhook</code></pre>
         <p>v0.3.3ではWebコンソールを削除しました。更新時は旧<code>deckox-terminal.service</code>をDeckox管理のユニットだと確認してから停止・無効化し、ユニットとバイナリを削除します。</p>
         <p>旧アカウントのホーム・nologinシェル・主グループがDeckoxの作成条件と一致する場合だけ、<code>deckox-terminal</code>ユーザーとグループを削除します。<code>/var/lib/deckox-terminal</code>が空でなければデータ保護のため残し、インストーラーへ警告を表示します。</p>
       </section>
+      <section class="section" aria-labelledby="config-recovery-title">
+        <h2 id="config-recovery-title">設定のバックアップと復旧</h2>
+        <p>Agentは、管理画面の操作で<code>/etc/deckox/agent.toml</code>を書き換えるたびに、直前の内容を<code>agent.toml.bak.1</code>(最新)から<code>agent.toml.bak.3</code>まで、3世代保存します。</p>
+        <pre><code>ls -l /etc/deckox/</code></pre>
+        <p>設定がおかしくなったら、直前の状態へ戻します。</p>
+        <pre><code>sudo cp -p /etc/deckox/agent.toml.bak.1 /etc/deckox/agent.toml
+sudo systemctl restart deckox-agent</code></pre>
+        <p>手で編集する前は、自分でもバックアップを取ります。編集後は、構文を確認してから再起動してください(Python 3.11以降)。</p>
+        <pre><code>sudo cp -p /etc/deckox/agent.toml /etc/deckox/agent.toml.manual.bak
+sudoedit /etc/deckox/agent.toml
+sudo python3 -c "import tomllib; tomllib.load(open('/etc/deckox/agent.toml','rb')); print('OK')"
+sudo systemctl restart deckox-agent</code></pre>
+        <p>バックアップも失われた場合は、標準の設定を作り直します。許可していたサービスやソフトウェアは、必要に応じて足してください。</p>
+        <pre><code>sudo tee /etc/deckox/agent.toml &gt;/dev/null &lt;&lt;'EOF'
+socket = "/run/deckox/agent.sock"
+
+[system]
+allow_reboot = false
+allow_update = false
+
+[software]
+auto_adopt = true
+allowed = []
+dismissed = []
+
+[services]
+allowed = []
+EOF
+sudo chown root:deckox /etc/deckox/agent.toml
+sudo chmod 640 /etc/deckox/agent.toml
+sudo systemctl restart deckox-agent</code></pre>
+        <aside class="note warning"><strong>v0.6.6以前の注意:</strong> これらの版は、サービスやソフトウェアの許可・解除の書き込みで、<code>[software]</code>などの表が消えることがありました。v0.6.7以降へ更新してから復旧してください。</aside>
+      </section>
+
+      <section class="section" aria-labelledby="purge-title">
+        <h2 id="purge-title">完全削除(データも含めてすべて消す)</h2>
+        <p><code>--uninstall</code>は、バイナリ・Web画面・systemdユニット・版情報だけを削除します。設定、管理者アカウント、監査ログ、スケジュール、更新前バックアップ、<code>deckox</code>ユーザーは残ります。これらまで消すには、アンインストールの後に次を実行します。</p>
+        <pre><code>curl -fsSL https://raw.githubusercontent.com/scolor-dev/deckox/main/packaging/scripts/install.sh -o install.sh
+sudo sh install.sh --uninstall
+
+sudo rm -rf /etc/deckox /var/lib/deckox /run/deckox
+sudo userdel deckox
+getent group deckox &gt;/dev/null &amp;&amp; sudo groupdel deckox</code></pre>
+        <table class="status-table">
+          <thead><tr><th>場所</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td><code>/etc/deckox</code></td><td>設定(<code>agent.toml</code>、<code>server.toml</code>)とそのバックアップ</td></tr>
+            <tr><td><code>/var/lib/deckox</code></td><td>管理者のパスワードハッシュと二段階認証、監査ログ(<code>audit.log</code>)、スケジュール(<code>schedules.json</code>)、更新前バックアップ(<code>backups/</code>)</td></tr>
+            <tr><td><code>/run/deckox</code></td><td>Agentのソケット(再起動で消える一時領域)</td></tr>
+            <tr><td><code>deckox</code>ユーザーとグループ</td><td>Serverの実行アカウント</td></tr>
+          </tbody>
+        </table>
+        <aside class="note warning"><strong>元に戻せません:</strong> パスワード、二段階認証、監査ログ、バックアップも消えます。再インストールすると初期状態になり、管理者パスワードの設定から始まります。必要なものは、先に別の場所へコピーしてください。</aside>
+        <p>systemdのログ(<code>journalctl</code>)はDeckoxの管理外です。消す場合は<code>sudo journalctl --vacuum-time=1s</code>を使います(ホスト全体のログが対象になります)。</p>
+      </section>
+
       <footer class="footer">Deckox Docs · Installation</footer>
     </main>
   </div>
