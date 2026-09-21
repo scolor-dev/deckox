@@ -23,7 +23,7 @@ The Vue design system lives in `apps/web/src/design-system/`. Read `README.md` t
 
 ## Web modules
 
-Web pages are declared in `apps/web/src/modules/registry.ts` (`WEB_MODULES`), which drives the router, the sidebar and the page cache. Use the same `id` as the Agent/Server module a page shows, list backend modules it needs in `requires`, and load data with `useStaleRefresh` so pages held by `<KeepAlive>` refetch only when stale. Pages that hold secrets set `staleMs: null`.
+Web pages are declared in `apps/web/src/modules/registry.ts` (`WEB_MODULES`), which drives the router, the sidebar and the page cache. Use the same `id` as the Agent/Server module a page shows, list backend modules it needs in `requires`, and load data with `useStaleRefresh` so pages held by `<KeepAlive>` refetch only when stale. Pages that hold secrets set `staleMs: null`. A panel, tab or section that needs other backend modules than its page is declared under `parts` and gated with `partEnabled(moduleId, part)`, so it neither renders nor calls a switched-off endpoint.
 
 ## Version bump
 

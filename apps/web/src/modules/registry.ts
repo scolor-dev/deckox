@@ -22,6 +22,12 @@ export interface WebModule {
   /** Backend module ids (Agent or Server) that must be enabled. */
   requires: readonly string[];
   /**
+   * Panels, tabs and sections inside the page that need more than the page
+   * does, each with the backend modules it needs. A part whose modules are off
+   * is left out and never calls their endpoints.
+   */
+  parts?: Readonly<Record<string, readonly string[]>>;
+  /**
    * Keep the page alive when leaving it and reload only after this many
    * milliseconds. `null` drops the page on leave, for screens holding secrets.
    */
@@ -38,6 +44,11 @@ export const WEB_MODULES: readonly WebModule[] = [
     load: () => import("../views/OverviewView.vue"),
     viewName: "OverviewView",
     requires: [],
+    parts: {
+      system: ["system"],
+      storage: ["storage"],
+      live: ["realtime", "system"],
+    },
     staleMs: 5 * MINUTE,
   },
   {
@@ -47,6 +58,7 @@ export const WEB_MODULES: readonly WebModule[] = [
     load: () => import("../views/ServicesView.vue"),
     viewName: "ServicesView",
     requires: ["services"],
+    parts: { schedules: ["schedules"] },
     staleMs: MINUTE / 2,
   },
   {
@@ -74,6 +86,7 @@ export const WEB_MODULES: readonly WebModule[] = [
     load: () => import("../views/DiagnosticsView.vue"),
     viewName: "DiagnosticsView",
     requires: ["diagnostics"],
+    parts: { backups: ["backups"] },
     staleMs: MINUTE,
   },
   {
@@ -92,6 +105,13 @@ export const WEB_MODULES: readonly WebModule[] = [
     load: () => import("../views/SettingsView.vue"),
     viewName: "SettingsView",
     requires: [],
+    parts: {
+      webhook: ["notifications"],
+      "update-check": ["update-check"],
+      "update-now": ["update", "system"],
+      reboot: ["power", "system"],
+      live: ["realtime", "system"],
+    },
     staleMs: null,
   },
 ];
@@ -133,8 +153,27 @@ export function isAvailable(
   enabled: ModuleAvailability,
   known: ReadonlySet<string>,
 ): boolean {
+  return requirementsMet(module.requires, enabled, known);
+}
+
+function requirementsMet(
+  requires: readonly string[],
+  enabled: ModuleAvailability,
+  known: ReadonlySet<string>,
+) {
   if (enabled === null) return true;
-  return module.requires.every((id) => !known.has(id) || enabled.has(id));
+  return requires.every((id) => !known.has(id) || enabled.has(id));
+}
+
+/** Whether a part of a page (see `WebModule.parts`) should be shown. */
+export function isPartAvailable(
+  module: WebModule,
+  part: string,
+  enabled: ModuleAvailability,
+  known: ReadonlySet<string>,
+): boolean {
+  const requires = module.parts?.[part];
+  return requires === undefined ? true : requirementsMet(requires, enabled, known);
 }
 
 export function availableModules(

@@ -28,6 +28,7 @@ import {
   TabBar,
   TextField,
 } from "../design-system/components";
+import { partEnabled } from "../modules/store";
 import { notify } from "../notifications";
 import { preferences, type LocalePreference, type MetricsInterval, type ThemePreference } from "../preferences";
 
@@ -43,10 +44,23 @@ function isSettingsTab(value: unknown): value is SettingsTab {
   return typeof value === "string" && (TAB_KEYS as string[]).includes(value);
 }
 
-const activeTab = ref<SettingsTab>(isSettingsTab(route.query.tab) ? route.query.tab : "display");
+const webhookOn = computed(() => partEnabled("settings", "webhook"));
+const updateCheckOn = computed(() => partEnabled("settings", "update-check"));
+const updateNowOn = computed(() => partEnabled("settings", "update-now"));
+const liveOn = computed(() => partEnabled("settings", "live"));
+const rebootOn = computed(() => partEnabled("settings", "reboot"));
+
+function tabAvailable(tab: SettingsTab) {
+  if (tab === "webhook") return webhookOn.value;
+  if (tab === "system") return updateCheckOn.value || rebootOn.value;
+  return true;
+}
+
+const requestedTab = ref<SettingsTab>(isSettingsTab(route.query.tab) ? route.query.tab : "display");
+const activeTab = computed(() => (tabAvailable(requestedTab.value) ? requestedTab.value : "display"));
 
 function selectTab(tab: SettingsTab) {
-  activeTab.value = tab;
+  requestedTab.value = tab;
   void router.replace({ query: { ...route.query, tab } });
 }
 
@@ -93,7 +107,9 @@ function displaySettingsChanged() {
   notify("success", t("settings.saved"));
 }
 
-const tabs = computed(() => TAB_KEYS.map((key) => ({ key, label: t(`settings.tab.${key}`) })));
+const tabs = computed(() => TAB_KEYS
+  .filter((key) => tabAvailable(key))
+  .map((key) => ({ key, label: t(`settings.tab.${key}`) })));
 
 function handleTabChange(key: string) {
   if (isSettingsTab(key)) selectTab(key);
@@ -243,6 +259,7 @@ async function disableTotp() {
 }
 
 async function loadSystemCapabilities() {
+  if (!rebootOn.value && !updateNowOn.value) return;
   try {
     systemCapabilities.value = await api.systemCapabilities();
   } catch (caught) {
@@ -400,11 +417,13 @@ onMounted(() => {
             :options="themeOptions"
           />
           <AppCheckbox
+            v-if="liveOn"
             v-model="realtimeValue"
             :label="t('settings.realtime')"
             :help="t('settings.realtimeHelp')"
           />
           <SelectField
+            v-if="liveOn"
             id="metrics-interval"
             v-model="intervalValue"
             :label="t('settings.interval')"
@@ -616,6 +635,7 @@ onMounted(() => {
     </div>
 
     <div
+      v-if="webhookOn"
       v-show="activeTab === 'webhook'"
       role="tabpanel"
     >
@@ -667,6 +687,7 @@ onMounted(() => {
       role="tabpanel"
     >
       <section
+        v-if="updateCheckOn"
         class="settings-section"
         aria-labelledby="update-heading"
       >
@@ -724,7 +745,7 @@ onMounted(() => {
               target="_blank"
               rel="noopener noreferrer"
             >{{ t("settings.openRelease") }}</a>
-            <template v-if="updateStatus.update_available && systemCapabilities?.update_allowed">
+            <template v-if="updateStatus.update_available && updateNowOn && systemCapabilities?.update_allowed">
               <InfoNote>{{ t("settings.updateHelp") }}</InfoNote>
               <AppButton
                 variant="primary"
@@ -762,6 +783,7 @@ onMounted(() => {
       </section>
 
       <section
+        v-if="rebootOn"
         class="settings-section"
         aria-labelledby="system-operations-heading"
       >

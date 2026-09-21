@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { partEnabled } from "../modules/store";
 import { useStaleRefresh } from "../composables/useStaleRefresh";
 import { staleMsOf } from "../modules/registry";
 import {
@@ -234,7 +235,10 @@ function scheduleLastRunLabel(schedule: ServiceSchedule) {
   }).format(new Date(schedule.last_run_at_ms));
 }
 
+const schedulesOn = computed(() => partEnabled("services", "schedules"));
+
 async function loadSchedules() {
+  if (!schedulesOn.value) return;
   schedulesLoading.value = true;
   schedulesError.value = null;
   try {
@@ -608,130 +612,132 @@ const reloadAll = useStaleRefresh(
 
     <InfoNote>{{ t("services.allowlist") }}</InfoNote>
 
-    <TablePanel
-      :loading="schedulesLoading && schedules.length === 0"
-      :empty="schedules.length === 0"
-      :empty-message="t('services.scheduleEmpty')"
-    >
-      <template #toolbar>
-        <TableToolbar :count="t('services.count', { count: schedules.length })">
-          <template #filters>
-            <h2>
-              {{ t("services.scheduleTitle") }}
-            </h2>
-          </template>
-        </TableToolbar>
-      </template>
-      <template
-        v-if="schedulesError"
-        #note
+    <template v-if="schedulesOn">
+      <TablePanel
+        :loading="schedulesLoading && schedules.length === 0"
+        :empty="schedules.length === 0"
+        :empty-message="t('services.scheduleEmpty')"
       >
-        <NoticeBanner tone="error">
-          {{ schedulesError }}
-        </NoticeBanner>
-      </template>
-      <template #loading>
-        {{ t("common.loading") }}
-      </template>
-      <table>
-        <thead>
-          <tr>
-            <th>{{ t("services.service") }}</th>
-            <th>{{ t("services.scheduleAction") }}</th>
-            <th>{{ t("services.scheduleWeekdays") }}</th>
-            <th>{{ t("services.scheduleTime") }}</th>
-            <th>{{ t("services.scheduleLastRun") }}</th>
-            <th>{{ t("services.actions") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="schedule in schedules"
-            :key="schedule.id"
-          >
-            <td><strong class="service-name">{{ schedule.service_id }}</strong></td>
-            <td>{{ t(`services.${schedule.action}`) }}</td>
-            <td>{{ scheduleWeekdaysLabel(schedule) }}</td>
-            <td>{{ scheduleTimeLabel(schedule) }}</td>
-            <td>
-              <span>{{ scheduleLastRunLabel(schedule) }}</span>
-              <small v-if="schedule.last_result">{{ schedule.last_result }}</small>
-            </td>
-            <td>
-              <AppStack
-                class="row-actions"
-                direction="row"
-                gap="2"
-              >
-                <AppButton
-                  variant="action"
-                  :disabled="schedulePending !== null"
-                  @click="toggleScheduleEnabled(schedule)"
-                >
-                  {{ schedule.enabled ? t("services.scheduleDisable") : t("services.scheduleEnable") }}
-                </AppButton>
-                <AppButton
-                  variant="action"
-                  danger
-                  :disabled="schedulePending !== null"
-                  @click="deleteSchedule(schedule)"
-                >
-                  {{ t("services.scheduleDelete") }}
-                </AppButton>
-              </AppStack>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </TablePanel>
-
-    <AppStack
-      as="form"
-      class="schedule-form"
-      direction="row"
-      gap="3"
-      align="end"
-      wrap
-      @submit.prevent="createSchedule"
-    >
-      <SelectField
-        id="schedule-service"
-        v-model="scheduleServiceId"
-        :label="t('services.service')"
-        :options="scheduleServiceOptions"
-      />
-      <SelectField
-        id="schedule-action"
-        v-model="scheduleActionValue"
-        :label="t('services.scheduleAction')"
-        :options="scheduleActionOptions"
-      />
-      <TextField
-        id="schedule-time"
-        v-model="scheduleTime"
-        :label="t('services.scheduleTime')"
-        type="time"
-        required
-      />
-      <TagToggleGroup :label="t('services.scheduleWeekdays')">
-        <TagToggle
-          v-for="day in WEEKDAY_OPTIONS"
-          :key="day"
-          category="other"
-          :checked="scheduleWeekdays.includes(day)"
-          @update:checked="toggleScheduleWeekday(day)"
+        <template #toolbar>
+          <TableToolbar :count="t('services.count', { count: schedules.length })">
+            <template #filters>
+              <h2>
+                {{ t("services.scheduleTitle") }}
+              </h2>
+            </template>
+          </TableToolbar>
+        </template>
+        <template
+          v-if="schedulesError"
+          #note
         >
-          {{ weekdayLabel(day) }}
-        </TagToggle>
-      </TagToggleGroup>
-      <AppButton
-        type="submit"
-        :disabled="schedulePending !== null || !scheduleServiceId || scheduleWeekdays.length === 0"
+          <NoticeBanner tone="error">
+            {{ schedulesError }}
+          </NoticeBanner>
+        </template>
+        <template #loading>
+          {{ t("common.loading") }}
+        </template>
+        <table>
+          <thead>
+            <tr>
+              <th>{{ t("services.service") }}</th>
+              <th>{{ t("services.scheduleAction") }}</th>
+              <th>{{ t("services.scheduleWeekdays") }}</th>
+              <th>{{ t("services.scheduleTime") }}</th>
+              <th>{{ t("services.scheduleLastRun") }}</th>
+              <th>{{ t("services.actions") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="schedule in schedules"
+              :key="schedule.id"
+            >
+              <td><strong class="service-name">{{ schedule.service_id }}</strong></td>
+              <td>{{ t(`services.${schedule.action}`) }}</td>
+              <td>{{ scheduleWeekdaysLabel(schedule) }}</td>
+              <td>{{ scheduleTimeLabel(schedule) }}</td>
+              <td>
+                <span>{{ scheduleLastRunLabel(schedule) }}</span>
+                <small v-if="schedule.last_result">{{ schedule.last_result }}</small>
+              </td>
+              <td>
+                <AppStack
+                  class="row-actions"
+                  direction="row"
+                  gap="2"
+                >
+                  <AppButton
+                    variant="action"
+                    :disabled="schedulePending !== null"
+                    @click="toggleScheduleEnabled(schedule)"
+                  >
+                    {{ schedule.enabled ? t("services.scheduleDisable") : t("services.scheduleEnable") }}
+                  </AppButton>
+                  <AppButton
+                    variant="action"
+                    danger
+                    :disabled="schedulePending !== null"
+                    @click="deleteSchedule(schedule)"
+                  >
+                    {{ t("services.scheduleDelete") }}
+                  </AppButton>
+                </AppStack>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </TablePanel>
+
+      <AppStack
+        as="form"
+        class="schedule-form"
+        direction="row"
+        gap="3"
+        align="end"
+        wrap
+        @submit.prevent="createSchedule"
       >
-        {{ t("services.scheduleAdd") }}
-      </AppButton>
-    </AppStack>
-    <InfoNote>{{ t("services.scheduleNote") }}</InfoNote>
+        <SelectField
+          id="schedule-service"
+          v-model="scheduleServiceId"
+          :label="t('services.service')"
+          :options="scheduleServiceOptions"
+        />
+        <SelectField
+          id="schedule-action"
+          v-model="scheduleActionValue"
+          :label="t('services.scheduleAction')"
+          :options="scheduleActionOptions"
+        />
+        <TextField
+          id="schedule-time"
+          v-model="scheduleTime"
+          :label="t('services.scheduleTime')"
+          type="time"
+          required
+        />
+        <TagToggleGroup :label="t('services.scheduleWeekdays')">
+          <TagToggle
+            v-for="day in WEEKDAY_OPTIONS"
+            :key="day"
+            category="other"
+            :checked="scheduleWeekdays.includes(day)"
+            @update:checked="toggleScheduleWeekday(day)"
+          >
+            {{ weekdayLabel(day) }}
+          </TagToggle>
+        </TagToggleGroup>
+        <AppButton
+          type="submit"
+          :disabled="schedulePending !== null || !scheduleServiceId || scheduleWeekdays.length === 0"
+        >
+          {{ t("services.scheduleAdd") }}
+        </AppButton>
+      </AppStack>
+      <InfoNote>{{ t("services.scheduleNote") }}</InfoNote>
+    </template>
 
     <AppModal
       :open="logService !== null"

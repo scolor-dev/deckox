@@ -4,9 +4,15 @@ import {
   availabilityOf,
   availableModules,
   isAvailable,
+  isPartAvailable,
   staleMsOf,
   WEB_MODULES,
 } from "./registry";
+
+const BACKEND_MODULES = new Set([
+  "system", "power", "update", "storage", "diagnostics", "backups", "services", "schedules",
+  "software", "audit", "realtime", "notifications", "update-check",
+]);
 
 const info = (id: string, enabled: boolean): ModuleInfo => ({ id, requires: [], enabled, routes: [] });
 
@@ -67,13 +73,30 @@ describe("web modules", () => {
   });
 
   it("names only backend modules the Agent or Server actually define", () => {
-    const backend = new Set([
-      "system", "power", "update", "storage", "diagnostics", "backups", "services", "schedules",
-      "software", "audit", "realtime", "notifications", "update-check",
-    ]);
     for (const module of WEB_MODULES) {
-      for (const id of module.requires) expect(backend.has(id), `${module.id} requires ${id}`).toBe(true);
+      const named = [...module.requires, ...Object.values(module.parts ?? {}).flat()];
+      for (const id of named) expect(BACKEND_MODULES.has(id), `${module.id} requires ${id}`).toBe(true);
     }
+  });
+
+  it("hides a part of a page without hiding the page", () => {
+    const overview = WEB_MODULES.find((module) => module.id === "overview");
+    if (!overview) throw new Error("overview is not registered");
+    const { enabled, known } = availabilityOf(manifest([info("system", false), info("storage", true)]));
+    expect(isPartAvailable(overview, "system", enabled, known)).toBe(false);
+    expect(isPartAvailable(overview, "storage", enabled, known)).toBe(true);
+    expect(isPartAvailable(overview, "live", enabled, known)).toBe(false);
+    expect(offered(manifest([info("system", false)]))).toContain("overview");
+  });
+
+  it("needs every module a part lists, and keeps parts nobody declared", () => {
+    const settings = WEB_MODULES.find((module) => module.id === "settings");
+    if (!settings) throw new Error("settings is not registered");
+    const off = availabilityOf(manifest([info("power", true), info("system", false)]));
+    expect(isPartAvailable(settings, "reboot", off.enabled, off.known)).toBe(false);
+    expect(isPartAvailable(settings, "undeclared", off.enabled, off.known)).toBe(true);
+    const unreachable = availabilityOf(manifest([], [], false));
+    expect(isPartAvailable(settings, "reboot", unreachable.enabled, unreachable.known)).toBe(true);
   });
 
   it("keeps rarely changing data longer than fast changing data", () => {

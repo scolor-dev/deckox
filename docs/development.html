@@ -191,6 +191,7 @@ allowed = [
         <h2 id="web-modules-title">Webの画面をモジュールとして足す</h2>
         <p>Webの画面は、AgentやServerと同じ「モジュール」の考え方で登録します。<code>apps/web/src/modules/registry.ts</code>の<code>WEB_MODULES</code>に1件足すと、ルート、サイドバーの項目、ページのキャッシュが揃います。<code>id</code>は、対応するAgent・Serverのモジュールと同じ名前にします(<code>services</code>・<code>software</code>・<code>storage</code>・<code>diagnostics</code>・<code>audit</code>)。<code>overview</code>と<code>settings</code>はコアで、常に表示します。</p>
         <p><code>requires</code>に、必要なAgent・Serverのモジュールを書きます。<code>GET /api/v1/modules</code>でそのどれかが無効なら、サイドバーから外れ、開いていれば概要に戻ります。Agentに繋がらない間は、Agentのモジュールの状態が分からないので、隠さずに全て表示します。</p>
+        <p>ページの中のパネル・タブ・節が、ページより多くのモジュールを必要とするときは、<code>parts</code>に、部品の名前と必要なモジュールを書きます(概要のリアルタイム表示は<code>realtime</code>と<code>system</code>、設定の再起動は<code>power</code>と<code>system</code>など)。<code>partEnabled(モジュールid, 部品名)</code>が偽なら、その部品は出さず、そのAPIも呼びません。</p>
         <p>ページは<code>&lt;KeepAlive&gt;</code>で保持し、画面を切り替えても再読み込みしません。<code>staleMs</code>を過ぎてから戻ったときだけ、裏で読み直します。読み込みは<code>useStaleRefresh</code>で書き、更新ボタンや操作後の再取得には、その戻り値を使います(時計が巻き戻ります)。パスワード入力を持つ画面は、<code>staleMs: null</code>で保持しません。</p>
       </section>
 

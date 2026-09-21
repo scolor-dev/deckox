@@ -1,6 +1,6 @@
 import { computed, ref } from "vue";
 import { api, type ModuleList } from "../api/client";
-import { availabilityOf, availableModules } from "./registry";
+import { availabilityOf, availableModules, isPartAvailable, WEB_MODULES } from "./registry";
 
 const manifest = ref<ModuleList | null>(null);
 
@@ -18,6 +18,16 @@ export const cachedViewNames = computed(() =>
 
 /** Whether the Agent answered when the manifest was fetched. */
 export const agentReachable = computed(() => manifest.value?.agent.connected ?? true);
+
+/**
+ * Whether a part of a page is on. Read it inside a `computed` or a template so
+ * it follows the manifest.
+ */
+export function partEnabled(moduleId: string, part: string) {
+  const module = WEB_MODULES.find((candidate) => candidate.id === moduleId);
+  if (!module) return false;
+  return isPartAvailable(module, part, availability.value.enabled, availability.value.known);
+}
 
 export function moduleEnabled(id: string) {
   return enabledModules.value.some((module) => module.id === id);

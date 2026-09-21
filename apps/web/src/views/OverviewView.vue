@@ -30,6 +30,7 @@ import {
   StateBadge,
 } from "../design-system/components";
 import { useRealtimeMetrics } from "../composables/useRealtimeMetrics";
+import { partEnabled } from "../modules/store";
 import { notify } from "../notifications";
 import { preferences } from "../preferences";
 import { apiErrorKey } from "../api/errors";
@@ -56,7 +57,12 @@ const networkTransmittedHistory = ref<number[]>([]);
 const diskReadHistory = ref<number[]>([]);
 const diskWrittenHistory = ref<number[]>([]);
 
-const stream = useRealtimeMetrics(intervalSeconds, realtimeEnabled);
+const systemOn = computed(() => partEnabled("overview", "system"));
+const storageOn = computed(() => partEnabled("overview", "storage"));
+const liveOn = computed(() => partEnabled("overview", "live"));
+const streamEnabled = computed(() => realtimeEnabled.value && liveOn.value);
+
+const stream = useRealtimeMetrics(intervalSeconds, streamEnabled);
 const agentOnline = computed(() => stream.latest.value?.agent_online ?? Boolean(status.value?.agent));
 const lastUpdated = computed(() => {
   if (stream.lastReceivedAt.value === null) return t("overview.notUpdated");
@@ -172,13 +178,17 @@ async function fetchOverview() {
   try {
     status.value = await api.serverStatus();
     emit("status", status.value);
-    const [systemInfo, systemMetrics] = await Promise.all([
-      api.systemInfo(),
-      api.systemMetrics(),
-    ]);
-    system.value = systemInfo;
-    applyMetrics(systemMetrics);
-    storageMounts.value = await api.storage().catch(() => storageMounts.value);
+    if (systemOn.value) {
+      const [systemInfo, systemMetrics] = await Promise.all([
+        api.systemInfo(),
+        api.systemMetrics(),
+      ]);
+      system.value = systemInfo;
+      applyMetrics(systemMetrics);
+    }
+    if (storageOn.value) {
+      storageMounts.value = await api.storage().catch(() => storageMounts.value);
+    }
   } catch (cause) {
     error.value = t(apiErrorKey(cause, "errors.overview"));
   } finally {
@@ -200,10 +210,10 @@ async function refreshIdentity() {
   try {
     const [serverStatus, systemInfo] = await Promise.all([
       api.serverStatus(),
-      api.systemInfo(),
+      systemOn.value ? api.systemInfo() : Promise.resolve(null),
     ]);
     status.value = serverStatus;
-    system.value = systemInfo;
+    if (systemInfo) system.value = systemInfo;
     emit("status", serverStatus);
   } catch {
     // The SSE reconnect loop remains responsible for recovery.
@@ -237,12 +247,18 @@ const refresh = useStaleRefresh(fetchOverview, staleMsOf("overview"));
           align="center"
           wrap
         >
-          <span role="status">
+          <span
+            v-if="liveOn"
+            role="status"
+          >
             <StateBadge :state="stream.status.value === 'connected' ? 'active' : 'inactive'">
               {{ stream.status.value === "connected" ? t("overview.realtime") : stream.status.value === "paused" ? t("overview.paused") : t("overview.connecting") }}
             </StateBadge>
           </span>
-          <small class="last-updated">{{ t("overview.lastUpdated", { time: lastUpdated }) }}</small>
+          <small
+            v-if="liveOn"
+            class="last-updated"
+          >{{ t("overview.lastUpdated", { time: lastUpdated }) }}</small>
           <AppButton
             v-if="stream.status.value === 'paused' || stream.status.value === 'reconnecting' || !agentOnline"
             :disabled="loading"
@@ -281,7 +297,7 @@ const refresh = useStaleRefresh(fetchOverview, staleMsOf("overview"));
           </StateBadge>
           <small class="server-os">{{ system?.operating_system ?? "Linux" }} {{ system?.os_version ?? "" }}</small>
         </AppStack>
-        <DetailList>
+        <DetailList v-if="systemOn">
           <DetailRow :term="t('overview.uptime')">
             {{ formatUptime(system?.uptime_seconds, locale) }}
           </DetailRow>
@@ -293,102 +309,106 @@ const refresh = useStaleRefresh(fetchOverview, staleMsOf("overview"));
     </AppCard>
 
     <section
+      v-if="systemOn || storageOn"
       class="metric-grid"
       :aria-label="t('overview.resources')"
     >
+      <template v-if="systemOn">
+        <MetricCard
+          :label="t('overview.cpu')"
+          :meta="t('overview.cores', { count: metrics?.cpu.logical_cores ?? t('common.none') })"
+          :value="metrics ? `${metrics.cpu.usage_percent.toFixed(1)}%` : '—'"
+        >
+          <MetricChart
+            :values="cpuHistory"
+            :maximum="100"
+            :label="t('overview.cpuChart')"
+            :limit="HISTORY_LIMIT"
+            :value-formatter="percentFormatter"
+          />
+        </MetricCard>
+        <MetricCard
+          :label="t('overview.memory')"
+          :meta="t('overview.total', { value: formatBytes(metrics?.memory.total_bytes ?? 0, locale) })"
+          :value="metrics ? t('overview.inUse', { value: formatBytes(metrics.memory.used_bytes, locale) }) : t('common.none')"
+          :footer="`${memoryPercent.toFixed(1)}%`"
+        >
+          <MetricChart
+            :values="memoryHistory"
+            :maximum="100"
+            :label="t('overview.memoryChart')"
+            :limit="HISTORY_LIMIT"
+            :value-formatter="percentFormatter"
+          />
+        </MetricCard>
+        <MetricCard
+          :label="t('overview.load')"
+          :meta="t('overview.fiveMinutes', { value: metrics?.load_average.five_minutes.toFixed(2) ?? t('common.none') })"
+          :value="metrics?.load_average.one_minute.toFixed(2) ?? '—'"
+          :footer="t('overview.fifteenMinutes', { value: metrics?.load_average.fifteen_minutes.toFixed(2) ?? t('common.none') })"
+        >
+          <MetricChart
+            :values="loadHistory"
+            :maximum="loadMaximum"
+            :label="t('overview.loadChart')"
+            :limit="HISTORY_LIMIT"
+            :value-formatter="decimalFormatter"
+          />
+        </MetricCard>
+        <MetricCard
+          label="Swap"
+          :meta="metrics?.memory.swap_total_bytes ? t('overview.total', { value: formatBytes(metrics.memory.swap_total_bytes, locale) }) : t('overview.notConfigured')"
+          :value="swapPercent === null ? t('common.none') : `${swapPercent.toFixed(1)}%`"
+          :warning="swapPercent !== null && swapPercent >= 80"
+          :warning-text="t('overview.highUsage')"
+        >
+          <MetricChart
+            :values="swapHistory"
+            :maximum="100"
+            :label="t('overview.swapChart')"
+            :limit="HISTORY_LIMIT"
+            :value-formatter="percentFormatter"
+          />
+        </MetricCard>
+        <MetricCard
+          :label="t('overview.network')"
+          meta="RX / TX"
+          :pairs="[
+            { label: 'RX', value: formatRate(metrics?.network?.received_bytes_per_second) },
+            { label: 'TX', value: formatRate(metrics?.network?.transmitted_bytes_per_second) },
+          ]"
+          :footer="`${t('overview.received')} / ${t('overview.transmitted')}`"
+        >
+          <MetricChart
+            :values="networkReceivedHistory"
+            :secondary-values="networkTransmittedHistory"
+            :maximum="networkMaximum"
+            :label="t('overview.networkChart')"
+            :limit="HISTORY_LIMIT"
+            :value-formatter="rateFormatter"
+          />
+        </MetricCard>
+        <MetricCard
+          :label="t('overview.diskIo')"
+          :meta="t('overview.hostTotal')"
+          :pairs="[
+            { label: t('overview.read'), value: formatRate(metrics?.disk_io?.read_bytes_per_second) },
+            { label: t('overview.write'), value: formatRate(metrics?.disk_io?.written_bytes_per_second) },
+          ]"
+          :footer="`${t('overview.read')} / ${t('overview.write')}`"
+        >
+          <MetricChart
+            :values="diskReadHistory"
+            :secondary-values="diskWrittenHistory"
+            :maximum="diskMaximum"
+            :label="t('overview.diskIoChart')"
+            :limit="HISTORY_LIMIT"
+            :value-formatter="rateFormatter"
+          />
+        </MetricCard>
+      </template>
       <MetricCard
-        :label="t('overview.cpu')"
-        :meta="t('overview.cores', { count: metrics?.cpu.logical_cores ?? t('common.none') })"
-        :value="metrics ? `${metrics.cpu.usage_percent.toFixed(1)}%` : '—'"
-      >
-        <MetricChart
-          :values="cpuHistory"
-          :maximum="100"
-          :label="t('overview.cpuChart')"
-          :limit="HISTORY_LIMIT"
-          :value-formatter="percentFormatter"
-        />
-      </MetricCard>
-      <MetricCard
-        :label="t('overview.memory')"
-        :meta="t('overview.total', { value: formatBytes(metrics?.memory.total_bytes ?? 0, locale) })"
-        :value="metrics ? t('overview.inUse', { value: formatBytes(metrics.memory.used_bytes, locale) }) : t('common.none')"
-        :footer="`${memoryPercent.toFixed(1)}%`"
-      >
-        <MetricChart
-          :values="memoryHistory"
-          :maximum="100"
-          :label="t('overview.memoryChart')"
-          :limit="HISTORY_LIMIT"
-          :value-formatter="percentFormatter"
-        />
-      </MetricCard>
-      <MetricCard
-        :label="t('overview.load')"
-        :meta="t('overview.fiveMinutes', { value: metrics?.load_average.five_minutes.toFixed(2) ?? t('common.none') })"
-        :value="metrics?.load_average.one_minute.toFixed(2) ?? '—'"
-        :footer="t('overview.fifteenMinutes', { value: metrics?.load_average.fifteen_minutes.toFixed(2) ?? t('common.none') })"
-      >
-        <MetricChart
-          :values="loadHistory"
-          :maximum="loadMaximum"
-          :label="t('overview.loadChart')"
-          :limit="HISTORY_LIMIT"
-          :value-formatter="decimalFormatter"
-        />
-      </MetricCard>
-      <MetricCard
-        label="Swap"
-        :meta="metrics?.memory.swap_total_bytes ? t('overview.total', { value: formatBytes(metrics.memory.swap_total_bytes, locale) }) : t('overview.notConfigured')"
-        :value="swapPercent === null ? t('common.none') : `${swapPercent.toFixed(1)}%`"
-        :warning="swapPercent !== null && swapPercent >= 80"
-        :warning-text="t('overview.highUsage')"
-      >
-        <MetricChart
-          :values="swapHistory"
-          :maximum="100"
-          :label="t('overview.swapChart')"
-          :limit="HISTORY_LIMIT"
-          :value-formatter="percentFormatter"
-        />
-      </MetricCard>
-      <MetricCard
-        :label="t('overview.network')"
-        meta="RX / TX"
-        :pairs="[
-          { label: 'RX', value: formatRate(metrics?.network?.received_bytes_per_second) },
-          { label: 'TX', value: formatRate(metrics?.network?.transmitted_bytes_per_second) },
-        ]"
-        :footer="`${t('overview.received')} / ${t('overview.transmitted')}`"
-      >
-        <MetricChart
-          :values="networkReceivedHistory"
-          :secondary-values="networkTransmittedHistory"
-          :maximum="networkMaximum"
-          :label="t('overview.networkChart')"
-          :limit="HISTORY_LIMIT"
-          :value-formatter="rateFormatter"
-        />
-      </MetricCard>
-      <MetricCard
-        :label="t('overview.diskIo')"
-        :meta="t('overview.hostTotal')"
-        :pairs="[
-          { label: t('overview.read'), value: formatRate(metrics?.disk_io?.read_bytes_per_second) },
-          { label: t('overview.write'), value: formatRate(metrics?.disk_io?.written_bytes_per_second) },
-        ]"
-        :footer="`${t('overview.read')} / ${t('overview.write')}`"
-      >
-        <MetricChart
-          :values="diskReadHistory"
-          :secondary-values="diskWrittenHistory"
-          :maximum="diskMaximum"
-          :label="t('overview.diskIoChart')"
-          :limit="HISTORY_LIMIT"
-          :value-formatter="rateFormatter"
-        />
-      </MetricCard>
-      <MetricCard
+        v-if="storageOn"
         :label="t('storage.overallUsage')"
         :meta="t('storage.summary', { count: storageMounts.length })"
         :value="storageMounts.length > 0 ? `${overallStoragePercent.toFixed(0)}%` : t('common.none')"
@@ -404,6 +424,7 @@ const refresh = useStaleRefresh(fetchOverview, staleMsOf("overview"));
         />
       </MetricCard>
       <MetricCard
+        v-if="systemOn"
         :label="t('overview.temperature')"
         meta="CPU"
         :value="temperature === null ? t('common.none') : `${temperature.toFixed(1)} °C`"
@@ -424,25 +445,30 @@ const refresh = useStaleRefresh(fetchOverview, staleMsOf("overview"));
         {{ t("overview.systemInfo") }}
       </h2>
       <DetailList>
-        <DetailRow :term="t('overview.hostname')">
-          {{ system?.hostname ?? t("common.none") }}
-        </DetailRow>
-        <DetailRow term="OS">
-          {{ system ? `${system.operating_system} ${system.os_version ?? ""}` : t("common.none") }}
-        </DetailRow>
-        <DetailRow :term="t('overview.kernel')">
-          {{ system?.kernel_version ?? t("common.none") }}
-        </DetailRow>
-        <DetailRow :term="t('overview.architecture')">
-          {{ system?.architecture ?? t("common.none") }}
-        </DetailRow>
-        <DetailRow :term="t('overview.timezone')">
-          {{ system?.timezone ?? t("common.none") }}
-        </DetailRow>
+        <template v-if="systemOn">
+          <DetailRow :term="t('overview.hostname')">
+            {{ system?.hostname ?? t("common.none") }}
+          </DetailRow>
+          <DetailRow term="OS">
+            {{ system ? `${system.operating_system} ${system.os_version ?? ""}` : t("common.none") }}
+          </DetailRow>
+          <DetailRow :term="t('overview.kernel')">
+            {{ system?.kernel_version ?? t("common.none") }}
+          </DetailRow>
+          <DetailRow :term="t('overview.architecture')">
+            {{ system?.architecture ?? t("common.none") }}
+          </DetailRow>
+          <DetailRow :term="t('overview.timezone')">
+            {{ system?.timezone ?? t("common.none") }}
+          </DetailRow>
+        </template>
         <DetailRow term="Deckox">
           {{ t("common.version") }} {{ status?.version ?? t("common.none") }}
         </DetailRow>
-        <DetailRow :term="t('overview.accessUrl')">
+        <DetailRow
+          v-if="systemOn"
+          :term="t('overview.accessUrl')"
+        >
           <template v-if="accessUrls.length === 0">
             {{ t("common.none") }}
           </template>

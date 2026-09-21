@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { api, type ServerStatus } from "./api/client";
@@ -23,14 +23,16 @@ async function refreshStatus() {
   } catch {
     status.value = null;
   }
-  void loadModules();
+  await loadModules();
 }
 
 async function checkAuthentication() {
   try {
     const session = await api.authSession();
-    authenticated.value = session.authenticated;
+    // The manifest is read before the shell shows, so pages never call a
+    // module that is switched off while it is still unknown.
     if (session.authenticated) await refreshStatus();
+    authenticated.value = session.authenticated;
   } catch {
     authenticated.value = false;
   } finally {
@@ -38,10 +40,10 @@ async function checkAuthentication() {
   }
 }
 
-function handleAuthenticated() {
-  authenticated.value = true;
+async function handleAuthenticated() {
   loginMessage.value = null;
-  void refreshStatus();
+  await refreshStatus();
+  authenticated.value = true;
 }
 
 function handleUnauthorized() {
@@ -80,13 +82,15 @@ watch(() => status.value?.agent != null, (online) => {
   if (online) void loadModules();
 });
 
-// Leave a page whose module has just been switched off.
-watch(enabledModules, (modules) => {
+// A page whose module is switched off is neither shown nor left mounted.
+const routeAllowed = computed(() => {
   const id = route.meta.moduleId;
-  if (typeof id === "string" && !modules.some((module) => module.id === id)) {
-    void router.replace("/");
-  }
+  return typeof id !== "string" || enabledModules.value.some((module) => module.id === id);
 });
+
+watch(routeAllowed, (allowed) => {
+  if (!allowed) void router.replace("/");
+}, { immediate: true });
 
 onMounted(() => {
   window.addEventListener("deckox:unauthorized", handleUnauthorized);
@@ -174,7 +178,10 @@ onBeforeUnmount(() => {
 
     <main class="main-content">
       <NotificationRegion />
-      <RouterView v-slot="{ Component }">
+      <RouterView
+        v-if="routeAllowed"
+        v-slot="{ Component }"
+      >
         <KeepAlive :include="cachedViewNames">
           <component
             :is="Component"
