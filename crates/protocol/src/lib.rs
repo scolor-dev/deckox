@@ -642,3 +642,88 @@ pub struct ModuleInfo {
 pub struct ModuleManifest {
     pub modules: Vec<ModuleInfo>,
 }
+
+/// A module as declared in code: its id, what it needs and the paths it owns.
+pub struct ModuleDefinition {
+    pub id: &'static str,
+    pub requires: &'static [&'static str],
+    /// Request path prefixes; the longest matching prefix wins.
+    pub routes: &'static [&'static str],
+}
+
+/// Checks a `disabled` list against `definitions` and returns it as a set.
+///
+/// A name that is not a module (a typo) is refused, and so is leaving a
+/// module on while a module it needs is off.
+///
+/// # Errors
+///
+/// Returns a message naming the offending module.
+pub fn validate_disabled(
+    definitions: &[ModuleDefinition],
+    disabled: &[String],
+) -> Result<std::collections::HashSet<String>, String> {
+    let mut known: Vec<&str> = definitions.iter().map(|module| module.id).collect();
+    known.sort_unstable();
+    for name in disabled {
+        if !known.contains(&name.as_str()) {
+            return Err(format!(
+                "unknown module \"{name}\" in the disabled list (known: {})",
+                known.join(", ")
+            ));
+        }
+    }
+    let disabled: std::collections::HashSet<String> = disabled.iter().cloned().collect();
+    for module in definitions {
+        if disabled.contains(module.id) {
+            continue;
+        }
+        if let Some(missing) = module
+            .requires
+            .iter()
+            .find(|required| disabled.contains(**required))
+        {
+            return Err(format!(
+                "module \"{}\" needs \"{missing}\", which is disabled; disable \"{}\" as well or enable \"{missing}\"",
+                module.id, module.id
+            ));
+        }
+    }
+    Ok(disabled)
+}
+
+/// The module that owns `path`, if any (the longest prefix match).
+#[must_use]
+pub fn module_owner(definitions: &[ModuleDefinition], path: &str) -> Option<&'static str> {
+    definitions
+        .iter()
+        .flat_map(|module| module.routes.iter().map(move |prefix| (module.id, *prefix)))
+        .filter(|(_, prefix)| {
+            path == *prefix
+                || path
+                    .strip_prefix(prefix)
+                    .is_some_and(|rest| rest.starts_with('/'))
+        })
+        .max_by_key(|(_, prefix)| prefix.len())
+        .map(|(id, _)| id)
+}
+
+#[must_use]
+pub fn module_infos<S: std::hash::BuildHasher>(
+    definitions: &[ModuleDefinition],
+    disabled: &std::collections::HashSet<String, S>,
+) -> Vec<ModuleInfo> {
+    definitions
+        .iter()
+        .map(|module| ModuleInfo {
+            id: module.id.to_owned(),
+            requires: module.requires.iter().map(|id| (*id).to_owned()).collect(),
+            enabled: !disabled.contains(module.id),
+            routes: module
+                .routes
+                .iter()
+                .map(|route| (*route).to_owned())
+                .collect(),
+        })
+        .collect()
+}

@@ -35,6 +35,7 @@ use crate::{
     update::UpdateManager,
 };
 
+mod api_errors;
 mod backups;
 mod config;
 mod diagnostics;
@@ -252,6 +253,7 @@ async fn main() {
             state.modules.clone(),
             modules::gate,
         ))
+        .layer(middleware::from_fn(api_errors::normalize))
         .with_state(state)
         .layer(middleware::from_fn(request_context::assign_request_id));
 

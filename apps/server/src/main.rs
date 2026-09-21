@@ -30,6 +30,7 @@ use crate::{
 };
 
 mod agent_client;
+mod api_errors;
 mod audit;
 mod auth;
 mod cli;
@@ -38,6 +39,7 @@ mod doctor;
 mod events;
 mod fsutil;
 mod metrics_stream;
+mod modules;
 mod notifier;
 mod request_context;
 mod security_headers;
@@ -56,6 +58,7 @@ struct AppState {
     audit: AuditLog,
     metrics: MetricsHub,
     events: events::EventFeed,
+    modules: modules::ModuleRegistry,
     updates: update::UpdateChecker,
     webhook_url: Option<String>,
     instance_id: String,
@@ -93,12 +96,12 @@ struct ErrorResponse {
 
 /// Shared by every handler in this crate (including `auth.rs`, via
 /// `crate::error_response`) that needs to return a JSON error body.
-fn error_response(status: StatusCode, code: &'static str, message: &'static str) -> Response {
+fn error_response(status: StatusCode, code: &'static str, message: impl Into<String>) -> Response {
     (
         status,
         Json(ErrorResponse {
             code,
-            message: message.to_owned(),
+            message: message.into(),
         }),
     )
         .into_response()
@@ -170,12 +173,18 @@ async fn main() {
     });
     let updates = load_update_checker();
     let webhook_url = env::var("DECKOX_WEBHOOK_URL").ok();
-    notifier::spawn(
-        agent.clone(),
-        audit.clone(),
-        updates.clone(),
-        webhook_url.clone(),
-    );
+    let modules = modules::ModuleRegistry::from_environment().unwrap_or_else(|error| {
+        eprintln!("invalid DECKOX_DISABLED_MODULES: {error}");
+        std::process::exit(2);
+    });
+    if modules.is_enabled("notifications") {
+        notifier::spawn(
+            agent.clone(),
+            audit.clone(),
+            updates.clone(),
+            webhook_url.clone(),
+        );
+    }
     let instance_id = format!("{:016x}", rand::random::<u64>());
     let events = events::EventFeed::new(&instance_id);
     events::spawn(agent.clone(), events.clone());
@@ -185,6 +194,7 @@ async fn main() {
         audit,
         metrics: MetricsHub::new(agent),
         events,
+        modules,
         updates,
         webhook_url,
         instance_id,
@@ -286,6 +296,10 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
         .route("/settings/totp/disable", post(auth::totp_disable))
         .route("/settings/webhook/test", post(test_webhook))
         .route_layer(middleware::from_fn_with_state(
+            state.modules.clone(),
+            modules::gate,
+        ))
+        .route_layer(middleware::from_fn_with_state(
             auth.clone(),
             auth::require_auth,
         ))
@@ -299,7 +313,10 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
         ServeDir::new(web_dir).not_found_service(ServeFile::new(web_dir.join("index.html")));
     Router::new()
         .route("/healthz", get(health))
-        .nest("/api/v1", public_api)
+        .nest(
+            "/api/v1",
+            public_api.layer(middleware::from_fn(api_errors::normalize)),
+        )
         .fallback_service(static_files)
         .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn(request_context::assign_request_id))
@@ -342,7 +359,10 @@ struct EventFeedQuery {
 #[derive(Serialize)]
 struct ModuleList {
     agent: events::AgentLink,
+    /// The Agent's modules (switched in `agent.toml`).
     modules: Vec<deckox_protocol::ModuleInfo>,
+    /// The Server's own modules (switched with `DECKOX_DISABLED_MODULES`).
+    server_modules: Vec<deckox_protocol::ModuleInfo>,
 }
 
 /// The Agent's modules and whether each is switched on, with the Agent's
@@ -358,7 +378,11 @@ async fn module_list(
         .await
         .map(|manifest| manifest.modules)
         .unwrap_or_default();
-    Json(ModuleList { agent, modules })
+    Json(ModuleList {
+        agent,
+        modules,
+        server_modules: state.modules.infos(),
+    })
 }
 
 async fn proxy_jobs(
@@ -379,7 +403,7 @@ async fn proxy_job(
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
     {
-        return (StatusCode::BAD_REQUEST, "invalid job id").into_response();
+        return error_response(StatusCode::BAD_REQUEST, "bad_request", "invalid job id");
     }
     proxy_agent(
         &state.agent,

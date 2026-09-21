@@ -221,6 +221,17 @@ disabled = ["software", "power"]</code></pre>
             <tr><td><code>software</code></td><td>ソフトウェアの管理</td></tr>
           </tbody>
         </table>
+                <p>Server側の機能も、同じように止められます。Serverのユニット(<code>/etc/systemd/system/deckox-server.service</code>)の<code>Environment=DECKOX_DISABLED_MODULES=</code>に、カンマ区切りで書いて、Serverを再起動します(書き間違いは、理由を表示して起動を拒否します)。</p>
+        <table class="status-table">
+          <thead><tr><th>Serverのモジュール</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td><code>audit</code></td><td>監査ログの画面とダウンロード(記録そのものは止まりません)</td></tr>
+            <tr><td><code>realtime</code></td><td>メトリクスのリアルタイム配信</td></tr>
+            <tr><td><code>notifications</code></td><td>Webhookの通知とテスト送信(監視の常駐処理も止まります)</td></tr>
+            <tr><td><code>update-check</code></td><td>GitHubの最新版の確認</td></tr>
+          </tbody>
+        </table>
+        <pre><code>Environment=DECKOX_DISABLED_MODULES=audit,realtime</code></pre>
         <p>止めたモジュールの経路は<code>404</code>を返し、そのモジュールだけが使う常駐処理は起動しません。書き間違いや、依存先(例: <code>schedules</code>に対する<code>services</code>)だけを止める設定は、Agentが理由を表示して起動を拒否します。状態は<code>sudo -u deckox deckox-server doctor</code>の<code>agent.toml</code>の行で確認できます。</p>
       </section>
 

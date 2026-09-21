@@ -13,59 +13,53 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use deckox_protocol::{ModuleInfo, ModuleManifest};
+use deckox_protocol::{
+    ModuleDefinition, ModuleManifest, module_infos, module_owner, validate_disabled,
+};
 use serde_json::json;
 
-struct Definition {
-    id: &'static str,
-    requires: &'static [&'static str],
-    routes: &'static [&'static str],
-}
-
-/// Every module. `routes` are path prefixes; the longest matching prefix
-/// wins, so `/v1/system/reboot` belongs to `power`, not to `system`.
-const DEFINITIONS: &[Definition] = &[
-    Definition {
+const DEFINITIONS: &[ModuleDefinition] = &[
+    ModuleDefinition {
         id: "system",
         requires: &[],
         routes: &["/v1/system"],
     },
-    Definition {
+    ModuleDefinition {
         id: "power",
         requires: &[],
         routes: &["/v1/system/reboot"],
     },
-    Definition {
+    ModuleDefinition {
         id: "update",
         requires: &[],
         routes: &["/v1/system/update"],
     },
-    Definition {
+    ModuleDefinition {
         id: "storage",
         requires: &[],
         routes: &["/v1/storage"],
     },
-    Definition {
+    ModuleDefinition {
         id: "diagnostics",
         requires: &[],
         routes: &["/v1/diagnostics"],
     },
-    Definition {
+    ModuleDefinition {
         id: "backups",
         requires: &[],
         routes: &["/v1/backups"],
     },
-    Definition {
+    ModuleDefinition {
         id: "services",
         requires: &[],
         routes: &["/v1/services"],
     },
-    Definition {
+    ModuleDefinition {
         id: "schedules",
         requires: &["services"],
         routes: &["/v1/schedules"],
     },
-    Definition {
+    ModuleDefinition {
         id: "software",
         requires: &[],
         routes: &["/v1/software"],
@@ -81,35 +75,8 @@ impl ModuleRegistry {
     /// Builds the registry from the `disabled` list, refusing a typo or a
     /// module whose dependency is switched off.
     pub fn new(disabled: &[String]) -> Result<Self, String> {
-        let known: HashSet<&str> = DEFINITIONS.iter().map(|module| module.id).collect();
-        for name in disabled {
-            if !known.contains(name.as_str()) {
-                let mut ids: Vec<&str> = known.iter().copied().collect();
-                ids.sort_unstable();
-                return Err(format!(
-                    "unknown module \"{name}\" in [modules] disabled (known: {})",
-                    ids.join(", ")
-                ));
-            }
-        }
-        let disabled: HashSet<String> = disabled.iter().cloned().collect();
-        for module in DEFINITIONS {
-            if disabled.contains(module.id) {
-                continue;
-            }
-            if let Some(missing) = module
-                .requires
-                .iter()
-                .find(|required| disabled.contains(**required))
-            {
-                return Err(format!(
-                    "module \"{}\" needs \"{missing}\", which is disabled; disable \"{}\" as well or enable \"{missing}\"",
-                    module.id, module.id
-                ));
-            }
-        }
         Ok(Self {
-            disabled: Arc::new(disabled),
+            disabled: Arc::new(validate_disabled(DEFINITIONS, disabled)?),
         })
     }
 
@@ -119,34 +86,12 @@ impl ModuleRegistry {
 
     /// The module that owns `path`, if any (the longest prefix match).
     pub fn owner_of(path: &str) -> Option<&'static str> {
-        DEFINITIONS
-            .iter()
-            .flat_map(|module| module.routes.iter().map(move |prefix| (module.id, *prefix)))
-            .filter(|(_, prefix)| {
-                path == *prefix
-                    || path
-                        .strip_prefix(prefix)
-                        .is_some_and(|rest| rest.starts_with('/'))
-            })
-            .max_by_key(|(_, prefix)| prefix.len())
-            .map(|(id, _)| id)
+        module_owner(DEFINITIONS, path)
     }
 
     pub fn manifest(&self) -> ModuleManifest {
         ModuleManifest {
-            modules: DEFINITIONS
-                .iter()
-                .map(|module| ModuleInfo {
-                    id: module.id.to_owned(),
-                    requires: module.requires.iter().map(|id| (*id).to_owned()).collect(),
-                    enabled: self.is_enabled(module.id),
-                    routes: module
-                        .routes
-                        .iter()
-                        .map(|route| (*route).to_owned())
-                        .collect(),
-                })
-                .collect(),
+            modules: module_infos(DEFINITIONS, &self.disabled),
         }
     }
 }
