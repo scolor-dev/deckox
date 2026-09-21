@@ -21,6 +21,10 @@ The Vue design system lives in `apps/web/src/design-system/`. Read `README.md` t
 - Keyboard and focus behavior (focus trap in dialogs, arrow keys in tabs and menus) is part of the contract; changing it needs a matching test in `keyboard.test.ts`.
 - Preview components with `npm run dev` at `/design-system.html`. `npm run build:catalog` writes the single-file catalog to `apps/web/dist-catalog/` for publishing as an Artifact.
 
+## Web modules
+
+Web pages are declared in `apps/web/src/modules/registry.ts` (`WEB_MODULES`), which drives the router, the sidebar and the page cache. Use the same `id` as the Agent/Server module a page shows, list backend modules it needs in `requires`, and load data with `useStaleRefresh` so pages held by `<KeepAlive>` refetch only when stale. Pages that hold secrets set `staleMs: null`.
+
 ## Version bump
 
 Before releasing, the version recorded in the repository (`Cargo.toml`, etc.) must already match the target tag; `scripts/release.sh` refuses otherwise.

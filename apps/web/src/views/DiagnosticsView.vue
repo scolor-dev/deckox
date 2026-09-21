@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { useStaleRefresh } from "../composables/useStaleRefresh";
+import { staleMsOf } from "../modules/registry";
 import {
   api,
   DIAGNOSTICS_REPORT_FILENAME,
@@ -64,7 +66,7 @@ function formatBackupDate(createdAtMs: number) {
   }).format(createdAtMs);
 }
 
-async function refresh() {
+async function fetchData() {
   loading.value = true;
   error.value = null;
   try {
@@ -108,7 +110,7 @@ async function downloadReport() {
   }
 }
 
-onMounted(refresh);
+const refresh = useStaleRefresh(fetchData, staleMsOf("diagnostics"));
 </script>
 
 <template>

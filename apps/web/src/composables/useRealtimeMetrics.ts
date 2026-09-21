@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue";
+import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch, type Ref } from "vue";
 import { api, ApiError, type SystemMetrics } from "../api/client";
 
 export type StreamStatus = "paused" | "connecting" | "connected" | "reconnecting";
@@ -127,17 +127,25 @@ export function useRealtimeMetrics(
     connect();
   });
 
-  onMounted(() => {
+  function start() {
+    if (mounted) return;
     mounted = true;
     document.addEventListener("visibilitychange", handleVisibilityChange);
     connect();
-  });
+  }
 
-  onBeforeUnmount(() => {
+  function stop() {
     mounted = false;
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     disconnect();
-  });
+  }
+
+  // A page held by <KeepAlive> is never unmounted, so the stream also has to
+  // follow the page being shown and hidden or it would keep running unseen.
+  onMounted(start);
+  onActivated(start);
+  onDeactivated(stop);
+  onBeforeUnmount(stop);
 
   return { status, latest, lastReceivedAt, reconnect: connect };
 }

@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useStaleRefresh } from "../composables/useStaleRefresh";
+import { staleMsOf } from "../modules/registry";
 import { api, capacityMounts, formatBytes, usagePercentage, type StorageDisk, type StorageMount } from "../api/client";
 import DiskPanel from "../components/DiskPanel.vue";
 import { apiErrorKey } from "../api/errors";
@@ -144,7 +146,7 @@ const filteredMounts = computed(() => mounts.value.filter((mount) => {
   return !keys.every((key) => isTagHidden(key));
 }));
 
-async function refresh() {
+async function fetchData() {
   loading.value = true;
   error.value = null;
   try {
@@ -158,7 +160,7 @@ async function refresh() {
   }
 }
 
-onMounted(refresh);
+const refresh = useStaleRefresh(fetchData, staleMsOf("storage"));
 </script>
 
 <template>

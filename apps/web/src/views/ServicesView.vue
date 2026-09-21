@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { useStaleRefresh } from "../composables/useStaleRefresh";
+import { staleMsOf } from "../modules/registry";
 import {
   api,
   type CreateScheduleRequest,
@@ -419,10 +421,10 @@ function closeLogs() {
   logError.value = null;
 }
 
-onMounted(() => {
-  void refresh();
-  void loadSchedules();
-});
+const reloadAll = useStaleRefresh(
+  () => Promise.all([refresh(), loadSchedules()]),
+  staleMsOf("services"),
+);
 </script>
 
 <template>
@@ -434,7 +436,7 @@ onMounted(() => {
       <template #actions>
         <AppButton
           :disabled="loading"
-          @click="refresh"
+          @click="reloadAll"
         >
           {{ loading ? t("common.loading") : t("common.refresh") }}
         </AppButton>

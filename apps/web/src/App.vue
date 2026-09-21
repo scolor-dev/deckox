@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { RouterLink, RouterView, useRoute } from "vue-router";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { api, type ServerStatus } from "./api/client";
 import NotificationRegion from "./components/NotificationRegion.vue";
 import { AppButton } from "./design-system/components";
 import LoginView from "./views/LoginView.vue";
+import { cachedViewNames, enabledModules, loadModules, resetModules } from "./modules/store";
 
 const route = useRoute();
+const router = useRouter();
 const { t, locale } = useI18n();
 const status = ref<ServerStatus | null>(null);
 const menuOpen = ref(false);
@@ -21,6 +23,7 @@ async function refreshStatus() {
   } catch {
     status.value = null;
   }
+  void loadModules();
 }
 
 async function checkAuthentication() {
@@ -43,6 +46,7 @@ function handleAuthenticated() {
 
 function handleUnauthorized() {
   authenticated.value = false;
+  resetModules();
   status.value = null;
   menuOpen.value = false;
 }
@@ -69,6 +73,20 @@ watch([() => route.fullPath, locale], () => {
   const titleKey = typeof route.meta.titleKey === "string" ? route.meta.titleKey : "nav.overview";
   document.title = `${t(titleKey)} · Deckox`;
 }, { immediate: true });
+
+// A module switched off in agent.toml only shows once the Agent restarts, so
+// the manifest is read again whenever the Agent comes back.
+watch(() => status.value?.agent != null, (online) => {
+  if (online) void loadModules();
+});
+
+// Leave a page whose module has just been switched off.
+watch(enabledModules, (modules) => {
+  const id = route.meta.moduleId;
+  if (typeof id === "string" && !modules.some((module) => module.id === id)) {
+    void router.replace("/");
+  }
+});
 
 onMounted(() => {
   window.addEventListener("deckox:unauthorized", handleUnauthorized);
@@ -128,26 +146,12 @@ onBeforeUnmount(() => {
         <div><span>Deckox</span><small>{{ t("app.serverManagement") }}</small></div>
       </div>
       <nav :aria-label="t('app.mainNavigation')">
-        <RouterLink to="/">
-          {{ t("nav.overview") }}
-        </RouterLink>
-        <RouterLink to="/services">
-          {{ t("nav.services") }}
-        </RouterLink>
-        <RouterLink to="/software">
-          {{ t("nav.software") }}
-        </RouterLink>
-        <RouterLink to="/storage">
-          {{ t("nav.storage") }}
-        </RouterLink>
-        <RouterLink to="/diagnostics">
-          {{ t("nav.diagnostics") }}
-        </RouterLink>
-        <RouterLink to="/audit">
-          {{ t("nav.audit") }}
-        </RouterLink>
-        <RouterLink to="/settings">
-          {{ t("nav.settings") }}
+        <RouterLink
+          v-for="module in enabledModules"
+          :key="module.id"
+          :to="module.path"
+        >
+          {{ t(module.titleKey) }}
         </RouterLink>
       </nav>
       <div class="agent-state">
@@ -171,11 +175,13 @@ onBeforeUnmount(() => {
     <main class="main-content">
       <NotificationRegion />
       <RouterView v-slot="{ Component }">
-        <component
-          :is="Component"
-          @status="status = $event"
-          @password-changed="handlePasswordChanged"
-        />
+        <KeepAlive :include="cachedViewNames">
+          <component
+            :is="Component"
+            @status="status = $event"
+            @password-changed="handlePasswordChanged"
+          />
+        </KeepAlive>
       </RouterView>
     </main>
   </div>

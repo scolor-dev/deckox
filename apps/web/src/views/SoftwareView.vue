@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { useStaleRefresh } from "../composables/useStaleRefresh";
+import { staleMsOf } from "../modules/registry";
 import { api, type InstalledSoftware, type SoftwarePackage } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import PasswordConfirmDialog from "../components/PasswordConfirmDialog.vue";
@@ -209,10 +211,10 @@ async function confirmAction(password: string) {
   }
 }
 
-onMounted(() => {
-  void loadInstalled();
-  void refresh();
-});
+const reloadAll = useStaleRefresh(
+  () => Promise.all([refresh(), loadInstalled()]),
+  staleMsOf("software"),
+);
 </script>
 
 <template>
@@ -224,7 +226,7 @@ onMounted(() => {
       <template #actions>
         <AppButton
           :disabled="loading"
-          @click="refresh"
+          @click="reloadAll"
         >
           {{ loading ? t("common.loading") : t("common.refresh") }}
         </AppButton>

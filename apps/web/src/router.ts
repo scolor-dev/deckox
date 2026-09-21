@@ -1,25 +1,24 @@
-import { createRouter, createWebHistory } from "vue-router";
-import OverviewView from "./views/OverviewView.vue";
-import ServicesView from "./views/ServicesView.vue";
-import SoftwareView from "./views/SoftwareView.vue";
-import SettingsView from "./views/SettingsView.vue";
-import StorageView from "./views/StorageView.vue";
-import RestartingView from "./views/RestartingView.vue";
-import DiagnosticsView from "./views/DiagnosticsView.vue";
-import AuditView from "./views/AuditView.vue";
+import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
+import { WEB_MODULES } from "./modules/registry";
 
-export const routes = [
-  { path: "/", name: "overview", component: OverviewView, meta: { titleKey: "nav.overview" } },
-  { path: "/services", name: "services", component: ServicesView, meta: { titleKey: "nav.services" } },
-  { path: "/software", name: "software", component: SoftwareView, meta: { titleKey: "nav.software" } },
-  { path: "/storage", name: "storage", component: StorageView, meta: { titleKey: "nav.storage" } },
-  { path: "/diagnostics", name: "diagnostics", component: DiagnosticsView, meta: { titleKey: "nav.diagnostics" } },
-  { path: "/audit", name: "audit", component: AuditView, meta: { titleKey: "nav.audit" } },
-  { path: "/settings", name: "settings", component: SettingsView, meta: { titleKey: "nav.settings" } },
-  { path: "/restarting", name: "restarting", component: RestartingView, meta: { titleKey: "restart.title" } },
-] as const;
+const moduleRoutes: RouteRecordRaw[] = WEB_MODULES.map((module) => ({
+  path: module.path,
+  name: module.id,
+  component: module.load,
+  meta: { titleKey: module.titleKey, moduleId: module.id },
+}));
+
+export const routes: RouteRecordRaw[] = [
+  ...moduleRoutes,
+  {
+    path: "/restarting",
+    name: "restarting",
+    component: () => import("./views/RestartingView.vue"),
+    meta: { titleKey: "restart.title" },
+  },
+];
 
 export const router = createRouter({
   history: createWebHistory(),
-  routes: [...routes],
+  routes,
 });

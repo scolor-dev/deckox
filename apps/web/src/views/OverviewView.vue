@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, toRef, watch } from "vue";
+import { computed, ref, toRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useStaleRefresh } from "../composables/useStaleRefresh";
+import { staleMsOf } from "../modules/registry";
 import {
   api,
   appendMetricHistory,
@@ -164,7 +166,7 @@ const decimalFormatter = (value: number) => value.toFixed(1);
 const temperatureFormatter = (value: number) => `${String(Math.round(value))}°C`;
 const rateFormatter = (value: number) => formatBytes(value, locale.value);
 
-async function refresh() {
+async function fetchOverview() {
   loading.value = true;
   error.value = null;
   try {
@@ -219,7 +221,7 @@ watch(stream.status, (current, previous) => {
   }
 });
 
-onMounted(refresh);
+const refresh = useStaleRefresh(fetchOverview, staleMsOf("overview"));
 </script>
 
 <template>

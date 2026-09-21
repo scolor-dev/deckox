@@ -6,6 +6,29 @@ export interface AgentStatus {
   uptime_seconds: number | null;
 }
 
+/** A switchable feature of the Agent or the Server, as `/api/v1/modules` reports it. */
+export interface ModuleInfo {
+  id: string;
+  requires: string[];
+  enabled: boolean;
+  routes: string[];
+}
+
+export interface AgentLink {
+  connected: boolean;
+  agent_version: string | null;
+  protocol_version: number | null;
+  compatible: boolean;
+}
+
+export interface ModuleList {
+  agent: AgentLink;
+  /** The Agent's modules, switched in `agent.toml`. Empty while it is unreachable. */
+  modules: ModuleInfo[];
+  /** The Server's own modules, switched with `DECKOX_DISABLED_MODULES`. */
+  server_modules: ModuleInfo[];
+}
+
 export interface ServerStatus {
   name: string;
   version: string;
@@ -411,6 +434,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
     }),
   serverStatus: () => request<ServerStatus>("/api/v1/status"),
+  modules: () => request<ModuleList>("/api/v1/modules"),
   systemInfo: () => request<SystemInfo>("/api/v1/system"),
   systemMetrics: () => request<SystemMetrics>("/api/v1/system/metrics"),
   systemCapabilities: () => request<SystemCapabilities>("/api/v1/system/capabilities"),

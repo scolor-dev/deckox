@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { useStaleRefresh } from "../composables/useStaleRefresh";
+import { staleMsOf } from "../modules/registry";
 import { AUDIT_REPORT_FILENAME, api, type AuditEvent } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import {
@@ -58,7 +60,7 @@ function formatTime(timestampMs: number) {
   }).format(timestampMs);
 }
 
-async function refresh() {
+async function fetchData() {
   loading.value = true;
   error.value = null;
   try {
@@ -111,7 +113,7 @@ async function downloadReport() {
   }
 }
 
-onMounted(refresh);
+const refresh = useStaleRefresh(fetchData, staleMsOf("audit"));
 </script>
 
 <template>
