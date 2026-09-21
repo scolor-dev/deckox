@@ -77,7 +77,7 @@ make_archive() {
   chmod +x "$stage/bin/deckox-server" "$stage/bin/deckox-agent"
   printf '<!doctype html><title>%s</title>\n' "$label" > "$stage/web/index.html"
   printf 'listen_addr = "127.0.0.1:8080"\n' > "$stage/config/server.toml"
-  printf 'socket = "/run/deckox/agent.sock"\n\n[system]\nallow_reboot = false\nallow_update = false\n\n[services]\nallowed = []\n' \
+  printf 'socket = "/run/deckox/agent.sock"\n\n[system]\nallow_reboot = false\nallow_update = false\n\n[modules]\ndisabled = []\n\n[services]\nallowed = []\n' \
     > "$stage/config/agent.toml"
   cp "${root_dir}/packaging/systemd/deckox-agent.service" "$stage/systemd/"
   cp "${root_dir}/packaging/systemd/deckox-server.service" "$stage/systemd/"
@@ -230,6 +230,50 @@ assert_contains "$wizard_default_override" "Environment=DECKOX_LISTEN_ADDR=127.0
 assert_contains "$wizard_default_root/etc/deckox/agent.toml" "allow_reboot = false"
 assert_contains "$wizard_default_root/etc/deckox/agent.toml" "allow_update = false"
 assert_contains "$test_dir/wizard-default.out" "Deckox is listening on http://127.0.0.1:8080/"
+assert_contains "$test_dir/wizard-default.out" "Profile: normal"
+assert_contains "$wizard_default_root/etc/deckox/agent.toml" 'disabled = ["schedules", "software"]'
+if grep -F "DECKOX_DISABLED_MODULES" "$wizard_default_override" >/dev/null; then
+  fail "the normal profile must not disable any Server module"
+fi
+
+# The profile decides which modules the first install switches off.
+lite_root="${test_dir}/profile-lite-root"
+(DECKOX_PROFILE=lite run_installer "$lite_root" "$archive_wizard_v1" 2.0.0 > "$test_dir/profile-lite.out")
+assert_contains "$test_dir/profile-lite.out" "Profile: lite"
+assert_contains "$lite_root/etc/deckox/agent.toml" 'disabled = ["power", "update", "backups", "schedules", "software"]'
+assert_contains "$lite_root/etc/deckox/agent.toml" "allow_reboot = false"
+assert_contains "$lite_root/etc/systemd/system/deckox-server.service.d/override.conf" \
+  "Environment=DECKOX_DISABLED_MODULES=notifications,update-check"
+
+all_root="${test_dir}/profile-all-root"
+(DECKOX_PROFILE=all run_installer "$all_root" "$archive_wizard_v1" 2.0.0 > "$test_dir/profile-all.out")
+assert_contains "$test_dir/profile-all.out" "Profile: all"
+assert_contains "$all_root/etc/deckox/agent.toml" "disabled = []"
+assert_contains "$all_root/etc/deckox/agent.toml" "allow_reboot = false"
+
+# The hidden develop profile turns everything on and grants every permission.
+develop_root="${test_dir}/profile-develop-root"
+(DECKOX_PROFILE=develop run_installer "$develop_root" "$archive_wizard_v1" 2.0.0 > "$test_dir/profile-develop.out")
+assert_contains "$test_dir/profile-develop.out" "Profile: develop"
+assert_contains "$develop_root/etc/deckox/agent.toml" "disabled = []"
+assert_contains "$develop_root/etc/deckox/agent.toml" "allow_reboot = true"
+assert_contains "$develop_root/etc/deckox/agent.toml" "allow_update = true"
+
+# An explicit permission variable still wins over the develop profile.
+develop_override_root="${test_dir}/profile-develop-override-root"
+(DECKOX_PROFILE=develop DECKOX_ALLOW_REBOOT=false \
+  run_installer "$develop_override_root" "$archive_wizard_v1" 2.0.0 > "$test_dir/profile-develop-override.out")
+assert_contains "$develop_override_root/etc/deckox/agent.toml" "allow_reboot = false"
+assert_contains "$develop_override_root/etc/deckox/agent.toml" "allow_update = true"
+
+# Each profile run is a subshell so bash-as-sh does not keep the variable for later runs.
+# An unknown profile is refused before anything is installed.
+bad_profile_root="${test_dir}/profile-bad-root"
+if (DECKOX_PROFILE=huge run_installer "$bad_profile_root" "$archive_wizard_v1" 2.0.0 > "$test_dir/profile-bad.out" 2>&1); then
+  fail "an unknown profile must be rejected"
+fi
+assert_contains "$test_dir/profile-bad.out" "unknown DECKOX_PROFILE: huge"
+assert_missing "$bad_profile_root/usr/local/bin/deckox-agent"
 
 # A non-interactive initial install with setup overrides set via environment
 # variables applies them, without requiring a TTY.

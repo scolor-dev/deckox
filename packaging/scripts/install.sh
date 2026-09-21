@@ -13,6 +13,9 @@ mode="install"
 chosen_listen_addr="127.0.0.1:8080"
 chosen_allow_reboot="false"
 chosen_allow_update="false"
+chosen_profile="normal"
+agent_disabled=""
+server_disabled=""
 tty_source=""
 
 usage() {
@@ -49,6 +52,43 @@ ask_yes_no() {
     [Yy]|[Yy][Ee][Ss]) echo "true" ;;
     *) echo "false" ;;
   esac
+}
+
+apply_profile() {
+  case "$1" in
+    lite)
+      agent_disabled="power update backups schedules software"
+      server_disabled="notifications update-check"
+      ;;
+    normal)
+      agent_disabled="schedules software"
+      server_disabled=""
+      ;;
+    all | develop)
+      agent_disabled=""
+      server_disabled=""
+      ;;
+    *)
+      echo "unknown DECKOX_PROFILE: $1 (use lite, normal or all)" >&2
+      exit 2
+      ;;
+  esac
+  chosen_profile="$1"
+}
+
+agent_module_off() {
+  case " $agent_disabled " in
+    *" $1 "*) return 0 ;;
+  esac
+  return 1
+}
+
+toml_list() {
+  list_items=""
+  for list_item in $1; do
+    list_items="${list_items:+${list_items}, }\"${list_item}\""
+  done
+  printf '[%s]' "$list_items"
 }
 
 case "${1:-}" in
@@ -326,10 +366,31 @@ fi
 
 if [ "$install_kind" = "initial" ]; then
   detect_tty_source
-  if [ -n "$tty_source" ] || [ -n "${DECKOX_LISTEN_ADDR:-}" ] \
+  if [ -n "$tty_source" ] || [ -n "${DECKOX_PROFILE:-}" ] || [ -n "${DECKOX_LISTEN_ADDR:-}" ] \
     || [ -n "${DECKOX_ALLOW_REBOOT:-}" ] || [ -n "${DECKOX_ALLOW_UPDATE:-}" ]; then
     echo
     echo "== Deckox setup =="
+  fi
+
+  if [ -n "${DECKOX_PROFILE:-}" ]; then
+    apply_profile "$DECKOX_PROFILE"
+  elif [ -n "$tty_source" ]; then
+    echo "Profile (which features are installed):"
+    echo "  1) lite   - monitoring only: system, storage, diagnostics, services"
+    echo "  2) normal (default) - lite plus backups, reboot and self-update"
+    echo "  3) all    - every feature, including software management and schedules"
+    while :; do
+      profile_choice="$(ask "Selection [2]: ")"
+      case "$profile_choice" in
+        1 | lite) apply_profile lite; break ;;
+        "" | 2 | normal) apply_profile normal; break ;;
+        3 | all) apply_profile all; break ;;
+        develop) apply_profile develop; break ;;
+        *) echo "Enter 1, 2 or 3." >&2 ;;
+      esac
+    done
+  else
+    apply_profile "$chosen_profile"
   fi
 
   if [ -n "${DECKOX_LISTEN_ADDR:-}" ]; then
@@ -378,13 +439,17 @@ if [ "$install_kind" = "initial" ]; then
 
   if [ -n "${DECKOX_ALLOW_REBOOT:-}" ]; then
     chosen_allow_reboot="$DECKOX_ALLOW_REBOOT"
-  elif [ -n "$tty_source" ]; then
+  elif [ "$chosen_profile" = "develop" ]; then
+    chosen_allow_reboot="true"
+  elif [ -n "$tty_source" ] && ! agent_module_off power; then
     chosen_allow_reboot="$(ask_yes_no "Allow the admin UI to reboot this host? [y/N]: ")"
   fi
 
   if [ -n "${DECKOX_ALLOW_UPDATE:-}" ]; then
     chosen_allow_update="$DECKOX_ALLOW_UPDATE"
-  elif [ -n "$tty_source" ]; then
+  elif [ "$chosen_profile" = "develop" ]; then
+    chosen_allow_update="true"
+  elif [ -n "$tty_source" ] && ! agent_module_off update; then
     chosen_allow_update="$(ask_yes_no "Allow the admin UI to apply Deckox updates? [y/N]: ")"
   fi
 fi
@@ -482,13 +547,17 @@ if [ ! -f "${config_dir}/server.toml" ]; then
 fi
 if [ ! -f "${config_dir}/agent.toml" ]; then
   agent_toml_source="${release_dir}/config/agent.toml"
-  if [ "$chosen_allow_reboot" = "true" ] || [ "$chosen_allow_update" = "true" ]; then
+  if [ "$chosen_allow_reboot" = "true" ] || [ "$chosen_allow_update" = "true" ] || [ -n "$agent_disabled" ]; then
     agent_toml_source="${work_dir}/agent.toml"
-    awk -v allow_reboot="$chosen_allow_reboot" -v allow_update="$chosen_allow_update" '
+    awk -v allow_reboot="$chosen_allow_reboot" -v allow_update="$chosen_allow_update" \
+      -v disabled="$(toml_list "$agent_disabled")" '
       /^allow_reboot = / { print "allow_reboot = " allow_reboot; next }
       /^allow_update = / { print "allow_update = " allow_update; next }
+      /^disabled = / { print "disabled = " disabled; seen = 1; next }
       { print }
-    ' "${release_dir}/config/agent.toml" > "$agent_toml_source"
+      END { if (disabled != "[]" && !seen) exit 1 }
+    ' "${release_dir}/config/agent.toml" > "$agent_toml_source" \
+      || { echo "the packaged agent.toml has no [modules] disabled line" >&2; exit 1; }
   fi
   install_file 0640 root deckox "$agent_toml_source" "${config_dir}/agent.toml"
 fi
@@ -512,6 +581,9 @@ if [ "$install_kind" = "initial" ]; then
   {
     echo "[Service]"
     echo "Environment=DECKOX_LISTEN_ADDR=${chosen_listen_addr}"
+    if [ -n "$server_disabled" ]; then
+      echo "Environment=DECKOX_DISABLED_MODULES=$(printf '%s' "$server_disabled" | tr ' ' ',')"
+    fi
   } > "${work_dir}/override.conf"
   install_file 0644 root root "${work_dir}/override.conf" "${systemd_dir}/deckox-server.service.d/override.conf"
 fi
@@ -567,6 +639,9 @@ fi
 echo
 echo "Deckox ${package_version} has been installed (${install_kind})."
 echo "Deckox is listening on http://${effective_listen_addr}/"
+if [ "$install_kind" = "initial" ]; then
+  echo "Profile: ${chosen_profile}"
+fi
 if [ -n "$initial_password" ]; then
   echo "Initial administrator password: ${initial_password}"
   echo "Store this password now. It is not shown again."

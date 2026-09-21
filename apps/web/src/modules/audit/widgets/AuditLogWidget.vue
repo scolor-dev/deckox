@@ -1,21 +1,22 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useStaleRefresh } from "../composables/useStaleRefresh";
-import { staleMsOf } from "../modules/registry";
-import { AUDIT_REPORT_FILENAME, api, type AuditEvent } from "../api/client";
-import { apiErrorKey } from "../api/errors";
+import { useStaleRefresh } from "../../../composables/useStaleRefresh";
+import { AUDIT_REPORT_FILENAME, api, type AuditEvent } from "../../../api/client";
+import WidgetHeader from "../../../widgets/WidgetHeader.vue";
+import { apiErrorKey } from "../../../api/errors";
 import {
   AppButton,
   AppStack,
   NoticeBanner,
-  PageHeader,
   SelectField,
   StateBadge,
   TableToolbar,
   TablePanel,
-} from "../design-system/components";
-import { notify } from "../notifications";
+} from "../../../design-system/components";
+import { notify } from "../../../notifications";
+
+defineOptions({ inheritAttrs: false });
 
 const { t, locale } = useI18n();
 
@@ -113,16 +114,13 @@ async function downloadReport() {
   }
 }
 
-const refresh = useStaleRefresh(fetchData, staleMsOf("audit"));
+const refresh = useStaleRefresh(fetchData, 30_000);
 </script>
 
 <template>
-  <div class="view audit-view">
-    <PageHeader
-      :title="t('audit.title')"
-      :subtitle="t('audit.subtitle')"
-    >
-      <template #actions>
+  <AppStack gap="4">
+    <WidgetHeader :title="t('audit.title')">
+      <template #default>
         <AppStack
           direction="row"
           gap="2"
@@ -142,7 +140,7 @@ const refresh = useStaleRefresh(fetchData, staleMsOf("audit"));
           </AppButton>
         </AppStack>
       </template>
-    </PageHeader>
+    </WidgetHeader>
 
     <NoticeBanner
       v-if="error"
@@ -230,5 +228,5 @@ const refresh = useStaleRefresh(fetchData, staleMsOf("audit"));
         </AppButton>
       </template>
     </TablePanel>
-  </div>
+  </AppStack>
 </template>

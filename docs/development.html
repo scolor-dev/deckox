@@ -89,9 +89,11 @@ npm run build</code></pre>
             <tr><td><code>DECKOX_AGENT_SOCKET</code></td><td><code>/run/deckox/agent.sock</code></td><td>Server / Agent</td></tr>
             <tr><td><code>DECKOX_SCHEDULES_FILE</code></td><td><code>/var/lib/deckox/schedules.json</code></td><td>Agent</td></tr>
             <tr><td><code>DECKOX_WEB_DIR</code></td><td><code>/usr/local/share/deckox/web</code></td><td>Server</td></tr>
+            <tr><td><code>DECKOX_PROFILE</code></td><td><code>normal</code></td><td>インストーラー(初回のみ)。<code>lite</code>・<code>normal</code>・<code>all</code>に加え、開発用の<code>develop</code>(全モジュール有効、再起動・更新も許可。対話の選択肢には表示されず、質問なしで導入)</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH_FILE</code></td><td><code>/var/lib/deckox/admin-password.hash</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_ADMIN_PASSWORD_HASH</code></td><td>なし</td><td>Server（開発・コンテナ向け）</td></tr>
             <tr><td><code>DECKOX_AUDIT_LOG_FILE</code></td><td><code>/var/lib/deckox/audit.log</code></td><td>Server</td></tr>
+            <tr><td><code>DECKOX_LAYOUT_FILE</code></td><td><code>/var/lib/deckox/layout.json</code></td><td>Server</td></tr>
             <tr><td><code>DECKOX_SECURE_COOKIE</code></td><td><code>false</code></td><td>Server。HTTPS終端時に<code>true</code></td></tr>
             <tr><td><code>DECKOX_WEBHOOK_URL</code></td><td>なし(通知無効)</td><td>Server</td></tr>
             <tr><td><code>RUST_LOG</code></td><td>各プロセスの<code>info</code></td><td>Server / Agent</td></tr>
@@ -188,11 +190,13 @@ allowed = [
       </section>
 
       <section class="section" aria-labelledby="web-modules-title">
-        <h2 id="web-modules-title">Webの画面をモジュールとして足す</h2>
-        <p>Webの画面は、AgentやServerと同じ「モジュール」の考え方で登録します。<code>apps/web/src/modules/registry.ts</code>の<code>WEB_MODULES</code>に1件足すと、ルート、サイドバーの項目、ページのキャッシュが揃います。<code>id</code>は、対応するAgent・Serverのモジュールと同じ名前にします(<code>services</code>・<code>software</code>・<code>storage</code>・<code>diagnostics</code>・<code>audit</code>)。<code>overview</code>と<code>settings</code>はコアで、常に表示します。</p>
-        <p><code>requires</code>に、必要なAgent・Serverのモジュールを書きます。<code>GET /api/v1/modules</code>でそのどれかが無効なら、サイドバーから外れ、開いていれば概要に戻ります。Agentに繋がらない間は、Agentのモジュールの状態が分からないので、隠さずに全て表示します。</p>
-        <p>ページの中のパネル・タブ・節が、ページより多くのモジュールを必要とするときは、<code>parts</code>に、部品の名前と必要なモジュールを書きます(概要のリアルタイム表示は<code>realtime</code>と<code>system</code>、設定の再起動は<code>power</code>と<code>system</code>など)。<code>partEnabled(モジュールid, 部品名)</code>が偽なら、その部品は出さず、そのAPIも呼びません。</p>
-        <p>ページは<code>&lt;KeepAlive&gt;</code>で保持し、画面を切り替えても再読み込みしません。<code>staleMs</code>を過ぎてから戻ったときだけ、裏で読み直します。読み込みは<code>useStaleRefresh</code>で書き、更新ボタンや操作後の再取得には、その戻り値を使います(時計が巻き戻ります)。パスワード入力を持つ画面は、<code>staleMs: null</code>で保持しません。</p>
+        <h2 id="web-modules-title">Webの機能をモジュール(ウィジェット)として足す</h2>
+        <p>Webの画面は、ページとウィジェットでできています。コアは、ウィジェットを並べる格子、ウィジェットの枠、配置の編集、デザインシステムを提供します。機能はモジュールが、ウィジェットとして提供します。</p>
+        <p>モジュールは<code>apps/web/src/modules/&lt;id&gt;/index.ts</code>に置きます。フォルダを足すだけで、自動で見つかります。<code>id</code>は、対応するAgent・Serverのモジュールと同じ名前にします(<code>storage</code>・<code>services</code>・<code>software</code>・<code>diagnostics</code>・<code>audit</code>・<code>power</code>・<code>notifications</code>・<code>update-check</code>・<code>system</code>)。<code>core</code>は、文章・見出し・お知らせ・区切り線・サーバーの状態を提供します。</p>
+        <p>ウィジェットは、<code>id</code>(<code>&lt;モジュール&gt;.&lt;名前&gt;</code>)、必要なAgent・Serverのモジュール(<code>requires</code>)、標準・最小・最大のサイズ、設定の項目(<code>config</code>)、枠の種類(<code>frame</code>は題名つきの枠、<code>bare</code>は自分で箱を描く)、コンポーネントを宣言します。文言はモジュールの<code>messages</code>に、日本語と英語で書きます。<code>requires</code>のどれかが<code>GET /api/v1/modules</code>で無効なら、そのウィジェットは出ず、APIも呼びません。Agentに繋がらない間は、状態が分からないので、隠さずに出します。</p>
+        <p>格子は12列で、1行は<code>--widget-row</code>(72px)です。ウィジェットは「順番・幅(1から12)・高さ(行数、または<code>auto</code>)」で並べ、座標は持ちません。モジュールを無効にしても、穴が空かずに詰まります。幅が6列(タブレット)、2列(スマホ)に狭まると、幅は自動で縮みます。ページは、縦に伸びる「スクロール」と、画面に収まる「1面」の2種類です。</p>
+        <p>配置は、Serverの<code>DECKOX_LAYOUT_FILE</code>(<code>/var/lib/deckox/layout.json</code>)と、各ブラウザの<code>localStorage</code>の両方に保存します。ブラウザに保存があれば、そちらを優先します。Serverに、より新しい配置があるときは、知らせて、選んでもらいます。初期配置は<code>layout/defaults.ts</code>の「おすすめ」で、無効なモジュールのウィジェットだけのページは、ナビに出しません。</p>
+        <p>データは<code>data/sources.ts</code>の共有ソースで読みます。同じデータを見るウィジェットが何個あっても、取得は1回で、ページを切り替えても、古くなるまで読み直しません。ウィジェットの中で自分だけが使うデータは、<code>useStaleRefresh</code>で読みます。リアルタイムの指標は<code>data/metrics.ts</code>が、表示中のウィジェットがあるあいだだけ、1本の接続で配ります。</p>
       </section>
 
       <section class="section" aria-labelledby="test-title">

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import appStyles from "../style.css?raw";
 
-const vueModules = import.meta.glob(["../App.vue", "../views/*.vue", "../components/*.vue"], { query: "?raw", import: "default", eager: true });
+const vueModules = import.meta.glob(["../App.vue", "../views/*.vue", "../components/*.vue", "../widgets/*.vue", "../modules/**/*.vue"], { query: "?raw", import: "default", eager: true });
 
 const styleBlocks: [string, string][] = [
   ["style.css", appStyles],

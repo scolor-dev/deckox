@@ -29,6 +29,12 @@ export interface ModuleList {
   server_modules: ModuleInfo[];
 }
 
+/** The saved layout as the Server stores it; `layout` is `null` until one is saved. */
+export interface StoredLayout {
+  revision: number;
+  layout: unknown;
+}
+
 export interface ServerStatus {
   name: string;
   version: string;
@@ -435,6 +441,12 @@ export const api = {
     }),
   serverStatus: () => request<ServerStatus>("/api/v1/status"),
   modules: () => request<ModuleList>("/api/v1/modules"),
+  layout: () => request<StoredLayout>("/api/v1/layout"),
+  saveLayout: (layout: unknown) => request<StoredLayout>("/api/v1/layout", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ layout }),
+  }),
   systemInfo: () => request<SystemInfo>("/api/v1/system"),
   systemMetrics: () => request<SystemMetrics>("/api/v1/system/metrics"),
   systemCapabilities: () => request<SystemCapabilities>("/api/v1/system/capabilities"),

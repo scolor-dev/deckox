@@ -2,25 +2,13 @@
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
-import {
-  api,
-  buildUpdateCommand,
-  safeReleaseUrl,
-  writeClipboardText,
-  type ServerStatus,
-  type SystemCapabilities,
-  type TotpStatus,
-  type UpdateStatus,
-} from "../api/client";
+import { api, writeClipboardText, type TotpStatus } from "../api/client";
 import { apiErrorKey } from "../api/errors";
 import ForgotPasswordHelp from "../components/ForgotPasswordHelp.vue";
-import PasswordConfirmDialog from "../components/PasswordConfirmDialog.vue";
 import {
   AppButton,
   AppCheckbox,
   AppStack,
-  DetailList,
-  DetailRow,
   InfoNote,
   NoticeBanner,
   PageHeader,
@@ -28,36 +16,31 @@ import {
   TabBar,
   TextField,
 } from "../design-system/components";
-import { partEnabled } from "../modules/store";
+import { backendEnabled } from "../modules/store";
 import { notify } from "../notifications";
-import { preferences, type LocalePreference, type MetricsInterval, type ThemePreference } from "../preferences";
+import {
+  preferences,
+  type LocalePreference,
+  type MetricsInterval,
+  type ThemePreference,
+} from "../preferences";
 
 const emit = defineEmits<{ passwordChanged: [] }>();
-const { t, locale } = useI18n();
+const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 
-type SettingsTab = "display" | "security" | "webhook" | "system";
-const TAB_KEYS: SettingsTab[] = ["display", "security", "webhook", "system"];
+type SettingsTab = "display" | "security";
+const TAB_KEYS: SettingsTab[] = ["display", "security"];
 
 function isSettingsTab(value: unknown): value is SettingsTab {
   return typeof value === "string" && (TAB_KEYS as string[]).includes(value);
 }
 
-const webhookOn = computed(() => partEnabled("settings", "webhook"));
-const updateCheckOn = computed(() => partEnabled("settings", "update-check"));
-const updateNowOn = computed(() => partEnabled("settings", "update-now"));
-const liveOn = computed(() => partEnabled("settings", "live"));
-const rebootOn = computed(() => partEnabled("settings", "reboot"));
-
-function tabAvailable(tab: SettingsTab) {
-  if (tab === "webhook") return webhookOn.value;
-  if (tab === "system") return updateCheckOn.value || rebootOn.value;
-  return true;
-}
+const liveOn = computed(() => backendEnabled(["realtime", "system"]));
 
 const requestedTab = ref<SettingsTab>(isSettingsTab(route.query.tab) ? route.query.tab : "display");
-const activeTab = computed(() => (tabAvailable(requestedTab.value) ? requestedTab.value : "display"));
+const activeTab = requestedTab;
 
 function selectTab(tab: SettingsTab) {
   requestedTab.value = tab;
@@ -69,16 +52,6 @@ const newPassword = ref("");
 const passwordConfirmation = ref("");
 const submitting = ref(false);
 const error = ref<string | null>(null);
-const systemCapabilities = ref<SystemCapabilities | null>(null);
-const rebootDialogOpen = ref(false);
-const rebooting = ref(false);
-const rebootError = ref<string | null>(null);
-const updateStatus = ref<UpdateStatus | null>(null);
-const updateChecking = ref(false);
-const updateErrorKey = ref<string | null>(null);
-const updateDialogOpen = ref(false);
-const updating = ref(false);
-const updateDialogError = ref<string | null>(null);
 const totpStatus = ref<TotpStatus | null>(null);
 const totpLoading = ref(true);
 const totpErrorKey = ref<string | null>(null);
@@ -89,27 +62,12 @@ const totpRecoveryCodes = ref<string[] | null>(null);
 const totpDisablePassword = ref("");
 const totpDisableCode = ref("");
 const totpDisabling = ref(false);
-const serverStatus = ref<ServerStatus | null>(null);
-const webhookTesting = ref(false);
-const webhookErrorKey = ref<string | null>(null);
-const updateCommand = computed(() => buildUpdateCommand(updateStatus.value?.latest_version));
-const releaseUrl = computed(() => safeReleaseUrl(updateStatus.value?.release_url));
-const updateCheckedAt = computed(() => {
-  const checkedAt = updateStatus.value?.checked_at_ms;
-  if (checkedAt == null) return null;
-  return new Intl.DateTimeFormat(locale.value, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(checkedAt);
-});
 
 function displaySettingsChanged() {
   notify("success", t("settings.saved"));
 }
 
-const tabs = computed(() => TAB_KEYS
-  .filter((key) => tabAvailable(key))
-  .map((key) => ({ key, label: t(`settings.tab.${key}`) })));
+const tabs = TAB_KEYS.map((key) => ({ key, label: t(`settings.tab.${key}`) }));
 
 function handleTabChange(key: string) {
   if (isSettingsTab(key)) selectTab(key);
@@ -258,120 +216,8 @@ async function disableTotp() {
   }
 }
 
-async function loadSystemCapabilities() {
-  if (!rebootOn.value && !updateNowOn.value) return;
-  try {
-    systemCapabilities.value = await api.systemCapabilities();
-  } catch (caught) {
-    rebootError.value = t(apiErrorKey(caught, "errors.systemCapabilities"));
-  }
-}
-
-function openRebootDialog() {
-  rebootError.value = null;
-  rebootDialogOpen.value = true;
-}
-
-function closeRebootDialog() {
-  rebootDialogOpen.value = false;
-  rebootError.value = null;
-}
-
-async function rebootSystem(password: string) {
-  rebooting.value = true;
-  rebootError.value = null;
-  try {
-    const health = await api.health().catch(() => null);
-    await api.rebootSystem(password);
-    if (health) sessionStorage.setItem("deckox:restart-instance", health.instance_id);
-    rebootDialogOpen.value = false;
-    await router.push({ name: "restarting" });
-  } catch (caught) {
-    rebootError.value = t(apiErrorKey(caught, "errors.reboot"));
-  } finally {
-    rebooting.value = false;
-  }
-}
-
-function openUpdateDialog() {
-  updateDialogError.value = null;
-  updateDialogOpen.value = true;
-}
-
-function closeUpdateDialog() {
-  updateDialogOpen.value = false;
-  updateDialogError.value = null;
-}
-
-async function triggerUpdate(password: string) {
-  updating.value = true;
-  updateDialogError.value = null;
-  try {
-    const health = await api.health().catch(() => null);
-    await api.triggerUpdate(password);
-    if (health) sessionStorage.setItem("deckox:restart-instance", health.instance_id);
-    updateDialogOpen.value = false;
-    await router.push({ name: "restarting" });
-  } catch (caught) {
-    updateDialogError.value = t(apiErrorKey(caught, "errors.updateTrigger"));
-  } finally {
-    updating.value = false;
-  }
-}
-
-async function checkForUpdate() {
-  updateChecking.value = true;
-  updateErrorKey.value = null;
-  try {
-    updateStatus.value = await api.updateStatus();
-  } catch (caught) {
-    updateErrorKey.value = apiErrorKey(caught, "errors.updateCheck");
-  } finally {
-    updateChecking.value = false;
-  }
-}
-
-async function copyUpdateCommand() {
-  if (!updateCommand.value) {
-    updateErrorKey.value = "settings.updateCommandUnavailable";
-    return;
-  }
-  updateErrorKey.value = null;
-  if (await writeClipboardText(updateCommand.value)) {
-    notify("success", t("settings.updateCommandCopied"));
-  } else {
-    updateErrorKey.value = "settings.updateCopyFailed";
-    notify("error", t("settings.updateCopyFailed"));
-  }
-}
-
-async function loadServerStatus() {
-  try {
-    serverStatus.value = await api.serverStatus();
-  } catch {
-    // Overview already surfaces connectivity problems; this section only
-    // needs webhook_configured, so a failed fetch just leaves it unknown.
-  }
-}
-
-async function testWebhook() {
-  webhookErrorKey.value = null;
-  webhookTesting.value = true;
-  try {
-    await api.testWebhook();
-    notify("success", t("settings.webhookTestSuccess"));
-  } catch (caught) {
-    webhookErrorKey.value = apiErrorKey(caught, "errors.webhookTestFailed");
-    notify("error", t(webhookErrorKey.value));
-  } finally {
-    webhookTesting.value = false;
-  }
-}
-
 onMounted(() => {
-  void loadSystemCapabilities();
   void loadTotpStatus();
-  void loadServerStatus();
 });
 </script>
 
@@ -633,213 +479,5 @@ onMounted(() => {
         </AppStack>
       </section>
     </div>
-
-    <div
-      v-if="webhookOn"
-      v-show="activeTab === 'webhook'"
-      role="tabpanel"
-    >
-      <section
-        class="settings-section"
-        aria-labelledby="webhook-heading"
-      >
-        <div class="settings-description">
-          <h2 id="webhook-heading">
-            {{ t("settings.webhookTitle") }}
-          </h2>
-          <p>{{ t("settings.webhookDescription") }}</p>
-        </div>
-        <AppStack
-          gap="3"
-          align="start"
-        >
-          <template v-if="serverStatus">
-            <NoticeBanner
-              v-if="!serverStatus.webhook_configured"
-              tone="warning"
-            >
-              {{ t("settings.webhookNotConfigured") }}
-            </NoticeBanner>
-            <template v-else>
-              <NoticeBanner tone="success">
-                {{ t("settings.webhookConfigured") }}
-              </NoticeBanner>
-              <NoticeBanner
-                v-if="webhookErrorKey"
-                tone="error"
-              >
-                {{ t(webhookErrorKey) }}
-              </NoticeBanner>
-              <AppButton
-                :disabled="webhookTesting"
-                @click="testWebhook"
-              >
-                {{ webhookTesting ? t("settings.webhookTesting") : t("settings.webhookTest") }}
-              </AppButton>
-            </template>
-          </template>
-        </AppStack>
-      </section>
-    </div>
-
-    <div
-      v-show="activeTab === 'system'"
-      role="tabpanel"
-    >
-      <section
-        v-if="updateCheckOn"
-        class="settings-section"
-        aria-labelledby="update-heading"
-      >
-        <div class="settings-description">
-          <h2 id="update-heading">
-            {{ t("settings.update") }}
-          </h2>
-          <p>{{ t("settings.updateDescription") }}</p>
-        </div>
-        <AppStack
-          class="update-settings"
-          gap="3"
-          align="start"
-        >
-          <NoticeBanner
-            v-if="updateErrorKey"
-            tone="error"
-          >
-            {{ t(updateErrorKey) }}
-          </NoticeBanner>
-          <template v-if="updateStatus">
-            <DetailList>
-              <DetailRow :term="t('settings.currentVersion')">
-                {{ updateStatus.current_version }}
-              </DetailRow>
-              <DetailRow :term="t('settings.latestVersion')">
-                {{ updateStatus.latest_version ?? t("common.none") }}
-              </DetailRow>
-            </DetailList>
-            <NoticeBanner
-              v-if="updateStatus.status === 'available' && updateStatus.update_available"
-              tone="success"
-            >
-              {{ t("settings.updateAvailable") }}
-            </NoticeBanner>
-            <NoticeBanner
-              v-else-if="updateStatus.status === 'up_to_date'"
-              tone="success"
-            >
-              {{ t("settings.upToDate") }}
-            </NoticeBanner>
-            <NoticeBanner
-              v-else
-              tone="warning"
-            >
-              {{ t("settings.updateUnavailable") }}
-            </NoticeBanner>
-            <InfoNote v-if="updateCheckedAt">
-              {{ t("settings.updateCheckedAt", { time: updateCheckedAt }) }}
-            </InfoNote>
-            <a
-              v-if="releaseUrl"
-              class="release-link"
-              :href="releaseUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-            >{{ t("settings.openRelease") }}</a>
-            <template v-if="updateStatus.update_available && updateNowOn && systemCapabilities?.update_allowed">
-              <InfoNote>{{ t("settings.updateHelp") }}</InfoNote>
-              <AppButton
-                variant="primary"
-                danger
-                @click="openUpdateDialog"
-              >
-                {{ t("settings.updateNow") }}
-              </AppButton>
-            </template>
-            <AppStack
-              v-else-if="updateStatus.update_available && updateCommand"
-              gap="2"
-              align="start"
-            >
-              <code>{{ updateCommand }}</code>
-              <AppButton
-                variant="action"
-                @click="copyUpdateCommand"
-              >
-                {{ t("settings.copyCommand") }}
-              </AppButton>
-              <InfoNote>{{ t("settings.manualUpdateOnly") }}</InfoNote>
-            </AppStack>
-          </template>
-          <InfoNote v-else-if="!updateChecking">
-            {{ t("settings.updateNotChecked") }}
-          </InfoNote>
-          <AppButton
-            :disabled="updateChecking"
-            @click="checkForUpdate"
-          >
-            {{ updateChecking ? t("settings.checkingUpdate") : t("settings.checkUpdate") }}
-          </AppButton>
-        </AppStack>
-      </section>
-
-      <section
-        v-if="rebootOn"
-        class="settings-section"
-        aria-labelledby="system-operations-heading"
-      >
-        <div class="settings-description">
-          <h2 id="system-operations-heading">
-            {{ t("settings.systemOperations") }}
-          </h2>
-          <p>{{ t("settings.systemOperationsDescription") }}</p>
-        </div>
-        <AppStack
-          gap="3"
-          align="start"
-        >
-          <NoticeBanner
-            v-if="systemCapabilities && !systemCapabilities.reboot_allowed"
-            tone="warning"
-          >
-            {{ t("settings.rebootDisabled") }}
-          </NoticeBanner>
-          <template v-else>
-            <InfoNote>{{ t("settings.rebootHelp") }}</InfoNote>
-            <AppButton
-              variant="primary"
-              danger
-              :disabled="!systemCapabilities?.reboot_allowed"
-              @click="openRebootDialog"
-            >
-              {{ t("settings.reboot") }}
-            </AppButton>
-          </template>
-        </AppStack>
-      </section>
-    </div>
-
-    <PasswordConfirmDialog
-      :open="rebootDialogOpen"
-      :title="t('settings.reboot')"
-      :description="t('settings.confirmReboot')"
-      :confirm-label="t('settings.reboot')"
-      :pending-label="t('settings.rebooting')"
-      :submitting="rebooting"
-      :error-message="rebootError"
-      @confirm="rebootSystem"
-      @close="closeRebootDialog"
-    />
-
-    <PasswordConfirmDialog
-      :open="updateDialogOpen"
-      :title="t('settings.updateNow')"
-      :description="t('settings.confirmUpdate')"
-      :confirm-label="t('settings.updateNow')"
-      :pending-label="t('settings.updating')"
-      :submitting="updating"
-      :error-message="updateDialogError"
-      @confirm="triggerUpdate"
-      @close="closeUpdateDialog"
-    />
   </section>
 </template>

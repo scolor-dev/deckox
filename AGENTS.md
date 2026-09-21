@@ -21,9 +21,16 @@ The Vue design system lives in `apps/web/src/design-system/`. Read `README.md` t
 - Keyboard and focus behavior (focus trap in dialogs, arrow keys in tabs and menus) is part of the contract; changing it needs a matching test in `keyboard.test.ts`.
 - Preview components with `npm run dev` at `/design-system.html`. `npm run build:catalog` writes the single-file catalog to `apps/web/dist-catalog/` for publishing as an Artifact.
 
-## Web modules
+## Web modules and widgets
 
-Web pages are declared in `apps/web/src/modules/registry.ts` (`WEB_MODULES`), which drives the router, the sidebar and the page cache. Use the same `id` as the Agent/Server module a page shows, list backend modules it needs in `requires`, and load data with `useStaleRefresh` so pages held by `<KeepAlive>` refetch only when stale. Pages that hold secrets set `staleMs: null`. A panel, tab or section that needs other backend modules than its page is declared under `parts` and gated with `partEnabled(moduleId, part)`, so it neither renders nor calls a switched-off endpoint.
+The Web is pages of widgets. Core draws the 12-column grid, the widget frame and the layout editor; features are modules that supply widgets. A module is a folder `apps/web/src/modules/<id>/` with an `index.ts` (found automatically) and its components under `widgets/`. Use the same `id` as the Agent/Server module it shows.
+
+- Declare each widget in the module's `index.ts`: `id` (`<module>.<name>`), `requires` (backend module ids that must be on), sizes, `config`, `chrome` (`frame` or `bare`) and the component. Put its texts under the module's `messages` in both `ja` and `en`; `modules/registry.test.ts` checks that every widget has them and that `requires` names real backend modules.
+- Name widget files `XxxWidget.vue` (multi-word), take `config` and `size` props only if used, and set `defineOptions({ inheritAttrs: false })` otherwise.
+- Read shared data through `data/sources.ts` (`source.use()`), not with per-widget fetches, so several widgets share one request. Read live metrics through `useMetrics()` in `data/metrics.ts`. Use `useStaleRefresh` only for data a single widget owns.
+- A widget whose module is off is not rendered and never calls its endpoints; do not check module state inside a widget for that.
+- The layout is stored on the Server (`/api/v1/layout`) and in the browser, and the browser copy wins. Change the shape only together with `normalizeLayout` and a version bump. The recommended layout is `layout/defaults.ts`.
+- Keep widgets to design-system components and tokens; `literals.test.ts` also scans `modules/` and `widgets/`.
 
 ## Version bump
 

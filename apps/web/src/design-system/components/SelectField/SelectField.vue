@@ -8,11 +8,13 @@ withDefaults(
     help?: string | null;
     disabled?: boolean;
     labelHidden?: boolean;
+    compact?: boolean;
   }>(),
   {
     help: null,
     disabled: false,
     labelHidden: false,
+    compact: false,
   },
 );
 
@@ -22,7 +24,7 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="ds-field">
+  <div :class="['ds-field', { 'ds-field--compact': compact }]">
     <label
       :for="id"
       :class="{ 'ds-field-label--hidden': labelHidden }"
@@ -58,6 +60,8 @@ defineEmits<{
   background: var(--surface-elevated);
   font: inherit;
 }
+.ds-field--compact { display: inline-grid; }
+.ds-field--compact select { width: auto; padding: var(--space-0-5) var(--space-2); font-size: var(--font-sm); }
 .ds-field select:focus { border-color: var(--brand-focus); box-shadow: var(--shadow-focus); }
 .ds-field select:disabled { color: var(--text-faint); background: var(--surface-muted); cursor: not-allowed; }
 .ds-field small { color: var(--text-muted); font-size: var(--font-xs); }

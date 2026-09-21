@@ -96,7 +96,7 @@ sh install.sh --version</code></pre>
           <dt>2. CPU判定</dt><dd><code>uname -m</code>からx86-64またはARM64を選択</dd>
           <dt>3. 検証</dt><dd>アーカイブとSHA-256を照合し、配布物内の<code>VERSION</code>と指定バージョンを比較。不完全な既存導入や未確認ユニットは変更前に拒否</dd>
           <dt>4. ユーザー</dt><dd><code>deckox</code>グループとシステムユーザーを未作成の場合のみ作成</dd>
-          <dt>5. 初期設定</dt><dd>初回導入時だけ、対話端末が使える場合に「待受アドレス(ローカルのみ/LAN内のこのホストのアドレス)」「ホスト再起動をUIから許可するか」「更新の適用をUIから許可するか」を尋ねる。既存導入(更新実行)では一切尋ねず既存の選択を維持。<code>DECKOX_LISTEN_ADDR</code>・<code>DECKOX_ALLOW_REBOOT</code>・<code>DECKOX_ALLOW_UPDATE</code>環境変数で無人インストール時にも指定可能</dd>
+          <dt>5. 初期設定</dt><dd>初回導入時だけ、対話端末が使える場合に「プロファイル(lite/normal/all)」「待受アドレス(ローカルのみ/LAN内のこのホストのアドレス)」「ホスト再起動をUIから許可するか」「更新の適用をUIから許可するか」を尋ねる。既存導入(更新実行)では一切尋ねず既存の選択を維持。<code>DECKOX_PROFILE</code>・<code>DECKOX_LISTEN_ADDR</code>・<code>DECKOX_ALLOW_REBOOT</code>・<code>DECKOX_ALLOW_UPDATE</code>環境変数で無人インストール時にも指定可能</dd>
           <dt>6. 配置</dt><dd>更新前の管理対象ファイルを<code>/var/lib/deckox/backups</code>へ保存し、2バイナリ、Vue成果物、版情報、systemdユニットを配置。既存設定は維持</dd>
           <dt>7. 認証</dt><dd>初回だけ管理者パスワードを生成し、Argon2idハッシュを<code>/var/lib/deckox</code>へ配置。旧配置からの更新時は既存値を移行して維持</dd>
           <dt>8. 起動</dt><dd><code>deckox-agent</code>と<code>deckox-server</code>をenableして起動確認。失敗時は管理対象ファイルを更新前へ戻して旧サービスを再起動</dd>
@@ -205,6 +205,17 @@ confirm = ["software_action", "system_reboot", "system_update"]</code></pre>
 
       <section class="section" aria-labelledby="modules-title">
         <h2 id="modules-title">使わない機能を止める(モジュール)</h2>
+        <h3>最初のプロファイルを選ぶ</h3>
+        <p>初回インストールの最初の質問で、有効にする機能の範囲を選びます。選んだ内容は、下記のモジュール設定として書き込まれます。あとから<code>agent.toml</code>とServerのユニットを編集すれば、いつでも変えられます。更新(アップデート)では、この選択を再質問も変更もしません。</p>
+        <table class="status-table">
+          <thead><tr><th>プロファイル</th><th>有効にする機能</th><th>止めるモジュール</th></tr></thead>
+          <tbody>
+            <tr><td><code>lite</code></td><td>システム情報、ストレージ、診断、サービス、監査ログ、リアルタイム表示</td><td>Agent: <code>power</code>・<code>update</code>・<code>backups</code>・<code>schedules</code>・<code>software</code>、Server: <code>notifications</code>・<code>update-check</code></td></tr>
+            <tr><td><code>normal</code>(既定)</td><td>lite に加えて、バックアップ一覧、ホスト再起動、管理画面からの更新、Webhook通知、更新確認</td><td>Agent: <code>schedules</code>・<code>software</code></td></tr>
+            <tr><td><code>all</code></td><td>すべて</td><td>なし</td></tr>
+          </tbody>
+        </table>
+        <p>ホスト再起動と更新の許可(<code>allow_reboot</code>・<code>allow_update</code>)は、プロファイルとは別に、初期値の無効のまま質問します。<code>power</code>または<code>update</code>を止めるプロファイルでは、その質問を省略します。無人インストールでは<code>DECKOX_PROFILE=lite</code>のように指定し、未指定なら<code>normal</code>です。</p>
         <p>Agentの機能は、モジュール単位で無効にできます。初期状態では、すべて有効です。<code>/etc/deckox/agent.toml</code>の<code>[modules]</code>に、止めたいモジュールを書いて、Agentを再起動します。</p>
         <pre><code>[modules]
 disabled = ["software", "power"]</code></pre>

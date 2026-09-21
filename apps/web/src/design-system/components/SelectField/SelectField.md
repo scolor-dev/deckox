@@ -34,6 +34,7 @@ Labeled dropdown for choosing one option from a list.
 | `help` | `string \| null` | `null` | Small helper text under the select. |
 | `disabled` | `boolean` | `false` | Disables the select. |
 | `labelHidden` | `boolean` | `false` | Hide the label visually but keep it for screen readers, for example on a toolbar filter. |
+| `compact` | `boolean` | `false` | A smaller select that is as wide as its content, for toolbars and dense bars. |
 
 **Events**
 
@@ -57,7 +58,7 @@ None.
 
 ## Tokens
 
-`--border-strong`, `--brand-focus`, `--font-sm`, `--font-xs`, `--radius-sm`, `--shadow-focus`, `--space-1`, `--space-2`, `--space-3`, `--surface-elevated`, `--surface-muted`, `--text-base`, `--text-faint`, `--text-muted`, `--text-strong`
+`--border-strong`, `--brand-focus`, `--font-sm`, `--font-xs`, `--radius-sm`, `--shadow-focus`, `--space-0-5`, `--space-1`, `--space-2`, `--space-3`, `--surface-elevated`, `--surface-muted`, `--text-base`, `--text-faint`, `--text-muted`, `--text-strong`
 
 ## Gotchas
 

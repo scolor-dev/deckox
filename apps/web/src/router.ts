@@ -1,24 +1,28 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
-import { WEB_MODULES } from "./modules/registry";
+import { createRouter, createWebHistory } from "vue-router";
 
-const moduleRoutes: RouteRecordRaw[] = WEB_MODULES.map((module) => ({
-  path: module.path,
-  name: module.id,
-  component: module.load,
-  meta: { titleKey: module.titleKey, moduleId: module.id },
-}));
-
-export const routes: RouteRecordRaw[] = [
-  ...moduleRoutes,
-  {
-    path: "/restarting",
-    name: "restarting",
-    component: () => import("./views/RestartingView.vue"),
-    meta: { titleKey: "restart.title" },
-  },
-];
-
+/**
+ * Screens are pages of widgets (`/:pageId`), laid out by the user; only
+ * settings and the restart wait are routes of their own.
+ */
 export const router = createRouter({
   history: createWebHistory(),
-  routes,
+  routes: [
+    {
+      path: "/settings",
+      name: "settings",
+      component: () => import("./views/SettingsView.vue"),
+      meta: { titleKey: "nav.settings" },
+    },
+    {
+      path: "/restarting",
+      name: "restarting",
+      component: () => import("./views/RestartingView.vue"),
+      meta: { titleKey: "restart.title" },
+    },
+    {
+      path: "/:pageId?",
+      name: "page",
+      component: () => import("./views/PageView.vue"),
+    },
+  ],
 });

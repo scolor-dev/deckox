@@ -343,6 +343,11 @@
   --space-12: 48px;
   --space-16: 64px;
 
+  /* widget grid: one row of the page grid, close to the width of one of its 12 columns */
+  --widget-row: 72px;
+  --widget-gap: var(--space-3);
+  --screen-chrome: 128px;
+
   --font-2xs: 10px;
   --font-xs: 11px;
   --font-sm: 12px;

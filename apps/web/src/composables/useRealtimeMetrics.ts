@@ -1,4 +1,4 @@
-import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch, type Ref } from "vue";
+import { ref, watch, type Ref } from "vue";
 import { api, ApiError, type SystemMetrics } from "../api/client";
 
 export type StreamStatus = "paused" | "connecting" | "connected" | "reconnecting";
@@ -33,7 +33,12 @@ export function parseMetricsEvent(data: string): RealtimeMetricsEvent | null {
   }
 }
 
-export function useRealtimeMetrics(
+/**
+ * The metrics event stream. It has no component lifecycle of its own: whoever
+ * shows metrics calls `start()` and `stop()`, so several widgets can share one
+ * connection (see `data/metrics.ts`).
+ */
+export function createMetricsStream(
   intervalSeconds: Readonly<Ref<number>>,
   enabled: Readonly<Ref<boolean>>,
 ) {
@@ -44,7 +49,7 @@ export function useRealtimeMetrics(
   let reconnectTimer: number | null = null;
   let reconnectAttempt = 0;
   let authCheckPending = false;
-  let mounted = false;
+  let active = false;
 
   function clearReconnectTimer() {
     if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
@@ -59,7 +64,7 @@ export function useRealtimeMetrics(
   }
 
   function shouldConnect() {
-    return mounted && enabled.value && document.visibilityState === "visible";
+    return active && enabled.value && document.visibilityState === "visible";
   }
 
   function scheduleReconnect() {
@@ -128,24 +133,17 @@ export function useRealtimeMetrics(
   });
 
   function start() {
-    if (mounted) return;
-    mounted = true;
+    if (active) return;
+    active = true;
     document.addEventListener("visibilitychange", handleVisibilityChange);
     connect();
   }
 
   function stop() {
-    mounted = false;
+    active = false;
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     disconnect();
   }
 
-  // A page held by <KeepAlive> is never unmounted, so the stream also has to
-  // follow the page being shown and hidden or it would keep running unseen.
-  onMounted(start);
-  onActivated(start);
-  onDeactivated(stop);
-  onBeforeUnmount(stop);
-
-  return { status, latest, lastReceivedAt, reconnect: connect };
+  return { status, latest, lastReceivedAt, start, stop, reconnect: connect };
 }

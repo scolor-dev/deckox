@@ -1,44 +1,48 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useStaleRefresh } from "../composables/useStaleRefresh";
-import { staleMsOf } from "../modules/registry";
-import { api, type InstalledSoftware, type SoftwarePackage } from "../api/client";
-import { apiErrorKey } from "../api/errors";
-import PasswordConfirmDialog from "../components/PasswordConfirmDialog.vue";
+import { api, type SoftwarePackage } from "../../../api/client";
+import { softwarePackages } from "../../../data/sources";
+import WidgetHeader from "../../../widgets/WidgetHeader.vue";
+import { apiErrorKey } from "../../../api/errors";
+import PasswordConfirmDialog from "../../../components/PasswordConfirmDialog.vue";
 import {
   AppButton,
-  AppCard,
   AppIcon,
   AppIconButton,
   AppStack,
   InfoNote,
   NoticeBanner,
-  PageHeader,
   StateBadge,
   TableToolbar,
   TablePanel,
   TagBadge,
   TagToggle,
   TagToggleGroup,
-  TextField,
-} from "../design-system/components";
-import { notify } from "../notifications";
-import { preferences, type SoftwareTagFilterKey } from "../preferences";
-import { buildSoftwareRows } from "../softwareGroups";
+} from "../../../design-system/components";
+import { notify } from "../../../notifications";
+import { preferences, type SoftwareTagFilterKey } from "../../../preferences";
+import { buildSoftwareRows } from "../../../softwareGroups";
+
+defineOptions({ inheritAttrs: false });
 
 const { t } = useI18n();
 
+const source = softwarePackages.use();
+const packages = computed(() => source.data.value ?? []);
+const loading = source.loading;
+const error = ref<string | null>(null);
+watch(source.error, (cause) => {
+  error.value = cause ? t(apiErrorKey(cause, "errors.software")) : null;
+});
+
+function refresh() {
+  return source.refresh();
+}
+
 const TAG_FILTER_KEYS: SoftwareTagFilterKey[] = ["installed", "not_installed"];
 
-const packages = ref<SoftwarePackage[]>([]);
-const loading = ref(true);
-const error = ref<string | null>(null);
 const pending = ref<string | null>(null);
-
-const newPackageName = ref("");
-const adding = ref(false);
-const addError = ref<string | null>(null);
 
 type ManageAction = "install" | "remove" | "upgrade";
 
@@ -90,80 +94,6 @@ const rows = computed(() =>
 );
 const topLevelCount = computed(() => rows.value.filter((row) => row.depth === 0).length);
 
-async function refresh() {
-  loading.value = true;
-  error.value = null;
-  try {
-    packages.value = await api.software();
-    const managedNames = new Set(packages.value.map((pkg) => pkg.name));
-    for (const pkg of installedPackages.value) pkg.managed = managedNames.has(pkg.name);
-  } catch (cause) {
-    error.value = t(apiErrorKey(cause, "errors.software"));
-  } finally {
-    loading.value = false;
-  }
-}
-
-const INSTALLED_LIMIT = 100;
-const installedLoading = ref(false);
-const installedError = ref<string | null>(null);
-const installedPackages = ref<InstalledSoftware[]>([]);
-const installedQuery = ref("");
-const managing = ref<string | null>(null);
-
-const installedMatches = computed(() => {
-  const query = installedQuery.value.trim().toLowerCase();
-  return query === ""
-    ? installedPackages.value
-    : installedPackages.value.filter((pkg) => pkg.name.toLowerCase().includes(query));
-});
-const installedShown = computed(() => installedMatches.value.slice(0, INSTALLED_LIMIT));
-
-async function loadInstalled() {
-  installedLoading.value = true;
-  installedError.value = null;
-  try {
-    installedPackages.value = await api.installedSoftware();
-  } catch (cause) {
-    installedError.value = t(apiErrorKey(cause, "errors.software"));
-  } finally {
-    installedLoading.value = false;
-  }
-}
-
-async function manageInstalled(pkg: InstalledSoftware) {
-  managing.value = pkg.name;
-  installedError.value = null;
-  try {
-    await api.softwareAllowlist(pkg.name, "allow");
-    pkg.managed = true;
-    notify("success", t("software.completed", { name: pkg.name }));
-    await refresh();
-  } catch (cause) {
-    installedError.value = t(apiErrorKey(cause, "errors.softwareAction"));
-  } finally {
-    managing.value = null;
-  }
-}
-
-async function addPackage() {
-  const name = newPackageName.value.trim();
-  if (!name) return;
-
-  adding.value = true;
-  addError.value = null;
-  try {
-    await api.softwareAllowlist(name, "allow");
-    newPackageName.value = "";
-    notify("success", t("software.completed", { name }));
-    await refresh();
-  } catch (cause) {
-    addError.value = t(apiErrorKey(cause, "errors.softwareAction"));
-  } finally {
-    adding.value = false;
-  }
-}
-
 async function disallow(pkg: SoftwarePackage) {
   if (!window.confirm(t("software.confirmDisallow", { name: pkg.name }))) return;
 
@@ -211,27 +141,19 @@ async function confirmAction(password: string) {
   }
 }
 
-const reloadAll = useStaleRefresh(
-  () => Promise.all([refresh(), loadInstalled()]),
-  staleMsOf("software"),
-);
 </script>
 
 <template>
-  <div class="view">
-    <PageHeader
-      :title="t('software.title')"
-      :subtitle="t('software.subtitle')"
-    >
-      <template #actions>
-        <AppButton
-          :disabled="loading"
-          @click="reloadAll"
-        >
-          {{ loading ? t("common.loading") : t("common.refresh") }}
-        </AppButton>
-      </template>
-    </PageHeader>
+  <AppStack gap="4">
+    <WidgetHeader :title="t('software.title')">
+      <small>{{ t("software.subtitle") }}</small>
+      <AppButton
+        :disabled="loading"
+        @click="refresh"
+      >
+        {{ loading ? t("common.loading") : t("common.refresh") }}
+      </AppButton>
+    </WidgetHeader>
 
     <NoticeBanner
       v-if="error"
@@ -366,117 +288,6 @@ const reloadAll = useStaleRefresh(
       </table>
     </TablePanel>
 
-    <AppCard>
-      <AppStack gap="3">
-        <h2>
-          {{ t("software.addTitle") }}
-        </h2>
-        <NoticeBanner
-          v-if="addError"
-          tone="error"
-        >
-          {{ addError }}
-        </NoticeBanner>
-        <AppStack
-          as="form"
-          direction="row"
-          gap="2"
-          align="end"
-          wrap
-          @submit.prevent="addPackage"
-        >
-          <TextField
-            id="software-package-name"
-            v-model="newPackageName"
-            :label="t('software.addLabel')"
-            :placeholder="t('software.addPlaceholder')"
-            required
-          />
-          <AppButton
-            type="submit"
-            :disabled="adding"
-          >
-            {{ adding ? t("software.adding") : t("software.add") }}
-          </AppButton>
-        </AppStack>
-        <InfoNote>{{ t("software.addHelp") }}</InfoNote>
-      </AppStack>
-    </AppCard>
-
-    <AppStack gap="3">
-      <h2>{{ t("software.installedTitle") }}</h2>
-      <InfoNote>{{ t("software.installedHelp") }}</InfoNote>
-      <NoticeBanner
-        v-if="installedError"
-        tone="error"
-      >
-        {{ installedError }}
-      </NoticeBanner>
-      <TablePanel
-        :loading="installedLoading"
-        :empty="installedShown.length === 0"
-        :empty-message="t('software.installedEmpty')"
-      >
-        <template #toolbar>
-          <TableToolbar :count="t('software.installedCount', { shown: installedShown.length, total: installedMatches.length })">
-            <template #search>
-              <TextField
-                id="software-installed-search"
-                v-model="installedQuery"
-                :label="t('software.installedSearch')"
-                type="search"
-                :placeholder="t('software.installedSearchPlaceholder')"
-                label-hidden
-              />
-            </template>
-          </TableToolbar>
-        </template>
-        <template #loading>
-          {{ t("software.installedLoading") }}
-        </template>
-        <table>
-          <thead>
-            <tr>
-              <th>{{ t("software.name") }}</th>
-              <th>{{ t("software.installedVersion") }}</th>
-              <th>{{ t("software.actions") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="pkg in installedShown"
-              :key="pkg.name"
-            >
-              <td><strong class="service-name">{{ pkg.name }}</strong></td>
-              <td>{{ pkg.version }}</td>
-              <td>
-                <StateBadge
-                  v-if="pkg.managed"
-                  state="active"
-                >
-                  {{ t("software.managed") }}
-                </StateBadge>
-                <AppButton
-                  v-else
-                  variant="action"
-                  :disabled="managing !== null"
-                  @click="manageInstalled(pkg)"
-                >
-                  {{ t("software.manage") }}
-                </AppButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <template
-          v-if="installedMatches.length > INSTALLED_LIMIT"
-          #footer
-        >
-          <InfoNote>{{ t("software.installedLimited", { limit: INSTALLED_LIMIT }) }}</InfoNote>
-        </template>
-      </TablePanel>
-    </AppStack>
-
     <InfoNote>{{ t("software.platformNote") }}</InfoNote>
 
     <PasswordConfirmDialog
@@ -490,5 +301,5 @@ const reloadAll = useStaleRefresh(
       @confirm="confirmAction"
       @close="closeAction"
     />
-  </div>
+  </AppStack>
 </template>

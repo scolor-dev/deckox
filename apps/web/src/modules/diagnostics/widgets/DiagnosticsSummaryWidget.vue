@@ -1,19 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { partEnabled } from "../modules/store";
-import { useStaleRefresh } from "../composables/useStaleRefresh";
-import { staleMsOf } from "../modules/registry";
+import { useStaleRefresh } from "../../../composables/useStaleRefresh";
 import {
   api,
   DIAGNOSTICS_REPORT_FILENAME,
-  formatBytes,
   formatUptime,
-  type BackupSummary,
   type DeckoxServiceDiagnostic,
   type DiagnosticsResponse,
-} from "../api/client";
-import { apiErrorKey } from "../api/errors";
+} from "../../../api/client";
+import WidgetHeader from "../../../widgets/WidgetHeader.vue";
+import { apiErrorKey } from "../../../api/errors";
 import {
   AppButton,
   AppStack,
@@ -21,21 +18,19 @@ import {
   DetailRow,
   InfoNote,
   NoticeBanner,
-  PageHeader,
   StateBadge,
   TableToolbar,
   TablePanel,
-} from "../design-system/components";
-import { notify } from "../notifications";
+} from "../../../design-system/components";
+import { notify } from "../../../notifications";
+
+defineOptions({ inheritAttrs: false });
 
 const { t, locale } = useI18n();
 const diagnostics = ref<DiagnosticsResponse | null>(null);
 const loading = ref(true);
 const downloading = ref(false);
 const error = ref<string | null>(null);
-const backupsOn = computed(() => partEnabled("diagnostics", "backups"));
-const backups = ref<BackupSummary[]>([]);
-const backupsError = ref<string | null>(null);
 
 const generatedAt = computed(() => {
   if (!diagnostics.value) return t("common.none");
@@ -61,13 +56,6 @@ function enabledLabel(enabled: boolean) {
   return t(enabled ? "diagnostics.enabled" : "diagnostics.disabled");
 }
 
-function formatBackupDate(createdAtMs: number) {
-  return new Intl.DateTimeFormat(locale.value, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(createdAtMs);
-}
-
 async function fetchData() {
   loading.value = true;
   error.value = null;
@@ -77,16 +65,6 @@ async function fetchData() {
     error.value = t(apiErrorKey(cause, "errors.diagnostics"));
   } finally {
     loading.value = false;
-  }
-
-  // Kept independent of the diagnostics fetch above (own try/catch) so an
-  // Agent hiccup on one doesn't blank out the other.
-  if (!backupsOn.value) return;
-  try {
-    backups.value = await api.backups();
-    backupsError.value = null;
-  } catch (cause) {
-    backupsError.value = t(apiErrorKey(cause, "errors.backups"));
   }
 }
 
@@ -113,16 +91,13 @@ async function downloadReport() {
   }
 }
 
-const refresh = useStaleRefresh(fetchData, staleMsOf("diagnostics"));
+const refresh = useStaleRefresh(fetchData, 60_000);
 </script>
 
 <template>
-  <div class="view diagnostics-view">
-    <PageHeader
-      :title="t('diagnostics.title')"
-      :subtitle="t('diagnostics.subtitle')"
-    >
-      <template #actions>
+  <AppStack gap="4">
+    <WidgetHeader :title="t('diagnostics.title')">
+      <template #default>
         <AppStack
           direction="row"
           gap="2"
@@ -142,7 +117,7 @@ const refresh = useStaleRefresh(fetchData, staleMsOf("diagnostics"));
           </AppButton>
         </AppStack>
       </template>
-    </PageHeader>
+    </WidgetHeader>
 
     <NoticeBanner
       v-if="error"
@@ -282,46 +257,6 @@ const refresh = useStaleRefresh(fetchData, staleMsOf("diagnostics"));
           {{ t("diagnostics.noConfig") }}
         </InfoNote>
       </AppStack>
-
-      <template v-if="backupsOn">
-        <AppStack
-          v-if="backupsError"
-          gap="3"
-        >
-          <h2>
-            {{ t("diagnostics.backups") }}
-          </h2>
-          <InfoNote>{{ backupsError }}</InfoNote>
-        </AppStack>
-        <TablePanel
-          v-else
-          :empty="backups.length === 0"
-          :empty-message="t('diagnostics.noBackups')"
-        >
-          <template #toolbar>
-            <TableToolbar>
-              <template #filters>
-                <h2>
-                  {{ t("diagnostics.backups") }}
-                </h2>
-              </template>
-            </TableToolbar>
-          </template>
-          <table>
-            <thead><tr><th>{{ t("diagnostics.backupCreatedAt") }}</th><th>{{ t("diagnostics.backupPreviousVersion") }}</th><th>{{ t("diagnostics.backupSize") }}</th></tr></thead>
-            <tbody>
-              <tr
-                v-for="backup in backups"
-                :key="backup.name"
-              >
-                <td>{{ backup.created_at_ms === null ? t("common.none") : formatBackupDate(backup.created_at_ms) }}</td>
-                <td>{{ backup.previous_version ?? t("common.none") }}</td>
-                <td>{{ formatBytes(backup.size_bytes, locale) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </TablePanel>
-      </template>
     </AppStack>
-  </div>
+  </AppStack>
 </template>

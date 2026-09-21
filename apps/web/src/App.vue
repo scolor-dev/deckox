@@ -2,28 +2,28 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
-import { api, type ServerStatus } from "./api/client";
+import { api } from "./api/client";
 import NotificationRegion from "./components/NotificationRegion.vue";
 import { AppButton } from "./design-system/components";
 import LoginView from "./views/LoginView.vue";
-import { cachedViewNames, enabledModules, loadModules, resetModules } from "./modules/store";
+import { resetMetrics } from "./data/metrics";
+import { resetSources, serverStatus } from "./data/sources";
+import { forgetLayout, layout, loadLayout } from "./layout/store";
+import { navPages, pageTitle } from "./layout/pages";
+import { loadModules, resetModules } from "./modules/store";
 
 const route = useRoute();
 const router = useRouter();
 const { t, locale } = useI18n();
-const status = ref<ServerStatus | null>(null);
+const status = serverStatus.data;
 const menuOpen = ref(false);
 const authChecking = ref(true);
 const authenticated = ref(false);
 const loginMessage = ref<string | null>(null);
 
 async function refreshStatus() {
-  try {
-    status.value = await api.serverStatus();
-  } catch {
-    status.value = null;
-  }
-  await loadModules();
+  await Promise.all([serverStatus.refresh(), loadModules()]);
+  await loadLayout();
 }
 
 async function checkAuthentication() {
@@ -49,7 +49,9 @@ async function handleAuthenticated() {
 function handleUnauthorized() {
   authenticated.value = false;
   resetModules();
-  status.value = null;
+  resetSources();
+  resetMetrics();
+  forgetLayout();
   menuOpen.value = false;
 }
 
@@ -70,10 +72,14 @@ async function logout() {
   }
 }
 
-watch([() => route.fullPath, locale], () => {
+const currentPage = computed(() =>
+  route.name === "page" ? layout.value.pages.find((page) => page.id === route.params.pageId) : undefined);
+
+watch([() => route.fullPath, locale, currentPage], () => {
   menuOpen.value = false;
-  const titleKey = typeof route.meta.titleKey === "string" ? route.meta.titleKey : "nav.overview";
-  document.title = `${t(titleKey)} · Deckox`;
+  const titleKey = typeof route.meta.titleKey === "string" ? route.meta.titleKey : null;
+  const name = currentPage.value ? pageTitle(currentPage.value, t) : t(titleKey ?? "nav.overview");
+  document.title = `${name} · Deckox`;
 }, { immediate: true });
 
 // A module switched off in agent.toml only shows once the Agent restarts, so
@@ -82,14 +88,14 @@ watch(() => status.value?.agent != null, (online) => {
   if (online) void loadModules();
 });
 
-// A page whose module is switched off is neither shown nor left mounted.
-const routeAllowed = computed(() => {
-  const id = route.meta.moduleId;
-  return typeof id !== "string" || enabledModules.value.some((module) => module.id === id);
-});
-
-watch(routeAllowed, (allowed) => {
-  if (!allowed) void router.replace("/");
+// `/` and a page that no longer exists (or has nothing to show) go to the
+// first page that has something to show.
+watch([() => route.name, () => route.params.pageId, navPages, authenticated], () => {
+  if (!authenticated.value || route.name !== "page") return;
+  const requested = route.params.pageId;
+  const first = navPages.value.at(0);
+  const shown = typeof requested === "string" && navPages.value.some((page) => page.id === requested);
+  if (!shown && first && requested !== first.id) void router.replace(`/${first.id}`);
 }, { immediate: true });
 
 onMounted(() => {
@@ -151,11 +157,14 @@ onBeforeUnmount(() => {
       </div>
       <nav :aria-label="t('app.mainNavigation')">
         <RouterLink
-          v-for="module in enabledModules"
-          :key="module.id"
-          :to="module.path"
+          v-for="page in navPages"
+          :key="page.id"
+          :to="`/${page.id}`"
         >
-          {{ t(module.titleKey) }}
+          {{ pageTitle(page, t) }}
+        </RouterLink>
+        <RouterLink to="/settings">
+          {{ t("nav.settings") }}
         </RouterLink>
       </nav>
       <div class="agent-state">
@@ -178,14 +187,14 @@ onBeforeUnmount(() => {
 
     <main class="main-content">
       <NotificationRegion />
-      <RouterView
-        v-if="routeAllowed"
-        v-slot="{ Component }"
-      >
-        <KeepAlive :include="cachedViewNames">
+      <RouterView v-slot="{ Component }">
+        <KeepAlive
+          :max="10"
+          :exclude="['SettingsView', 'RestartingView']"
+        >
           <component
             :is="Component"
-            @status="status = $event"
+            :key="String(route.name === 'page' ? route.params.pageId : route.name)"
             @password-changed="handlePasswordChanged"
           />
         </KeepAlive>
