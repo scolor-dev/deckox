@@ -108,8 +108,8 @@ export const WEB_MODULES: readonly WebModule[] = [
     parts: {
       webhook: ["notifications"],
       "update-check": ["update-check"],
-      "update-now": ["update", "system"],
-      reboot: ["power", "system"],
+      "update-now": ["update"],
+      reboot: ["power"],
       live: ["realtime", "system"],
     },
     staleMs: null,

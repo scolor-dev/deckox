@@ -92,9 +92,13 @@ describe("web modules", () => {
   it("needs every module a part lists, and keeps parts nobody declared", () => {
     const settings = WEB_MODULES.find((module) => module.id === "settings");
     if (!settings) throw new Error("settings is not registered");
-    const off = availabilityOf(manifest([info("power", true), info("system", false)]));
-    expect(isPartAvailable(settings, "reboot", off.enabled, off.known)).toBe(false);
-    expect(isPartAvailable(settings, "undeclared", off.enabled, off.known)).toBe(true);
+    const noPower = availabilityOf(manifest([info("power", false), info("system", true)]));
+    expect(isPartAvailable(settings, "reboot", noPower.enabled, noPower.known)).toBe(false);
+    const noSystem = availabilityOf(manifest([info("power", true), info("system", false)]));
+    expect(isPartAvailable(settings, "reboot", noSystem.enabled, noSystem.known)).toBe(true);
+    expect(isPartAvailable(settings, "undeclared", noPower.enabled, noPower.known)).toBe(true);
+    const halfLive = availabilityOf(manifest([info("system", false)], [info("realtime", true)]));
+    expect(isPartAvailable(settings, "live", halfLive.enabled, halfLive.known)).toBe(false);
     const unreachable = availabilityOf(manifest([], [], false));
     expect(isPartAvailable(settings, "reboot", unreachable.enabled, unreachable.known)).toBe(true);
   });

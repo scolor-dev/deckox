@@ -3,6 +3,10 @@
 //! answers `404`, and the background work that only it needs is not started.
 //! Paths that belong to no module (health, info, events, jobs, modules) are
 //! the always-on core.
+//!
+//! `/v1/system/capabilities` is core although it sits under `/v1/system`: it
+//! only reports what the `power` and `update` modules allow, so it must keep
+//! answering when `system` is off and must not depend on that module.
 
 use std::{collections::HashSet, sync::Arc};
 
@@ -66,6 +70,9 @@ const DEFINITIONS: &[ModuleDefinition] = &[
     },
 ];
 
+/// Paths inside a module's prefix that belong to no module.
+const CORE_PATHS: &[&str] = &["/v1/system/capabilities"];
+
 #[derive(Clone)]
 pub struct ModuleRegistry {
     disabled: Arc<HashSet<String>>,
@@ -86,6 +93,9 @@ impl ModuleRegistry {
 
     /// The module that owns `path`, if any (the longest prefix match).
     pub fn owner_of(path: &str) -> Option<&'static str> {
+        if CORE_PATHS.contains(&path) {
+            return None;
+        }
         module_owner(DEFINITIONS, path)
     }
 
@@ -159,6 +169,7 @@ mod tests {
             "/v1/events",
             "/v1/jobs",
             "/v1/modules",
+            "/v1/system/capabilities",
         ] {
             assert_eq!(ModuleRegistry::owner_of(path), None, "{path}");
         }

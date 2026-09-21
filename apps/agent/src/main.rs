@@ -338,8 +338,8 @@ async fn system_info() -> Result<Json<SystemInfo>, AgentError> {
 
 async fn system_capabilities(State(state): State<AppState>) -> Json<SystemCapabilities> {
     Json(SystemCapabilities {
-        reboot_allowed: state.power.reboot_allowed(),
-        update_allowed: state.update.allowed(),
+        reboot_allowed: state.modules.is_enabled("power") && state.power.reboot_allowed(),
+        update_allowed: state.modules.is_enabled("update") && state.update.allowed(),
     })
 }
 
