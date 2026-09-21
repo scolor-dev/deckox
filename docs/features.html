@@ -70,7 +70,7 @@
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/services/{id}/logs/report</code></span></td><td><span class="status done">実装済み</span></td><td>同じ条件で取得したログを<code>deckox-service-logs-{id}.json</code>としてダウンロード</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/software</code></span></td><td><span class="status done">実装済み</span></td><td>管理対象(許可リスト+自動検出)のパッケージの状態を中継。自動検出されたものには<code>auto</code>、親にまとめられた子には<code>parent</code>を付与</td></tr>
             <tr><td><span class="endpoint"><span class="method">GET</span><code>/api/v1/software/installed</code></span></td><td><span class="status done">実装済み</span></td><td>ホストにインストール済みの全パッケージ(名前・バージョン・管理中かどうか)を読み取り専用で中継</td></tr>
-            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/install</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みパッケージをインストール</td></tr>
+            <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/install</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し(Serverに加えてAgentも検証)、許可済みパッケージをインストール</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/remove</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、許可済みパッケージを削除(purgeはしない)</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/upgrade</code></span></td><td><span class="status done">実装済み</span></td><td>管理者パスワードを再確認し、インストール済みの許可済みパッケージを最新版へ更新</td></tr>
             <tr><td><span class="endpoint"><span class="method">POST</span><code>/api/v1/software/{id}/allow</code></span></td><td><span class="status done">実装済み</span></td><td>パッケージ名を、ホストに設定済みのリポジトリまたはインストール済みパッケージの中で実在確認したうえで<code>/etc/deckox/agent.toml</code>の管理許可リストへ追加</td></tr>
@@ -207,3 +207,4 @@
   </div>
 </body>
 </html>
+\n            <tr><td><span class="endpoint"><span class="method">GET</span><code>/v1/security</code></span></td><td><span class="status done">実装済み</span></td><td>Agentが管理者パスワードを検証できるか、確認が必要な操作の一覧、確認のロック状態</td></tr>\n            <tr><td><span class="endpoint"><span class="method">POST</span><code>/v1/auth/verifier</code></span></td><td><span class="status done">実装済み</span></td><td>管理画面でのパスワード変更に合わせて、Agentの確認用ハッシュを更新。Agentが現在のパスワードを検証してから、新しいハッシュを保存する</td></tr>

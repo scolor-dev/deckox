@@ -127,10 +127,24 @@ pub enum UpdateCheckStatus {
 /// The Server (not the root-privileged Agent) is the one that talks to
 /// GitHub, so it resolves `target_version` and fetches `install_script` from
 /// the pinned release tag before handing both to the Agent for execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AgentUpdateRequest {
     pub target_version: String,
     pub install_script: String,
+    /// The admin password, which the Agent checks itself.
+    #[serde(default)]
+    pub current_password: Option<String>,
+}
+
+impl std::fmt::Debug for AgentUpdateRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AgentUpdateRequest")
+            .field("target_version", &self.target_version)
+            .field("install_script", &"…")
+            .field("current_password", &"…")
+            .finish()
+    }
 }
 
 /// `true` for well-formed `vMAJOR.MINOR.PATCH` release tags such as `v0.4.2`.
@@ -432,13 +446,43 @@ pub struct ServiceSchedule {
     pub last_result: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CreateScheduleRequest {
     pub service_id: String,
     pub action: ScheduleAction,
     pub hour: u8,
     pub minute: u8,
     pub weekdays: Vec<u8>,
+    /// The admin password, when the Agent is set to require one to change
+    /// schedules.
+    #[serde(default)]
+    pub current_password: Option<String>,
+}
+
+impl std::fmt::Debug for CreateScheduleRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CreateScheduleRequest")
+            .field("service_id", &self.service_id)
+            .field("action", &self.action)
+            .field("hour", &self.hour)
+            .field("minute", &self.minute)
+            .field("weekdays", &self.weekdays)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The admin password sent along with a request the Agent checks itself.
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct StepUp {
+    #[serde(default)]
+    pub current_password: Option<String>,
+}
+
+impl std::fmt::Debug for StepUp {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("StepUp { current_password: … }")
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -505,7 +549,7 @@ pub struct AuditPage {
 /// It changes only when a request or response shape changes incompatibly, so
 /// a Server and an Agent from different releases can tell whether they
 /// understand each other.
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// Answer to `GET /v1/info`: who the Agent is and what it speaks.
 #[derive(Debug, Clone, Serialize, Deserialize)]

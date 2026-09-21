@@ -35,6 +35,25 @@ impl AgentError {
         }
     }
 
+    /// A refusal the caller can fix by supplying (correct) credentials. `code`
+    /// tells the Server which case it is: `password_required`,
+    /// `invalid_password`.
+    pub fn unauthorized(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::UNAUTHORIZED,
+            code,
+            message: message.into(),
+        }
+    }
+
+    pub fn too_many_requests(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            code: "rate_limited",
+            message: message.into(),
+        }
+    }
+
     pub fn not_found(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::NOT_FOUND,

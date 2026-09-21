@@ -7,7 +7,7 @@ import { notify } from "../notifications";
 const { t } = useI18n();
 
 const command =
-  "printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password\nsudo systemctl restart deckox-server";
+  "printf '%s' '新しいパスワード' | sudo deckox-server reset-password\nsudo systemctl restart deckox-server";
 
 async function copyCommand() {
   if (await writeClipboardText(command)) {

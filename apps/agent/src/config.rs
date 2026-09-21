@@ -24,6 +24,8 @@ pub struct AgentConfig {
     pub services: ServicesConfig,
     #[serde(default)]
     pub modules: ModulesConfig,
+    #[serde(default)]
+    pub security: SecurityConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -58,6 +60,31 @@ impl Default for SoftwareConfig {
             allowed: Vec::new(),
             auto_adopt: true,
             dismissed: Vec::new(),
+        }
+    }
+}
+
+/// Which operations the Agent itself refuses unless the request carries the
+/// admin password. The Server checks the password too; this is the check a
+/// compromised Server cannot skip.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SecurityConfig {
+    #[serde(default = "default_confirm")]
+    pub confirm: Vec<String>,
+}
+
+/// The operations that already ask for the password in the Web UI.
+fn default_confirm() -> Vec<String> {
+    ["software_action", "system_reboot", "system_update"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self {
+            confirm: default_confirm(),
         }
     }
 }

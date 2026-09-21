@@ -393,6 +393,7 @@ mod tests {
                     hour: 3,
                     minute: 0,
                     weekdays: vec![1],
+                    current_password: None,
                 },
                 &services,
             )
@@ -423,6 +424,7 @@ mod tests {
                     hour: 3,
                     minute: 30,
                     weekdays: vec![1, 3, 5],
+                    current_password: None,
                 },
                 &services,
             )

@@ -19,6 +19,17 @@ pub async fn atomic_write_secure(path: &Path, contents: &[u8]) -> Result<(), Str
         hex::encode(rand::random::<[u8; 8]>())
     ));
 
+    // Whoever owns the file now keeps owning it: a `reset-password` run as
+    // root must not leave the Server (a different user) unable to read it.
+    #[cfg(unix)]
+    let owner = {
+        use std::os::unix::fs::MetadataExt;
+        tokio::fs::metadata(path)
+            .await
+            .ok()
+            .map(|metadata| (metadata.uid(), metadata.gid()))
+    };
+
     let mut options = tokio::fs::OpenOptions::new();
     options.create_new(true).write(true);
     #[cfg(unix)]
@@ -36,6 +47,10 @@ pub async fn atomic_write_secure(path: &Path, contents: &[u8]) -> Result<(), Str
             .await
             .map_err(|error| format!("failed to sync {}: {error}", temporary_path.display()))?;
         drop(file);
+        #[cfg(unix)]
+        if let Some((uid, gid)) = owner {
+            let _ = std::os::unix::fs::chown(&temporary_path, Some(uid), Some(gid));
+        }
         tokio::fs::rename(&temporary_path, path)
             .await
             .map_err(|error| format!("failed to replace {}: {error}", path.display()))

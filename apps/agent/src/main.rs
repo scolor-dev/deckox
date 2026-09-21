@@ -15,8 +15,8 @@ use deckox_protocol::{
     AgentDiagnostics, AgentInfo, AgentStatus, AgentUpdateRequest, BackupSummary, CommandResult,
     CreateScheduleRequest, EventBatch, EventResult, HealthResponse, PROTOCOL_VERSION,
     RuntimeConfigSummary, ServiceAction, ServiceDetails, ServiceLogPriority, ServiceLogs,
-    ServiceSchedule, ServiceSummary, SoftwarePackage, StorageMount, SystemCapabilities, SystemInfo,
-    SystemMetrics,
+    ServiceSchedule, ServiceSummary, SoftwarePackage, StepUp, StorageMount, SystemCapabilities,
+    SystemInfo, SystemMetrics,
 };
 use serde::Deserialize;
 use tokio::net::UnixListener;
@@ -50,6 +50,7 @@ mod software;
 mod storage;
 mod system;
 mod update;
+mod verifier;
 
 #[derive(Clone)]
 struct AppState {
@@ -62,6 +63,8 @@ struct AppState {
     events: events::EventBus,
     operations: operations::Operations,
     modules: modules::ModuleRegistry,
+    verifier: verifier::Verifier,
+    confirm: std::sync::Arc<std::collections::HashSet<String>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -139,6 +142,10 @@ async fn build_state() -> (AppState, PathBuf) {
             eprintln!("invalid [modules] configuration: {error}");
             std::process::exit(2);
         });
+    let confirm = validated_confirm(&config.security.confirm).unwrap_or_else(|error| {
+        eprintln!("invalid [security] configuration: {error}");
+        std::process::exit(2);
+    });
     let events = events::EventBus::new();
     let operations = operations::Operations::new(events.clone());
     if module_registry.is_enabled("schedules") {
@@ -161,6 +168,8 @@ async fn build_state() -> (AppState, PathBuf) {
             events,
             operations,
             modules: module_registry,
+            verifier: verifier::Verifier::from_environment(),
+            confirm: std::sync::Arc::new(confirm),
         },
         socket_path,
     )
@@ -194,6 +203,8 @@ async fn main() {
         .route("/v1/health", get(health))
         .route("/v1/info", get(agent_info))
         .route("/v1/events", get(agent_events))
+        .route("/v1/security", get(security_status))
+        .route("/v1/auth/verifier", post(replace_verifier))
         .route("/v1/modules", get(list_modules))
         .route("/v1/jobs", get(list_jobs))
         .route("/v1/jobs/{job_id}", get(get_job))
@@ -330,6 +341,104 @@ async fn system_capabilities(State(state): State<AppState>) -> Json<SystemCapabi
     })
 }
 
+/// The operations whose requests can be required to carry the admin password.
+const CONFIRMABLE: &[&str] = &[
+    "software_action",
+    "system_reboot",
+    "system_update",
+    "service_allowlist",
+    "software_allowlist",
+    "service_stop",
+    "schedule_change",
+];
+
+fn validated_confirm(names: &[String]) -> Result<std::collections::HashSet<String>, String> {
+    for name in names {
+        if !CONFIRMABLE.contains(&name.as_str()) {
+            return Err(format!(
+                "unknown operation \"{name}\" in [security] confirm (known: {})",
+                CONFIRMABLE.join(", ")
+            ));
+        }
+    }
+    Ok(names.iter().cloned().collect())
+}
+
+/// Refuses `operation` unless it carries the admin password, when the Agent is
+/// set to require one for it. Refusals are recorded as events.
+async fn authorize(
+    state: &AppState,
+    operation: &'static str,
+    password: Option<&str>,
+) -> Result<(), AgentError> {
+    if !state.confirm.contains(operation) {
+        return Ok(());
+    }
+    let outcome = match password {
+        Some(password) => state.verifier.verify(password).await,
+        None => Err(AgentError::unauthorized(
+            "password_required",
+            "this operation needs the admin password",
+        )),
+    };
+    if let Err(error) = &outcome {
+        state.events.publish(events::EventDraft {
+            kind: "password_check",
+            result: EventResult::Rejected,
+            subject: format!("operation={operation}"),
+            request_id: None,
+            command_id: None,
+            message: Some(error.message().to_owned()),
+        });
+    }
+    outcome
+}
+
+fn password_of(body: Option<&Json<StepUp>>) -> Option<&str> {
+    body.and_then(|Json(step_up)| step_up.current_password.as_deref())
+}
+
+async fn security_status(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let mut confirm: Vec<&String> = state.confirm.iter().collect();
+    confirm.sort();
+    Json(serde_json::json!({
+        "verifier_provisioned": state.verifier.is_provisioned(),
+        "locked_for_seconds": state.verifier.locked_for(),
+        "confirm": confirm,
+    }))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ReplaceVerifierRequest {
+    current_password: String,
+    new_password: String,
+}
+
+/// Called by the Server when the admin changes the password in the Web UI,
+/// so the Agent's copy follows. The old password must check out first.
+async fn replace_verifier(
+    State(state): State<AppState>,
+    Json(request): Json<ReplaceVerifierRequest>,
+) -> Result<Json<CommandResult>, AgentError> {
+    state
+        .verifier
+        .replace(&request.current_password, &request.new_password)
+        .await?;
+    state.events.publish(events::EventDraft {
+        kind: "password_change",
+        result: EventResult::Completed,
+        subject: "admin password".to_owned(),
+        request_id: None,
+        command_id: None,
+        message: None,
+    });
+    Ok(Json(CommandResult {
+        command_id: "verifier".to_owned(),
+        status: deckox_protocol::CommandStatus::Completed,
+        message: None,
+    }))
+}
+
 /// Runs a mutating operation under its resource lock. With `?async=true` it
 /// starts a background job and answers `202` with the [`Job`](deckox_protocol::Job);
 /// otherwise it waits and answers with the command result as before.
@@ -423,7 +532,9 @@ fn log_command_result(
 async fn reboot_system(
     State(state): State<AppState>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<Json<CommandResult>, AgentError> {
+    authorize(&state, "system_reboot", password_of(body.as_ref())).await?;
     let result = state
         .operations
         .exclusive("host", state.power.reboot())
@@ -436,6 +547,7 @@ async fn update_system(
     Extension(request_id): Extension<request_context::RequestId>,
     Json(payload): Json<AgentUpdateRequest>,
 ) -> Result<Json<CommandResult>, AgentError> {
+    authorize(&state, "system_update", payload.current_password.as_deref()).await?;
     let result = state
         .operations
         .exclusive(
@@ -488,6 +600,7 @@ async fn start_service(
     AxumPath(service_id): AxumPath<String>,
     Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<axum::response::Response, AgentError> {
     control_service(
         state,
@@ -495,6 +608,7 @@ async fn start_service(
         ServiceAction::Start,
         operation.run_async,
         request_id,
+        password_of(body.as_ref()),
     )
     .await
 }
@@ -504,6 +618,7 @@ async fn stop_service(
     AxumPath(service_id): AxumPath<String>,
     Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<axum::response::Response, AgentError> {
     control_service(
         state,
@@ -511,6 +626,7 @@ async fn stop_service(
         ServiceAction::Stop,
         operation.run_async,
         request_id,
+        password_of(body.as_ref()),
     )
     .await
 }
@@ -520,6 +636,7 @@ async fn restart_service(
     AxumPath(service_id): AxumPath<String>,
     Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<axum::response::Response, AgentError> {
     control_service(
         state,
@@ -527,6 +644,7 @@ async fn restart_service(
         ServiceAction::Restart,
         operation.run_async,
         request_id,
+        password_of(body.as_ref()),
     )
     .await
 }
@@ -536,6 +654,7 @@ async fn enable_service(
     AxumPath(service_id): AxumPath<String>,
     Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<axum::response::Response, AgentError> {
     control_service(
         state,
@@ -543,6 +662,7 @@ async fn enable_service(
         ServiceAction::Enable,
         operation.run_async,
         request_id,
+        password_of(body.as_ref()),
     )
     .await
 }
@@ -552,6 +672,7 @@ async fn disable_service(
     AxumPath(service_id): AxumPath<String>,
     Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<axum::response::Response, AgentError> {
     control_service(
         state,
@@ -559,6 +680,7 @@ async fn disable_service(
         ServiceAction::Disable,
         operation.run_async,
         request_id,
+        password_of(body.as_ref()),
     )
     .await
 }
@@ -567,7 +689,9 @@ async fn allow_service(
     State(state): State<AppState>,
     AxumPath(service_id): AxumPath<String>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<Json<CommandResult>, AgentError> {
+    authorize(&state, "service_allowlist", password_of(body.as_ref())).await?;
     let result = state.services.allow(&service_id).await;
     log_command_result(
         &state.events,
@@ -582,7 +706,9 @@ async fn disallow_service(
     State(state): State<AppState>,
     AxumPath(service_id): AxumPath<String>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<Json<CommandResult>, AgentError> {
+    authorize(&state, "service_allowlist", password_of(body.as_ref())).await?;
     let result = state.services.disallow(&service_id).await;
     log_command_result(
         &state.events,
@@ -625,7 +751,9 @@ async fn install_software(
     AxumPath(software_id): AxumPath<String>,
     Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<axum::response::Response, AgentError> {
+    authorize(&state, "software_action", password_of(body.as_ref())).await?;
     let software = state.software.clone();
     let name = software_id.clone();
     run_operation(
@@ -647,7 +775,9 @@ async fn remove_software(
     AxumPath(software_id): AxumPath<String>,
     Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<axum::response::Response, AgentError> {
+    authorize(&state, "software_action", password_of(body.as_ref())).await?;
     let software = state.software.clone();
     let name = software_id.clone();
     run_operation(
@@ -669,7 +799,9 @@ async fn upgrade_software(
     AxumPath(software_id): AxumPath<String>,
     Query(operation): Query<OperationQuery>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<axum::response::Response, AgentError> {
+    authorize(&state, "software_action", password_of(body.as_ref())).await?;
     let software = state.software.clone();
     let name = software_id.clone();
     run_operation(
@@ -690,7 +822,9 @@ async fn allow_software(
     State(state): State<AppState>,
     AxumPath(software_id): AxumPath<String>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<Json<CommandResult>, AgentError> {
+    authorize(&state, "software_allowlist", password_of(body.as_ref())).await?;
     let result = state.software.allow(&software_id).await;
     log_command_result(
         &state.events,
@@ -705,7 +839,9 @@ async fn disallow_software(
     State(state): State<AppState>,
     AxumPath(software_id): AxumPath<String>,
     Extension(request_id): Extension<request_context::RequestId>,
+    body: Option<Json<StepUp>>,
 ) -> Result<Json<CommandResult>, AgentError> {
+    authorize(&state, "software_allowlist", password_of(body.as_ref())).await?;
     let result = state.software.disallow(&software_id).await;
     log_command_result(
         &state.events,
@@ -725,6 +861,12 @@ async fn create_schedule(
     Extension(request_id): Extension<request_context::RequestId>,
     Json(payload): Json<CreateScheduleRequest>,
 ) -> Result<Json<ServiceSchedule>, AgentError> {
+    authorize(
+        &state,
+        "schedule_change",
+        payload.current_password.as_deref(),
+    )
+    .await?;
     let detail = format!(
         "service={} action={:?} hour={} minute={}",
         payload.service_id, payload.action, payload.hour, payload.minute
@@ -754,14 +896,18 @@ async fn create_schedule(
 async fn delete_schedule(
     State(state): State<AppState>,
     AxumPath(schedule_id): AxumPath<String>,
+    body: Option<Json<StepUp>>,
 ) -> Result<(), AgentError> {
+    authorize(&state, "schedule_change", password_of(body.as_ref())).await?;
     state.schedules.delete(&schedule_id).await
 }
 
 async fn enable_schedule(
     State(state): State<AppState>,
     AxumPath(schedule_id): AxumPath<String>,
+    body: Option<Json<StepUp>>,
 ) -> Result<Json<ServiceSchedule>, AgentError> {
+    authorize(&state, "schedule_change", password_of(body.as_ref())).await?;
     state
         .schedules
         .set_enabled(&schedule_id, true)
@@ -772,7 +918,9 @@ async fn enable_schedule(
 async fn disable_schedule(
     State(state): State<AppState>,
     AxumPath(schedule_id): AxumPath<String>,
+    body: Option<Json<StepUp>>,
 ) -> Result<Json<ServiceSchedule>, AgentError> {
+    authorize(&state, "schedule_change", password_of(body.as_ref())).await?;
     state
         .schedules
         .set_enabled(&schedule_id, false)
@@ -798,7 +946,11 @@ async fn control_service(
     action: ServiceAction,
     run_async: bool,
     request_id: request_context::RequestId,
+    password: Option<&str>,
 ) -> Result<axum::response::Response, AgentError> {
+    if matches!(action, ServiceAction::Stop | ServiceAction::Disable) {
+        authorize(&state, "service_stop", password).await?;
+    }
     let action_name = match &action {
         ServiceAction::Start => "start",
         ServiceAction::Stop => "stop",

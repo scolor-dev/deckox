@@ -23,6 +23,7 @@ use tokio::sync::{Mutex, RwLock};
 use totp_rs::{Algorithm, Secret, TOTP};
 use tracing::warn;
 
+use crate::agent_client::AgentClient;
 use crate::{
     audit::AuditLog, error_response, fsutil::atomic_write_secure, request_context::RequestId,
 };
@@ -81,6 +82,8 @@ pub struct AuthManager {
 }
 
 struct AuthInner {
+    /// Used to keep the Agent's copy of the password check in step.
+    agent: Option<AgentClient>,
     account: RwLock<Account>,
     account_path: Option<PathBuf>,
     secure_cookie: bool,
@@ -207,6 +210,8 @@ enum ChangePasswordResult {
     RateLimited,
     InvalidNewPassword,
     NotPersistent,
+    /// The Agent did not accept the current password, so its copy differs.
+    AgentOutOfSync,
     Failed(String),
 }
 
@@ -244,7 +249,7 @@ enum TotpDisableResult {
 }
 
 impl AuthManager {
-    pub fn load(audit: AuditLog) -> Result<Self, String> {
+    pub fn load(audit: AuditLog, agent: Option<AgentClient>) -> Result<Self, String> {
         let (account, account_path) = if let Ok(password_hash) =
             env::var("DECKOX_ADMIN_PASSWORD_HASH")
         {
@@ -277,6 +282,7 @@ impl AuthManager {
         let secure_cookie = env::var("DECKOX_SECURE_COOKIE").is_ok_and(|value| value == "true");
         Ok(Self {
             inner: Arc::new(AuthInner {
+                agent,
                 account: RwLock::new(account),
                 account_path,
                 secure_cookie,
@@ -290,6 +296,42 @@ impl AuthManager {
                 pending_totp_setup: Mutex::new(HashMap::new()),
             }),
         })
+    }
+
+    /// Tells the Agent about the new password before it is saved here, so the
+    /// two never disagree. The Agent checks the current password itself; if it
+    /// refuses it, its copy differs from ours (for example after
+    /// `reset-password` was run without root).
+    async fn sync_agent_verifier(
+        &self,
+        current_password: &str,
+        new_password: &str,
+    ) -> Result<(), ChangePasswordResult> {
+        let Some(agent) = &self.inner.agent else {
+            return Ok(());
+        };
+        let request_id = RequestId(format!("auth-{}", hex::encode(rand::random::<[u8; 8]>())));
+        let body = serde_json::json!({
+            "current_password": current_password,
+            "new_password": new_password,
+        });
+        match agent
+            .request_with_json_body("POST", "/v1/auth/verifier", &request_id, &body)
+            .await
+        {
+            Ok(response) if response.status.is_success() => Ok(()),
+            Ok(response) if response.body["code"] == "invalid_password" => {
+                Err(ChangePasswordResult::AgentOutOfSync)
+            }
+            Ok(response) => Err(ChangePasswordResult::Failed(format!(
+                "the Agent refused the password change: HTTP {} {}",
+                response.status.as_u16(),
+                response.body["message"].as_str().unwrap_or_default()
+            ))),
+            Err(error) => Err(ChangePasswordResult::Failed(format!(
+                "could not reach the Agent to update its password check: {error}"
+            ))),
+        }
     }
 
     async fn login(&self, source_ip: IpAddr, password: String) -> LoginResult {
@@ -405,7 +447,7 @@ impl AuthManager {
         }
 
         let current_hash = self.inner.account.read().await.password_hash.clone();
-        if !verify_password(current_hash, current_password).await {
+        if !verify_password(current_hash, current_password.clone()).await {
             record_failure(&self.inner.password_change_failures, source_ip).await;
             return ChangePasswordResult::InvalidCurrentPassword;
         }
@@ -414,6 +456,13 @@ impl AuthManager {
             .lock()
             .await
             .remove(&source_ip);
+
+        if let Err(result) = self
+            .sync_agent_verifier(&current_password, &new_password)
+            .await
+        {
+            return result;
+        }
 
         let password_to_hash = new_password;
         let new_hash =
@@ -1205,6 +1254,11 @@ pub async fn change_password(
             "password_change_unavailable",
             "password cannot be changed while DECKOX_ADMIN_PASSWORD_HASH is configured",
         ),
+        ChangePasswordResult::AgentOutOfSync => error_response(
+            StatusCode::CONFLICT,
+            "agent_out_of_sync",
+            "the Agent's copy of the password differs; run `sudo deckox-server reset-password` as root, then try again",
+        ),
         ChangePasswordResult::Failed(error) => {
             auth.audit()
                 .log_admin(
@@ -1541,11 +1595,13 @@ mod tests {
     use axum::http::{HeaderMap, HeaderValue, Method, header};
     use tokio::sync::{Mutex, RwLock};
 
+    use crate::agent_client::AgentClient;
+
     use super::{
-        Account, AuditLog, AuthInner, AuthManager, MAX_FAILURES, PasswordConfirmationResult,
-        TotpSecret, disable_totp_cli, hash_password, is_rate_limited, load_account_file,
-        load_admin_account, record_failure, requires_same_origin, reset_password_cli, same_origin,
-        session_token, write_account,
+        Account, AuditLog, AuthInner, AuthManager, ChangePasswordResult, MAX_FAILURES,
+        PasswordConfirmationResult, TotpSecret, disable_totp_cli, hash_password, is_rate_limited,
+        load_account_file, load_admin_account, record_failure, requires_same_origin,
+        reset_password_cli, same_origin, session_token, verify_password, write_account,
     };
 
     fn test_auth(password: &str) -> AuthManager {
@@ -1559,8 +1615,17 @@ mod tests {
         password: &str,
         account_path: Option<std::path::PathBuf>,
     ) -> AuthManager {
+        test_auth_with_agent(password, account_path, None)
+    }
+
+    fn test_auth_with_agent(
+        password: &str,
+        account_path: Option<std::path::PathBuf>,
+        agent: Option<AgentClient>,
+    ) -> AuthManager {
         AuthManager {
             inner: Arc::new(AuthInner {
+                agent,
                 account: RwLock::new(Account {
                     password_hash: hash_password(password).expect("password should hash"),
                     totp: None,
@@ -1865,5 +1930,112 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn changing_the_password_updates_the_agent_first() {
+        use serde_json::json;
+
+        use crate::test_support::FakeAgent;
+
+        let agent = FakeAgent::start(&[(
+            "POST",
+            "/v1/auth/verifier",
+            200,
+            json!({"command_id": "verifier", "status": "completed", "message": null}),
+        )]);
+        let dir = std::env::temp_dir().join(format!("deckox-auth-sync-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("admin-password.hash");
+        let auth = test_auth_with_agent(
+            "old-password-123",
+            Some(path.clone()),
+            Some(AgentClient::new(agent.socket.clone())),
+        );
+        write_account(&path, &auth.inner.account.read().await.clone())
+            .await
+            .expect("seed account");
+
+        let result = auth
+            .change_password(
+                "127.0.0.1".parse().expect("ip"),
+                "old-password-123".to_owned(),
+                "new-password-1234".to_owned(),
+            )
+            .await;
+        assert!(matches!(result, ChangePasswordResult::Changed));
+
+        let request = agent.requests().pop().expect("the Agent was called");
+        assert_eq!(request.method, "POST");
+        assert_eq!(request.path, "/v1/auth/verifier");
+        let body: serde_json::Value = serde_json::from_str(&request.body).expect("json");
+        assert_eq!(body["current_password"], "old-password-123");
+        assert_eq!(body["new_password"], "new-password-1234");
+    }
+
+    #[tokio::test]
+    async fn a_password_change_stops_when_the_agents_copy_differs() {
+        use serde_json::json;
+
+        use crate::test_support::FakeAgent;
+
+        let agent = FakeAgent::start(&[(
+            "POST",
+            "/v1/auth/verifier",
+            401,
+            json!({"code": "invalid_password", "message": "not accepted"}),
+        )]);
+        let dir = std::env::temp_dir().join(format!("deckox-auth-desync-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("admin-password.hash");
+        let auth = test_auth_with_agent(
+            "old-password-123",
+            Some(path.clone()),
+            Some(AgentClient::new(agent.socket.clone())),
+        );
+        write_account(&path, &auth.inner.account.read().await.clone())
+            .await
+            .expect("seed account");
+
+        let result = auth
+            .change_password(
+                "127.0.0.1".parse().expect("ip"),
+                "old-password-123".to_owned(),
+                "new-password-1234".to_owned(),
+            )
+            .await;
+        assert!(matches!(result, ChangePasswordResult::AgentOutOfSync));
+        assert!(
+            verify_password(
+                auth.inner.account.read().await.password_hash.clone(),
+                "old-password-123".to_owned()
+            )
+            .await,
+            "the Server keeps the old password when the Agent did not follow"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_password_change_stops_when_the_agent_is_unreachable() {
+        let dir = std::env::temp_dir().join(format!("deckox-auth-down-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("admin-password.hash");
+        let auth = test_auth_with_agent(
+            "old-password-123",
+            Some(path.clone()),
+            Some(AgentClient::new("/nonexistent/agent.sock".into())),
+        );
+        write_account(&path, &auth.inner.account.read().await.clone())
+            .await
+            .expect("seed account");
+
+        let result = auth
+            .change_password(
+                "127.0.0.1".parse().expect("ip"),
+                "old-password-123".to_owned(),
+                "new-password-1234".to_owned(),
+            )
+            .await;
+        assert!(matches!(result, ChangePasswordResult::Failed(_)));
     }
 }

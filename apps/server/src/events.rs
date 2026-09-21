@@ -417,4 +417,71 @@ mod tests {
         assert_eq!(mismatches, 1, "reported once, not on every poll");
         assert!(!feed.since(0).agent.compatible);
     }
+
+    #[tokio::test]
+    async fn follows_a_real_socket_and_reads_only_new_events() {
+        use serde_json::json;
+
+        use crate::{agent_client::AgentClient, test_support::FakeAgent};
+
+        let info =
+            json!({"protocol_version": PROTOCOL_VERSION, "agent_version": "9.9.9", "epoch": "e1"});
+        let batch = json!({
+            "epoch": "e1",
+            "events": [{
+                "seq": 1, "timestamp_ms": 5, "kind": "service_action", "result": "accepted",
+                "subject": "service=a.service action=stop", "request_id": "r1",
+                "command_id": null, "message": null
+            }],
+            "next_after": 1
+        });
+        let agent = FakeAgent::start(&[
+            ("GET", "/v1/info", 200, info),
+            ("GET", "/v1/events", 200, batch),
+        ]);
+        let client = AgentClient::new(agent.socket.clone());
+        let feed = EventFeed::new("instance");
+
+        super::follow_once(&client, &feed).await;
+        assert_eq!(kinds(&feed), ["agent_connected", "service_action"]);
+        assert_eq!(feed.since(0).agent.agent_version.as_deref(), Some("9.9.9"));
+
+        super::follow_once(&client, &feed).await;
+        let paths: Vec<String> = agent
+            .requests()
+            .into_iter()
+            .map(|request| request.path)
+            .collect();
+        assert_eq!(paths.iter().filter(|path| *path == "/v1/events").count(), 2);
+        assert_eq!(
+            feed.position(),
+            (1, Some("e1".to_owned())),
+            "the position moved on"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_agent_without_v1_info_is_treated_as_an_older_protocol() {
+        use crate::{agent_client::AgentClient, test_support::FakeAgent};
+
+        let agent = FakeAgent::start(&[]);
+        let feed = EventFeed::new("instance");
+        super::follow_once(&AgentClient::new(agent.socket.clone()), &feed).await;
+
+        let link = feed.since(0).agent;
+        assert!(link.connected && !link.compatible);
+        assert_eq!(link.protocol_version, Some(0));
+        assert!(kinds(&feed).contains(&"protocol_mismatch".to_owned()));
+    }
+
+    #[tokio::test]
+    async fn an_unreachable_socket_is_reported_as_disconnected() {
+        use crate::agent_client::AgentClient;
+
+        let feed = EventFeed::new("instance");
+        feed.apply_info(&info("e1", PROTOCOL_VERSION));
+        super::follow_once(&AgentClient::new("/nonexistent/agent.sock".into()), &feed).await;
+        assert!(!feed.since(0).agent.connected);
+        assert!(kinds(&feed).contains(&"agent_disconnected".to_owned()));
+    }
 }

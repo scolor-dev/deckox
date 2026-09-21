@@ -57,7 +57,7 @@ TOTP二要素認証の有効化ができます。管理画面へ入れなくな�
 したコンソールから次のサブコマンドで復旧できます。
 
 ```bash
-printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password
+printf '%s' '新しいパスワード' | sudo deckox-server reset-password
 sudo -u deckox deckox-server disable-totp   # TOTPだけを無効化する場合
 sudo systemctl restart deckox-server
 ```

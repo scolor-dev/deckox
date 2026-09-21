@@ -293,6 +293,7 @@ dependencies = [
 name = "deckox-agent"
 version = "0.6.8"
 dependencies = [
+ "argon2",
  "axum",
  "chrono",
  "deckox-protocol",

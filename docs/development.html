@@ -118,7 +118,7 @@ npm run build</code></pre>
           </tbody>
         </table>
         <p><code>reset-password</code>・<code>disable-totp</code>は永続化されたアカウントファイルが前提のため、<code>DECKOX_ADMIN_PASSWORD_HASH</code>だけが設定されている場合はエラーで終了します。</p>
-        <pre><code>printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password
+        <pre><code>printf '%s' '新しいパスワード' | sudo deckox-server reset-password
 sudo -u deckox deckox-server disable-totp
 sudo -u deckox deckox-server access-url</code></pre>
       </section>

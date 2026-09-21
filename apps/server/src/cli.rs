@@ -53,13 +53,55 @@ async fn reset_password() -> Result<(), String> {
     let account_path = require_account_path("password cannot be reset")?;
     let password = read_stdin_password()?;
     auth::reset_password_cli(&account_path, &password).await?;
+    let hash = auth::load_admin_account(&account_path)?.password_hash;
 
     AuditLog::from_env()
         .record_cli("password_reset_cli", "success", None)
         .await;
     println!("Password updated. Restart deckox-server for the change to take effect:");
     println!("  sudo systemctl restart deckox-server");
+    match write_agent_verifier(&verifier_path(), &hash) {
+        Ok(()) => println!("The Agent's password check was updated too (no Agent restart needed)."),
+        Err(error) => {
+            eprintln!();
+            eprintln!("WARNING: the Agent's password check was NOT updated ({error}).");
+            eprintln!(
+                "Until it is, operations that ask for the password (software, reboot, update)"
+            );
+            eprintln!("will be refused. Run this command as root to update both:");
+            eprintln!("  printf '%s' 'NEW-PASSWORD' | sudo deckox-server reset-password");
+        }
+    }
     Ok(())
+}
+
+fn verifier_path() -> PathBuf {
+    PathBuf::from(
+        env::var("DECKOX_AGENT_VERIFIER_FILE")
+            .unwrap_or_else(|_| "/etc/deckox/admin-verifier".to_owned()),
+    )
+}
+
+/// Writes the Agent's copy of the admin password hash. The file is
+/// root-owned, so this only succeeds when the command runs as root — which is
+/// the point: the Server user must not be able to change what the Agent
+/// checks the password against.
+fn write_agent_verifier(path: &std::path::Path, hash: &str) -> Result<(), String> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let temporary = path.with_extension("tmp");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&temporary)
+        .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
+    file.write_all(format!("{hash}\n").as_bytes())
+        .map_err(|error| format!("cannot write {}: {error}", temporary.display()))?;
+    drop(file);
+    std::fs::rename(&temporary, path)
+        .map_err(|error| format!("cannot replace {}: {error}", path.display()))
 }
 
 /// `disable-totp` — the last-resort recovery path when both the
@@ -176,4 +218,40 @@ fn confirm(prompt: &str) -> Result<bool, String> {
         .read_line(&mut answer)
         .map_err(|error| format!("failed to read confirmation: {error}"))?;
     Ok(matches!(answer.trim(), "y" | "Y" | "yes" | "YES"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::write_agent_verifier;
+
+    #[test]
+    fn the_verifier_file_is_private_and_replaced_in_place() {
+        let dir = std::env::temp_dir().join(format!("deckox-cli-verifier-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("admin-verifier");
+
+        write_agent_verifier(&path, "$argon2id$first").expect("write");
+        write_agent_verifier(&path, "$argon2id$second").expect("rewrite");
+
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("read").trim(),
+            "$argon2id$second"
+        );
+        let mode = std::fs::metadata(&path)
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn writing_where_the_user_may_not_reports_an_error_instead_of_panicking() {
+        assert!(
+            write_agent_verifier(std::path::Path::new("/nonexistent-dir/admin-verifier"), "x")
+                .is_err()
+        );
+    }
 }

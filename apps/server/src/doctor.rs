@@ -56,6 +56,7 @@ pub async fn run() -> Result<(), String> {
     )];
     checks.extend(check_units());
     checks.push(check_agent().await);
+    checks.push(check_agent_security().await);
     checks.extend(check_agent_config(&agent_config_path()));
     checks.push(check_web());
     checks.push(check_account());
@@ -161,6 +162,59 @@ async fn check_agent() -> Check {
             format!("cannot reach the Agent at {}: {error}", socket.display()),
         ),
     }
+}
+
+/// Whether the Agent can check the admin password itself (see
+/// `GET /v1/security`). Without a hash it refuses every operation that asks
+/// for the password, so this is a failure, not a warning.
+async fn check_agent_security() -> Check {
+    let socket = PathBuf::from(
+        env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| crate::DEFAULT_AGENT_SOCKET.to_owned()),
+    );
+    let request_id = RequestId(format!("cli-{}", hex::encode(rand::random::<[u8; 8]>())));
+    match AgentClient::new(socket)
+        .get_json::<serde_json::Value>("/v1/security", &request_id)
+        .await
+    {
+        Ok(status) => describe_security(&status),
+        Err(error) => Check::new(
+            Level::Warn,
+            "agent password",
+            format!("could not read the Agent's security status: {error}"),
+        ),
+    }
+}
+
+pub fn describe_security(status: &serde_json::Value) -> Check {
+    let confirm = status["confirm"]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default();
+    if status["verifier_provisioned"] != true {
+        return Check::new(
+            Level::Fail,
+            "agent password",
+            "the Agent has no admin password to check; run: printf '%s' 'NEW-PASSWORD' | sudo deckox-server reset-password",
+        );
+    }
+    if let Some(seconds) = status["locked_for_seconds"].as_u64() {
+        return Check::new(
+            Level::Warn,
+            "agent password",
+            format!("locked for {seconds}s after repeated wrong passwords"),
+        );
+    }
+    Check::new(
+        Level::Ok,
+        "agent password",
+        format!("the Agent checks the password itself for: {confirm}"),
+    )
 }
 
 /// Reads agent.toml the way the Agent will: it must parse, and each table
@@ -308,7 +362,7 @@ fn check_account() -> Check {
 
 #[cfg(test)]
 mod tests {
-    use super::{Level, check_agent_config, check_version};
+    use super::{Level, check_agent_config, check_version, describe_security};
 
     fn config_file(contents: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -374,5 +428,27 @@ mod tests {
             check_agent_config(std::path::Path::new("/nonexistent/agent.toml"))[0].level,
             Level::Fail
         );
+    }
+
+    #[test]
+    fn the_agents_password_check_is_reported() {
+        use serde_json::json;
+
+        let ok = describe_security(
+            &json!({"verifier_provisioned": true, "locked_for_seconds": null, "confirm": ["system_reboot"]}),
+        );
+        assert_eq!(ok.level, Level::Ok);
+        assert!(ok.detail.contains("system_reboot"));
+
+        let missing = describe_security(
+            &json!({"verifier_provisioned": false, "locked_for_seconds": null, "confirm": []}),
+        );
+        assert_eq!(missing.level, Level::Fail);
+        assert!(missing.detail.contains("reset-password"));
+
+        let locked = describe_security(
+            &json!({"verifier_provisioned": true, "locked_for_seconds": 120, "confirm": []}),
+        );
+        assert_eq!(locked.level, Level::Warn);
     }
 }

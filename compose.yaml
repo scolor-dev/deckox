@@ -9,6 +9,8 @@ services:
     entrypoint: ["/usr/local/bin/deckox-agent"]
     environment:
       DECKOX_AGENT_SOCKET: /run/deckox/agent.sock
+      # Agentがパスワードを自分で確認するための開発用ハッシュ(Serverと同じ値)
+      DECKOX_ADMIN_PASSWORD_HASH: "$$argon2id$$v=19$$m=19456,t=2,p=1$$gQ+hx1wm0mXLgOJ02QjNIQ$$FnI/+5BDDZuigmFeZ/5vrXs7ap5MZGwH7WLmb8AoAKI"
       RUST_LOG: "${RUST_LOG:-deckox_agent=info}"
     volumes:
       - agent-runtime:/run/deckox

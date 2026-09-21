@@ -41,6 +41,8 @@ mod metrics_stream;
 mod notifier;
 mod request_context;
 mod security_headers;
+#[cfg(test)]
+mod test_support;
 mod update;
 
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:8080";
@@ -159,13 +161,13 @@ async fn main() {
     let web_dir =
         PathBuf::from(env::var("DECKOX_WEB_DIR").unwrap_or_else(|_| DEFAULT_WEB_DIR.to_owned()));
     let audit = AuditLog::from_env();
-    let auth = AuthManager::load(audit.clone()).unwrap_or_else(|error| {
-        eprintln!("failed to load authentication configuration: {error}");
-        std::process::exit(2);
-    });
     let agent = AgentClient::new(PathBuf::from(
         env::var("DECKOX_AGENT_SOCKET").unwrap_or_else(|_| DEFAULT_AGENT_SOCKET.to_owned()),
     ));
+    let auth = AuthManager::load(audit.clone(), Some(agent.clone())).unwrap_or_else(|error| {
+        eprintln!("failed to load authentication configuration: {error}");
+        std::process::exit(2);
+    });
     let updates = load_update_checker();
     let webhook_url = env::var("DECKOX_WEBHOOK_URL").ok();
     notifier::spawn(
@@ -553,14 +555,26 @@ async fn reboot_host(
     user: &AuthenticatedUser,
     current_password: String,
 ) -> Response {
-    if let Err(response) =
-        confirm_password_or_respond(state, request_id, user, current_password, "system_reboot")
-            .await
+    if let Err(response) = confirm_password_or_respond(
+        state,
+        request_id,
+        user,
+        current_password.clone(),
+        "system_reboot",
+    )
+    .await
     {
         return *response;
     }
 
-    let response = proxy_agent(&state.agent, "POST", "/v1/system/reboot", request_id).await;
+    let response = proxy_agent_confirmed(
+        &state.agent,
+        "POST",
+        "/v1/system/reboot",
+        request_id,
+        &current_password,
+    )
+    .await;
     if response.status().is_success() {
         state
             .audit
@@ -677,6 +691,7 @@ async fn resolve_update_request(
     Ok(AgentUpdateRequest {
         target_version,
         install_script,
+        current_password: None,
     })
 }
 
@@ -693,17 +708,23 @@ async fn trigger_update(
     user: &AuthenticatedUser,
     current_password: String,
 ) -> Response {
-    if let Err(response) =
-        confirm_password_or_respond(state, request_id, user, current_password, "system_update")
-            .await
+    if let Err(response) = confirm_password_or_respond(
+        state,
+        request_id,
+        user,
+        current_password.clone(),
+        "system_update",
+    )
+    .await
     {
         return *response;
     }
 
-    let request = match resolve_update_request(state, request_id, user).await {
+    let mut request = match resolve_update_request(state, request_id, user).await {
         Ok(request) => request,
         Err(response) => return *response,
     };
+    request.current_password = Some(current_password);
     let target_version = request.target_version.clone();
 
     let response = agent_result_to_response(
@@ -1073,15 +1094,21 @@ async fn software_action(
     if !valid_software_id(software_id) {
         return invalid_software_id();
     }
-    if let Err(response) =
-        confirm_password_or_respond(state, request_id, user, current_password, "software_action")
-            .await
+    if let Err(response) = confirm_password_or_respond(
+        state,
+        request_id,
+        user,
+        current_password.clone(),
+        "software_action",
+    )
+    .await
     {
         return *response;
     }
 
     let path = format!("/v1/software/{software_id}/{action}");
-    let response = proxy_agent(&state.agent, "POST", &path, request_id).await;
+    let response =
+        proxy_agent_confirmed(&state.agent, "POST", &path, request_id, &current_password).await;
     if response.status().is_success() {
         state
             .audit
@@ -1498,6 +1525,26 @@ const fn log_priority_name(priority: ServiceLogPriority) -> &'static str {
     }
 }
 
+/// Sends a request to the Agent together with the admin password, for
+/// operations the Agent checks itself. The Server has already verified the
+/// password; this is the copy the Agent verifies against its own hash.
+async fn proxy_agent_confirmed(
+    client: &AgentClient,
+    method: &str,
+    path: &str,
+    request_id: &RequestId,
+    password: &str,
+) -> Response {
+    let body = deckox_protocol::StepUp {
+        current_password: Some(password.to_owned()),
+    };
+    agent_result_to_response(
+        client
+            .request_with_json_body(method, path, request_id, &body)
+            .await,
+    )
+}
+
 async fn proxy_agent(
     client: &AgentClient,
     method: &str,
@@ -1571,7 +1618,10 @@ async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use axum::{http::header, response::IntoResponse};
+    use axum::{
+        http::{StatusCode, header},
+        response::IntoResponse,
+    };
     use deckox_protocol::{ServiceLogPriority, ServiceLogs};
 
     use super::{log_priority_name, service_logs_attachment, valid_log_lines, valid_service_id};
@@ -1611,5 +1661,65 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("attachment; filename=\"deckox-service-logs-nginx.service.json\"")
         );
+    }
+
+    #[tokio::test]
+    async fn confirmed_requests_carry_the_password_to_the_agent() {
+        use serde_json::json;
+
+        use crate::{
+            agent_client::AgentClient, request_context::RequestId, test_support::FakeAgent,
+        };
+
+        use super::proxy_agent_confirmed;
+
+        let agent = FakeAgent::start(&[(
+            "POST",
+            "/v1/software/git/install",
+            200,
+            json!({"command_id": "c", "status": "completed", "message": null}),
+        )]);
+        let client = AgentClient::new(agent.socket.clone());
+        let response = proxy_agent_confirmed(
+            &client,
+            "POST",
+            "/v1/software/git/install",
+            &RequestId("req-1".to_owned()),
+            "the-admin-password",
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let sent = agent.requests().pop().expect("the Agent was called");
+        assert_eq!(sent.method, "POST");
+        let body: serde_json::Value = serde_json::from_str(&sent.body).expect("json body");
+        assert_eq!(body["current_password"], "the-admin-password");
+    }
+
+    #[tokio::test]
+    async fn an_agent_refusal_reaches_the_caller_unchanged() {
+        use serde_json::json;
+
+        use crate::{
+            agent_client::AgentClient, request_context::RequestId, test_support::FakeAgent,
+        };
+
+        use super::proxy_agent_confirmed;
+
+        let agent = FakeAgent::start(&[(
+            "POST",
+            "/v1/system/reboot",
+            401,
+            json!({"code": "invalid_password", "message": "the admin password was not accepted by the Agent"}),
+        )]);
+        let response = proxy_agent_confirmed(
+            &AgentClient::new(agent.socket.clone()),
+            "POST",
+            "/v1/system/reboot",
+            &RequestId("req-2".to_owned()),
+            "wrong",
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

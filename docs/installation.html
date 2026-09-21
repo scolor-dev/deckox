@@ -115,8 +115,8 @@ journalctl -u deckox-server -u deckox-agent -f</code></pre>
         <p>通常は管理画面の「設定」から、現在のパスワードと12文字以上の新しいパスワードを入力します。現在のパスワード確認に5分間で5回失敗すると一時的に制限されます。変更後は全セッションが失効し、完了案内が表示されたログイン画面から新しいパスワードで再ログインします。</p>
         <p>設定画面でTOTPによる二要素認証を有効にしている場合は、パスワード確認後にコード入力を求める2段階ログインになります。無効化・有効化の操作は「設定」画面のTOTPセクションから行います。</p>
         <h3>ログインできない場合の復旧</h3>
-        <p>管理画面へ入れない場合は、SSH接続したコンソールから<code>reset-password</code>サブコマンドでパスワードだけを再設定できます。TOTPの設定は変更されません。</p>
-        <pre><code>printf '%s' '新しいパスワード' | sudo -u deckox deckox-server reset-password
+        <p>管理画面へ入れない場合は、SSH接続したコンソールから<code>reset-password</code>サブコマンドでパスワードだけを再設定できます。TOTPの設定は変更されません。<strong>rootで実行</strong>してください。Agentが自分で持つパスワード確認用のハッシュ(<code>/etc/deckox/admin-verifier</code>、root専用)も同時に更新されます。</p>
+        <pre><code>printf '%s' '新しいパスワード' | sudo deckox-server reset-password
 sudo systemctl restart deckox-server</code></pre>
         <p>TOTPの認証アプリとリカバリーコードを両方失った場合は、<code>disable-totp</code>で二要素認証だけを無効化できます。</p>
         <pre><code>sudo -u deckox deckox-server disable-totp
@@ -186,6 +186,22 @@ Environment=DECKOX_WEBHOOK_URL=https://example.com/webhook</code></pre>
         <p>v0.3.3ではWebコンソールを削除しました。更新時は旧<code>deckox-terminal.service</code>をDeckox管理のユニットだと確認してから停止・無効化し、ユニットとバイナリを削除します。</p>
         <p>旧アカウントのホーム・nologinシェル・主グループがDeckoxの作成条件と一致する場合だけ、<code>deckox-terminal</code>ユーザーとグループを削除します。<code>/var/lib/deckox-terminal</code>が空でなければデータ保護のため残し、インストーラーへ警告を表示します。</p>
       </section>
+      <section class="section" aria-labelledby="agent-password-title">
+        <h2 id="agent-password-title">危険な操作のパスワード確認(Agentによる検証)</h2>
+        <p>ソフトウェアの操作、ホストの再起動、セルフアップデートは、管理者パスワードの再入力が必要です。Serverが確認するのに加えて、<strong>Agentも自分でパスワードを検証</strong>します。Serverが乗っ取られても、管理者がその場でパスワードを入力しない限り、これらの操作をAgent経由で実行できません。</p>
+        <ul>
+          <li>Agentは、root専用のファイル<code>/etc/deckox/admin-verifier</code>にパスワードのハッシュを持ちます。Serverのユーザー(<code>deckox</code>)は書き換えられません。</li>
+          <li>初回(既存環境の更新時を含む)は、Serverのアカウントファイルから、Agentが起動時に一度だけ作成します。</li>
+          <li>管理画面でパスワードを変えると、Serverは先にAgentへ通知します(Agentが古いパスワードを検証してから、新しいハッシュを保存します)。Agentが止まっているときは、パスワードは変更されません。</li>
+          <li><code>reset-password</code>は、rootで実行すると、Agentの確認用ハッシュも更新します。<code>deckox</code>ユーザーで実行した場合は、Agentの更新はできないと警告し、それまで確認が必要な操作は拒否されます(安全側に倒れます)。</li>
+          <li>間違ったパスワードが5回続くと、Agentは5分間、確認を受け付けません。</li>
+        </ul>
+        <p>確認を求める操作は、<code>agent.toml</code>の<code>[security] confirm</code>で追加できます。初期値は、現在の画面が既にパスワードを求めるもの(<code>software_action</code>、<code>system_reboot</code>、<code>system_update</code>)です。ほかに<code>service_allowlist</code>、<code>software_allowlist</code>、<code>service_stop</code>、<code>schedule_change</code>を指定できます(画面がパスワード入力に対応するまでは、指定しないでください)。</p>
+        <pre><code>[security]
+confirm = ["software_action", "system_reboot", "system_update"]</code></pre>
+        <p><code>sudo -u deckox deckox-server doctor</code>の<code>agent password</code>の行で、Agentが確認用のハッシュを持っているかを確認できます。</p>
+      </section>
+
       <section class="section" aria-labelledby="modules-title">
         <h2 id="modules-title">使わない機能を止める(モジュール)</h2>
         <p>Agentの機能は、モジュール単位で無効にできます。初期状態では、すべて有効です。<code>/etc/deckox/agent.toml</code>の<code>[modules]</code>に、止めたいモジュールを書いて、Agentを再起動します。</p>
