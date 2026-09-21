@@ -6,6 +6,8 @@
 
 use std::{
     collections::VecDeque,
+    fmt::Write as _,
+    path::PathBuf,
     sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -14,7 +16,7 @@ use deckox_protocol::{AgentEvent, AgentInfo, EventBatch, EventResult, PROTOCOL_V
 use serde::Serialize;
 use tracing::{info, warn};
 
-use crate::{agent_client::AgentClient, request_context::RequestId};
+use crate::{agent_client::AgentClient, audit::AuditLog, request_context::RequestId};
 
 const CAPACITY: usize = 500;
 const MAX_BATCH: usize = 200;
@@ -187,6 +189,18 @@ impl EventFeed {
         inner.link = AgentLink::default();
     }
 
+    /// Resumes from where the previous Server process stopped. If the Agent
+    /// has restarted since, the next `GET /v1/info` shows a different epoch
+    /// and reading starts over.
+    fn restore_cursor(&self, epoch: String, seq: u64) {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner.epoch = Some(epoch);
+        inner.agent_position = seq;
+    }
+
     fn position(&self) -> (u64, Option<String>) {
         let inner = self
             .inner
@@ -267,17 +281,76 @@ fn now_ms() -> u64 {
         })
 }
 
+/// Where the Agent's events are copied to as they arrive: the audit log,
+/// with a cursor file remembering how far it got, so a Server restart neither
+/// repeats nor skips events.
+#[derive(Clone)]
+pub struct EventMirror {
+    audit: AuditLog,
+    cursor_path: PathBuf,
+}
+
+impl EventMirror {
+    pub fn new(audit: AuditLog) -> Self {
+        let cursor_path = PathBuf::from(
+            std::env::var("DECKOX_EVENT_CURSOR_FILE")
+                .unwrap_or_else(|_| "/var/lib/deckox/agent-events.cursor".to_owned()),
+        );
+        Self { audit, cursor_path }
+    }
+
+    #[cfg(test)]
+    pub const fn at(audit: AuditLog, cursor_path: PathBuf) -> Self {
+        Self { audit, cursor_path }
+    }
+
+    fn load_cursor(&self) -> Option<(String, u64)> {
+        let text = std::fs::read_to_string(&self.cursor_path).ok()?;
+        let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+        Some((value["epoch"].as_str()?.to_owned(), value["seq"].as_u64()?))
+    }
+
+    fn save_cursor(&self, epoch: &str, seq: u64) {
+        let text = serde_json::json!({"epoch": epoch, "seq": seq}).to_string();
+        if let Err(error) = std::fs::write(&self.cursor_path, text) {
+            warn!(%error, "could not save the event cursor; events may be recorded twice after a restart");
+        }
+    }
+
+    async fn record(&self, event: &AgentEvent) {
+        let result = match event.result {
+            EventResult::Accepted => "accepted",
+            EventResult::Rejected => "rejected",
+            EventResult::Completed => "success",
+            EventResult::Failed => "failure",
+        };
+        let mut detail = event.subject.clone();
+        if let Some(request_id) = &event.request_id {
+            let _ = write!(detail, " request_id={request_id}");
+        }
+        if let Some(message) = &event.message {
+            let _ = write!(detail, " message={message}");
+        }
+        self.audit
+            .record_agent(&format!("agent_{}", event.kind), result, Some(detail))
+            .await;
+    }
+}
+
 /// Keeps the feed following the Agent for the life of the process.
-pub fn spawn(agent: AgentClient, feed: EventFeed) {
+pub fn spawn(agent: AgentClient, feed: EventFeed, mirror: EventMirror) {
+    if let Some((epoch, seq)) = mirror.load_cursor() {
+        feed.restore_cursor(epoch, seq);
+    }
     tokio::spawn(async move {
         loop {
-            follow_once(&agent, &feed).await;
+            follow_once(&agent, &feed, &mirror).await;
             tokio::time::sleep(POLL_INTERVAL).await;
         }
     });
 }
 
-async fn follow_once(agent: &AgentClient, feed: &EventFeed) {
+async fn follow_once(agent: &AgentClient, feed: &EventFeed, mirror: &EventMirror) {
     let request_id = RequestId(format!("feed-{}", hex::encode(rand::random::<[u8; 6]>())));
     let info = match agent.get_json::<AgentInfo>("/v1/info", &request_id).await {
         Ok(info) => info,
@@ -306,7 +379,15 @@ async fn follow_once(agent: &AgentClient, feed: &EventFeed) {
         |epoch| format!("/v1/events?after={after}&epoch={epoch}"),
     );
     match agent.get_json::<EventBatch>(&path, &request_id).await {
-        Ok(batch) => feed.apply_batch(batch),
+        Ok(batch) => {
+            for event in &batch.events {
+                mirror.record(event).await;
+            }
+            if !batch.events.is_empty() {
+                mirror.save_cursor(&batch.epoch, batch.next_after);
+            }
+            feed.apply_batch(batch);
+        }
         Err(error) => {
             warn!(%error, "failed to read the Agent's events");
             info!("will retry");
@@ -339,6 +420,19 @@ mod tests {
             command_id: None,
             message: None,
         }
+    }
+
+    fn test_mirror() -> super::EventMirror {
+        let dir = std::env::temp_dir().join(format!(
+            "deckox-mirror-{}-{}",
+            std::process::id(),
+            hex::encode(rand::random::<[u8; 4]>())
+        ));
+        std::fs::create_dir_all(&dir).expect("dir");
+        super::EventMirror::at(
+            crate::audit::AuditLog::new(dir.join("audit.log")),
+            dir.join("cursor"),
+        )
     }
 
     fn kinds(feed: &EventFeed) -> Vec<String> {
@@ -442,11 +536,11 @@ mod tests {
         let client = AgentClient::new(agent.socket.clone());
         let feed = EventFeed::new("instance");
 
-        super::follow_once(&client, &feed).await;
+        super::follow_once(&client, &feed, &test_mirror()).await;
         assert_eq!(kinds(&feed), ["agent_connected", "service_action"]);
         assert_eq!(feed.since(0).agent.agent_version.as_deref(), Some("9.9.9"));
 
-        super::follow_once(&client, &feed).await;
+        super::follow_once(&client, &feed, &test_mirror()).await;
         let paths: Vec<String> = agent
             .requests()
             .into_iter()
@@ -466,7 +560,12 @@ mod tests {
 
         let agent = FakeAgent::start(&[]);
         let feed = EventFeed::new("instance");
-        super::follow_once(&AgentClient::new(agent.socket.clone()), &feed).await;
+        super::follow_once(
+            &AgentClient::new(agent.socket.clone()),
+            &feed,
+            &test_mirror(),
+        )
+        .await;
 
         let link = feed.since(0).agent;
         assert!(link.connected && !link.compatible);
@@ -480,8 +579,78 @@ mod tests {
 
         let feed = EventFeed::new("instance");
         feed.apply_info(&info("e1", PROTOCOL_VERSION));
-        super::follow_once(&AgentClient::new("/nonexistent/agent.sock".into()), &feed).await;
+        super::follow_once(
+            &AgentClient::new("/nonexistent/agent.sock".into()),
+            &feed,
+            &test_mirror(),
+        )
+        .await;
         assert!(!feed.since(0).agent.connected);
         assert!(kinds(&feed).contains(&"agent_disconnected".to_owned()));
+    }
+
+    #[tokio::test]
+    async fn agent_events_reach_the_audit_log_once_even_across_a_restart() {
+        use serde_json::json;
+
+        use crate::{agent_client::AgentClient, audit::AuditLog, test_support::FakeAgent};
+
+        let dir = std::env::temp_dir().join(format!(
+            "deckox-mirror-restart-{}-{}",
+            std::process::id(),
+            hex::encode(rand::random::<[u8; 4]>())
+        ));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let audit_path = dir.join("audit.log");
+        let cursor_path = dir.join("cursor");
+        let mirror =
+            || super::EventMirror::at(AuditLog::new(audit_path.clone()), cursor_path.clone());
+
+        let event = json!({
+            "seq": 1, "timestamp_ms": 5, "kind": "password_check", "result": "rejected",
+            "subject": "operation=system_reboot", "request_id": null,
+            "command_id": null, "message": "the admin password was not accepted by the Agent"
+        });
+        let agent = FakeAgent::start(&[
+            (
+                "GET",
+                "/v1/info",
+                200,
+                json!({"protocol_version": PROTOCOL_VERSION, "agent_version": "1", "epoch": "e1"}),
+            ),
+            (
+                "GET",
+                "/v1/events",
+                200,
+                json!({"epoch": "e1", "events": [event], "next_after": 1}),
+            ),
+        ]);
+        let client = AgentClient::new(agent.socket.clone());
+
+        super::follow_once(&client, &EventFeed::new("first"), &mirror()).await;
+        let log = std::fs::read_to_string(&audit_path).expect("audit log");
+        assert!(log.contains("agent_password_check"), "{log}");
+        assert!(log.contains("\"result\":\"rejected\""), "{log}");
+        assert!(log.contains("operation=system_reboot"), "{log}");
+        assert_eq!(log.lines().count(), 1);
+
+        // A new Server process resumes from the saved cursor: the fake Agent
+        // still returns the same event, but it is asked only for newer ones.
+        let restarted = EventFeed::new("second");
+        let resumed = mirror();
+        let (epoch, seq) = resumed.load_cursor().expect("cursor saved");
+        restarted.restore_cursor(epoch, seq);
+        super::follow_once(&client, &restarted, &resumed).await;
+        let requested = agent
+            .requests()
+            .into_iter()
+            .filter(|request| request.path == "/v1/events")
+            .count();
+        assert_eq!(requested, 2, "it asked again after the restart");
+        assert_eq!(
+            restarted.position().0,
+            1,
+            "starting from the saved position"
+        );
     }
 }

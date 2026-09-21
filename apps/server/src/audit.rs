@@ -77,6 +77,14 @@ impl AuditLog {
             .await;
     }
 
+    /// Records something the Agent itself reported — what it actually ran or
+    /// refused — so the audit trail includes the privileged side's account of
+    /// events and not only the Server's.
+    pub async fn record_agent(&self, event: &str, result: &str, detail: Option<String>) {
+        self.record_raw(event, "agent", "agent".to_owned(), result, detail)
+            .await;
+    }
+
     async fn record_raw(
         &self,
         event: &str,

@@ -199,6 +199,7 @@ Environment=DECKOX_WEBHOOK_URL=https://example.com/webhook</code></pre>
         <p>確認を求める操作は、<code>agent.toml</code>の<code>[security] confirm</code>で追加できます。初期値は、現在の画面が既にパスワードを求めるもの(<code>software_action</code>、<code>system_reboot</code>、<code>system_update</code>)です。ほかに<code>service_allowlist</code>、<code>software_allowlist</code>、<code>service_stop</code>、<code>schedule_change</code>を指定できます(画面がパスワード入力に対応するまでは、指定しないでください)。</p>
         <pre><code>[security]
 confirm = ["software_action", "system_reboot", "system_update"]</code></pre>
+        <p>Agentが実際に実行・拒否した操作は、監査ログにも<code>agent_software_action</code>、<code>agent_password_check</code>のような名前で、操作者<code>agent</code>として記録されます。パスワードなしでAgentを直接呼ぼうとした試みは、<code>agent_password_check</code>の<code>rejected</code>として残ります。</p>
         <p><code>sudo -u deckox deckox-server doctor</code>の<code>agent password</code>の行で、Agentが確認用のハッシュを持っているかを確認できます。</p>
       </section>
 

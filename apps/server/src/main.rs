@@ -187,7 +187,11 @@ async fn main() {
     }
     let instance_id = format!("{:016x}", rand::random::<u64>());
     let events = events::EventFeed::new(&instance_id);
-    events::spawn(agent.clone(), events.clone());
+    events::spawn(
+        agent.clone(),
+        events.clone(),
+        events::EventMirror::new(audit.clone()),
+    );
     let state = AppState {
         agent: agent.clone(),
         auth: auth.clone(),
