@@ -38,6 +38,7 @@ mod diagnostics;
 mod doctor;
 mod events;
 mod fsutil;
+mod layout;
 mod metrics_stream;
 mod modules;
 mod notifier;
@@ -58,6 +59,7 @@ struct AppState {
     audit: AuditLog,
     metrics: MetricsHub,
     events: events::EventFeed,
+    layout: layout::LayoutStore,
     modules: modules::ModuleRegistry,
     updates: update::UpdateChecker,
     webhook_url: Option<String>,
@@ -198,6 +200,7 @@ async fn main() {
         audit,
         metrics: MetricsHub::new(agent),
         events,
+        layout: layout::LayoutStore::from_env(),
         modules,
         updates,
         webhook_url,
@@ -240,6 +243,7 @@ fn build_router(state: AppState, auth: &AuthManager, web_dir: &std::path::Path) 
         .route("/jobs/{job_id}", get(proxy_job))
         .route("/diagnostics", get(diagnostics))
         .route("/diagnostics/report", get(diagnostics_report))
+        .route("/layout", get(get_layout).put(put_layout))
         .route("/audit", get(audit_events))
         .route("/audit/report", get(audit_report))
         .route("/update", get(update_status))
@@ -468,6 +472,40 @@ async fn diagnostics_report(
 ) -> Response {
     let report = diagnostics::collect(&state.agent, &request_id).await;
     diagnostics::attachment(&report)
+}
+
+#[derive(Deserialize)]
+struct LayoutRequest {
+    layout: serde_json::Value,
+}
+
+async fn get_layout(State(state): State<AppState>) -> Json<layout::StoredLayout> {
+    Json(state.layout.get().await)
+}
+
+async fn put_layout(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(payload): Json<LayoutRequest>,
+) -> Response {
+    match state.layout.put(payload.layout).await {
+        Ok(stored) => {
+            state
+                .audit
+                .log_admin(
+                    &request_id,
+                    user.source_ip,
+                    "layout_update",
+                    "success",
+                    Some(format!("revision {}", stored.revision)),
+                    "layout saved",
+                )
+                .await;
+            Json(stored).into_response()
+        }
+        Err(message) => error_response(StatusCode::BAD_REQUEST, "invalid_layout", message),
+    }
 }
 
 async fn audit_events(
