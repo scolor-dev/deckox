@@ -89,6 +89,7 @@ impl Operations {
             started_ms: None,
             finished_ms: None,
             message: None,
+            error_code: None,
             request_id: spec.request_id.clone(),
         };
         self.store(job.clone());
@@ -102,22 +103,25 @@ impl Operations {
                 job.started_ms = Some(now_ms());
             });
             let outcome = work.await;
-            let (state, result, message) = match &outcome {
+            let (state, result, message, error_code) = match &outcome {
                 Ok(command) => (
                     JobState::Succeeded,
                     EventResult::Completed,
                     command.message.clone(),
+                    None,
                 ),
                 Err(error) => (
                     JobState::Failed,
                     EventResult::Failed,
                     Some(error.message().to_owned()),
+                    Some(error.code().to_owned()),
                 ),
             };
             operations.update(&id, |job| {
                 job.state = state;
                 job.finished_ms = Some(now_ms());
                 job.message.clone_from(&message);
+                job.error_code = error_code;
             });
             operations.events.publish(EventDraft {
                 kind: spec.kind,
@@ -296,13 +300,9 @@ mod tests {
             Err(AgentError::conflict("package is locked"))
         });
         wait_for(&operations, &job.id, JobState::Failed).await;
-        assert_eq!(
-            operations
-                .job(&job.id)
-                .and_then(|job| job.message)
-                .as_deref(),
-            Some("package is locked")
-        );
+        let finished = operations.job(&job.id).expect("job is kept");
+        assert_eq!(finished.message.as_deref(), Some("package is locked"));
+        assert_eq!(finished.error_code.as_deref(), Some("conflict"));
     }
 
     #[tokio::test]

@@ -622,6 +622,10 @@ pub struct Job {
     pub started_ms: Option<u64>,
     pub finished_ms: Option<u64>,
     pub message: Option<String>,
+    /// The error code (`conflict`, `not_found`, ...) of a failed job, the same
+    /// code the request would have answered with had it run in the foreground.
+    #[serde(default)]
+    pub error_code: Option<String>,
     pub request_id: Option<String>,
 }
 

@@ -133,6 +133,13 @@ struct ServiceLogsQuery {
     priority: ServiceLogPriority,
 }
 
+/// `?async=true` on an action starts it as a job and answers at once.
+#[derive(Debug, Default, Deserialize)]
+struct ActionQuery {
+    #[serde(default, rename = "async")]
+    run_async: bool,
+}
+
 #[derive(Debug, Deserialize)]
 struct AuditQuery {
     #[serde(default = "audit::default_limit")]
@@ -176,7 +183,7 @@ async fn main() {
     let updates = load_update_checker();
     let webhook_url = env::var("DECKOX_WEBHOOK_URL").ok();
     let modules = modules::ModuleRegistry::from_environment().unwrap_or_else(|error| {
-        eprintln!("invalid DECKOX_DISABLED_MODULES: {error}");
+        eprintln!("invalid module settings (server.toml or DECKOX_DISABLED_MODULES): {error}");
         std::process::exit(2);
     });
     if modules.is_enabled("notifications") {
@@ -366,6 +373,8 @@ struct EventFeedQuery {
 
 #[derive(Serialize)]
 struct ModuleList {
+    /// The protocol version this Server speaks, to compare with the Agent's.
+    protocol_version: u32,
     agent: events::AgentLink,
     /// The Agent's modules (switched in `agent.toml`).
     modules: Vec<deckox_protocol::ModuleInfo>,
@@ -387,6 +396,7 @@ async fn module_list(
         .map(|manifest| manifest.modules)
         .unwrap_or_default();
     Json(ModuleList {
+        protocol_version: deckox_protocol::PROTOCOL_VERSION,
         agent,
         modules,
         server_modules: state.modules.infos(),
@@ -857,30 +867,22 @@ async fn proxy_service_details(
     Path(service_id): Path<String>,
     Extension(request_id): Extension<RequestId>,
 ) -> Response {
-    proxy_service_request(
-        &state.agent,
-        &state.audit,
-        "GET",
-        &service_id,
-        None,
-        &request_id,
-        None,
-    )
-    .await
+    proxy_service_request(&state, "GET", &service_id, None, false, &request_id, None).await
 }
 
 async fn proxy_start_service(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
+    Query(query): Query<ActionQuery>,
     Extension(request_id): Extension<RequestId>,
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Response {
     proxy_service_request(
-        &state.agent,
-        &state.audit,
+        &state,
         "POST",
         &service_id,
         Some("start"),
+        query.run_async,
         &request_id,
         Some(&user),
     )
@@ -890,15 +892,16 @@ async fn proxy_start_service(
 async fn proxy_stop_service(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
+    Query(query): Query<ActionQuery>,
     Extension(request_id): Extension<RequestId>,
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Response {
     proxy_service_request(
-        &state.agent,
-        &state.audit,
+        &state,
         "POST",
         &service_id,
         Some("stop"),
+        query.run_async,
         &request_id,
         Some(&user),
     )
@@ -908,15 +911,16 @@ async fn proxy_stop_service(
 async fn proxy_restart_service(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
+    Query(query): Query<ActionQuery>,
     Extension(request_id): Extension<RequestId>,
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Response {
     proxy_service_request(
-        &state.agent,
-        &state.audit,
+        &state,
         "POST",
         &service_id,
         Some("restart"),
+        query.run_async,
         &request_id,
         Some(&user),
     )
@@ -926,15 +930,16 @@ async fn proxy_restart_service(
 async fn proxy_enable_service(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
+    Query(query): Query<ActionQuery>,
     Extension(request_id): Extension<RequestId>,
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Response {
     proxy_service_request(
-        &state.agent,
-        &state.audit,
+        &state,
         "POST",
         &service_id,
         Some("enable"),
+        query.run_async,
         &request_id,
         Some(&user),
     )
@@ -944,15 +949,16 @@ async fn proxy_enable_service(
 async fn proxy_disable_service(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
+    Query(query): Query<ActionQuery>,
     Extension(request_id): Extension<RequestId>,
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Response {
     proxy_service_request(
-        &state.agent,
-        &state.audit,
+        &state,
         "POST",
         &service_id,
         Some("disable"),
+        query.run_async,
         &request_id,
         Some(&user),
     )
@@ -966,11 +972,11 @@ async fn proxy_allow_service(
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Response {
     proxy_service_request(
-        &state.agent,
-        &state.audit,
+        &state,
         "POST",
         &service_id,
         Some("allow"),
+        false,
         &request_id,
         Some(&user),
     )
@@ -984,11 +990,11 @@ async fn proxy_disallow_service(
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Response {
     proxy_service_request(
-        &state.agent,
-        &state.audit,
+        &state,
         "POST",
         &service_id,
         Some("disallow"),
+        false,
         &request_id,
         Some(&user),
     )
@@ -1094,6 +1100,7 @@ struct SoftwareActionRequest {
 async fn install_software(
     State(state): State<AppState>,
     Path(software_id): Path<String>,
+    Query(query): Query<ActionQuery>,
     Extension(request_id): Extension<RequestId>,
     Extension(user): Extension<AuthenticatedUser>,
     Json(payload): Json<SoftwareActionRequest>,
@@ -1105,6 +1112,7 @@ async fn install_software(
         payload.current_password,
         &software_id,
         "install",
+        query.run_async,
     )
     .await
 }
@@ -1112,6 +1120,7 @@ async fn install_software(
 async fn remove_software(
     State(state): State<AppState>,
     Path(software_id): Path<String>,
+    Query(query): Query<ActionQuery>,
     Extension(request_id): Extension<RequestId>,
     Extension(user): Extension<AuthenticatedUser>,
     Json(payload): Json<SoftwareActionRequest>,
@@ -1123,6 +1132,7 @@ async fn remove_software(
         payload.current_password,
         &software_id,
         "remove",
+        query.run_async,
     )
     .await
 }
@@ -1130,6 +1140,7 @@ async fn remove_software(
 async fn upgrade_software(
     State(state): State<AppState>,
     Path(software_id): Path<String>,
+    Query(query): Query<ActionQuery>,
     Extension(request_id): Extension<RequestId>,
     Extension(user): Extension<AuthenticatedUser>,
     Json(payload): Json<SoftwareActionRequest>,
@@ -1141,6 +1152,7 @@ async fn upgrade_software(
         payload.current_password,
         &software_id,
         "upgrade",
+        query.run_async,
     )
     .await
 }
@@ -1156,6 +1168,7 @@ async fn software_action(
     current_password: String,
     software_id: &str,
     action: &str,
+    run_async: bool,
 ) -> Response {
     if !valid_software_id(software_id) {
         return invalid_software_id();
@@ -1172,37 +1185,24 @@ async fn software_action(
         return *response;
     }
 
-    let path = format!("/v1/software/{software_id}/{action}");
+    let path = with_async(format!("/v1/software/{software_id}/{action}"), run_async);
     let response =
         proxy_agent_confirmed(&state.agent, "POST", &path, request_id, &current_password).await;
-    if response.status().is_success() {
-        state
-            .audit
-            .log_admin(
-                request_id,
-                user.source_ip,
-                "software_action",
-                "success",
-                Some(format!("software={software_id} action={action}")),
-                "software action completed",
-            )
-            .await;
-    } else {
-        state
-            .audit
-            .log_admin(
-                request_id,
-                user.source_ip,
-                "software_action",
-                "failure",
-                Some(format!(
-                    "software={software_id} action={action} status={}",
-                    response.status().as_u16()
-                )),
-                "software action failed",
-            )
-            .await;
-    }
+    let (result, message) = action_outcome(response.status());
+    state
+        .audit
+        .log_admin(
+            request_id,
+            user.source_ip,
+            "software_action",
+            result,
+            Some(format!(
+                "software={software_id} action={action}{}",
+                action_detail(response.status(), run_async)
+            )),
+            message,
+        )
+        .await;
     response
 }
 
@@ -1522,11 +1522,11 @@ fn service_logs_attachment(service_id: &str, logs: &ServiceLogs) -> Response {
 }
 
 async fn proxy_service_request(
-    client: &AgentClient,
-    audit: &AuditLog,
+    state: &AppState,
     method: &str,
     service_id: &str,
     action: Option<&str>,
+    run_async: bool,
     request_id: &RequestId,
     user: Option<&AuthenticatedUser>,
 ) -> Response {
@@ -1536,38 +1536,60 @@ async fn proxy_service_request(
 
     let path = action.map_or_else(
         || format!("/v1/services/{service_id}"),
-        |action| format!("/v1/services/{service_id}/{action}"),
+        |action| with_async(format!("/v1/services/{service_id}/{action}"), run_async),
     );
-    let response = proxy_agent(client, method, &path, request_id).await;
+    let response = proxy_agent(&state.agent, method, &path, request_id).await;
     if let (Some(action), Some(user)) = (action, user) {
-        if response.status().is_success() {
-            audit
-                .log_admin(
-                    request_id,
-                    user.source_ip,
-                    "service_action",
-                    "success",
-                    Some(format!("service={service_id} action={action}")),
-                    "service action completed",
-                )
-                .await;
-        } else {
-            audit
-                .log_admin(
-                    request_id,
-                    user.source_ip,
-                    "service_action",
-                    "failure",
-                    Some(format!(
-                        "service={service_id} action={action} status={}",
-                        response.status().as_u16()
-                    )),
-                    "service action failed",
-                )
-                .await;
-        }
+        let (result, message) = action_outcome(response.status());
+        state
+            .audit
+            .log_admin(
+                request_id,
+                user.source_ip,
+                "service_action",
+                result,
+                Some(format!(
+                    "service={service_id} action={action}{}",
+                    action_detail(response.status(), run_async)
+                )),
+                message,
+            )
+            .await;
     }
     response
+}
+
+/// Asks the Agent to run the operation as a job and answer at once.
+fn with_async(mut path: String, run_async: bool) -> String {
+    if run_async {
+        path.push_str("?async=true");
+    }
+    path
+}
+
+/// How an action's answer is recorded: `202` means the Agent started a job
+/// whose end is reported separately (and mirrored into the audit log from the
+/// Agent's events), so it is "accepted" rather than "success".
+fn action_outcome(status: StatusCode) -> (&'static str, &'static str) {
+    if status == StatusCode::ACCEPTED {
+        ("accepted", "action started as a job")
+    } else if status.is_success() {
+        ("success", "action completed")
+    } else {
+        ("failure", "action failed")
+    }
+}
+
+fn action_detail(status: StatusCode, run_async: bool) -> String {
+    if status.is_success() {
+        if run_async {
+            " async=true".to_owned()
+        } else {
+            String::new()
+        }
+    } else {
+        format!(" status={}", status.as_u16())
+    }
 }
 
 fn invalid_service_id() -> Response {
@@ -1727,6 +1749,45 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("attachment; filename=\"deckox-service-logs-nginx.service.json\"")
         );
+    }
+
+    #[test]
+    fn a_started_job_is_audited_as_accepted_not_success() {
+        use super::{action_detail, action_outcome};
+
+        assert_eq!(
+            action_outcome(StatusCode::ACCEPTED),
+            ("accepted", "action started as a job")
+        );
+        assert_eq!(action_outcome(StatusCode::OK).0, "success");
+        assert_eq!(action_outcome(StatusCode::CONFLICT).0, "failure");
+        assert_eq!(action_detail(StatusCode::ACCEPTED, true), " async=true");
+        assert_eq!(action_detail(StatusCode::OK, false), "");
+        assert_eq!(action_detail(StatusCode::CONFLICT, true), " status=409");
+    }
+
+    #[test]
+    fn the_async_flag_is_passed_on_to_the_agent() {
+        use super::with_async;
+
+        assert_eq!(
+            with_async("/v1/software/git/install".to_owned(), true),
+            "/v1/software/git/install?async=true"
+        );
+        assert_eq!(
+            with_async("/v1/software/git/install".to_owned(), false),
+            "/v1/software/git/install"
+        );
+    }
+
+    #[test]
+    fn the_async_flag_is_read_from_the_query() {
+        use super::ActionQuery;
+
+        let parsed: ActionQuery =
+            serde_json::from_value(serde_json::json!({"async": true})).expect("async flag");
+        assert!(parsed.run_async);
+        assert!(!ActionQuery::default().run_async);
     }
 
     #[tokio::test]

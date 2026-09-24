@@ -58,6 +58,7 @@ pub async fn run() -> Result<(), String> {
     checks.push(check_agent().await);
     checks.push(check_agent_security().await);
     checks.extend(check_agent_config(&agent_config_path()));
+    checks.push(check_server_config(&crate::modules::config_path()));
     checks.push(check_web());
     checks.push(check_account());
 
@@ -220,6 +221,19 @@ pub fn describe_security(status: &serde_json::Value) -> Check {
 /// Reads agent.toml the way the Agent will: it must parse, and each table
 /// should be present. A missing table is a warning (defaults apply), a
 /// syntax error is a failure (the Agent refuses to start).
+/// The install profile whose module set `disabled` matches, or `custom` when
+/// the list was edited by hand. `develop` shares the `all` module set.
+fn profile_of(disabled: &[&str]) -> &'static str {
+    let mut sorted = disabled.to_vec();
+    sorted.sort_unstable();
+    match sorted.as_slice() {
+        [] => "all",
+        ["schedules", "software"] => "normal",
+        ["backups", "power", "schedules", "software", "update"] => "lite",
+        _ => "custom",
+    }
+}
+
 pub fn check_agent_config(path: &Path) -> Vec<Check> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -269,24 +283,24 @@ pub fn check_agent_config(path: &Path) -> Vec<Check> {
             .and_then(toml::Value::as_bool)
             .unwrap_or(default)
     };
-    let disabled_modules = value
+    let disabled: Vec<&str> = value
         .get("modules")
         .and_then(|table| table.get("disabled"))
         .and_then(toml::Value::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(toml::Value::as_str)
-                .collect::<Vec<_>>()
-                .join(", ")
-        })
-        .filter(|text| !text.is_empty())
-        .unwrap_or_else(|| "none".to_owned());
+        .map(|items| items.iter().filter_map(toml::Value::as_str).collect())
+        .unwrap_or_default();
+    let disabled_modules = if disabled.is_empty() {
+        "none".to_owned()
+    } else {
+        disabled.join(", ")
+    };
+    let profile = profile_of(&disabled);
     let mut checks = vec![Check::new(
         Level::Ok,
         "agent.toml",
         format!(
-            "reboot {}, update {}, {} allowed service(s), {} managed package(s), auto_adopt {}, modules off: {}",
+            "profile {}, reboot {}, update {}, {} allowed service(s), {} managed package(s), auto_adopt {}, modules off: {}",
+            profile,
             if flag("system", "allow_reboot", false) {
                 "allowed"
             } else {
@@ -317,6 +331,31 @@ pub fn check_agent_config(path: &Path) -> Vec<Check> {
         }
     }
     checks
+}
+
+pub fn check_server_config(path: &Path) -> Check {
+    match crate::modules::disabled_from_file(path) {
+        Ok(disabled) => {
+            let from_environment = env::var("DECKOX_DISABLED_MODULES")
+                .is_ok_and(|value| value.split(',').any(|name| !name.trim().is_empty()));
+            let listed = if disabled.is_empty() {
+                "none".to_owned()
+            } else {
+                disabled.join(", ")
+            };
+            let note = if from_environment {
+                " (DECKOX_DISABLED_MODULES overrides it)"
+            } else {
+                ""
+            };
+            Check::new(
+                Level::Ok,
+                "server.toml",
+                format!("modules off: {listed}{note}"),
+            )
+        }
+        Err(error) => Check::new(Level::Fail, "server.toml", error),
+    }
 }
 
 fn check_web() -> Check {
@@ -362,7 +401,7 @@ fn check_account() -> Check {
 
 #[cfg(test)]
 mod tests {
-    use super::{Level, check_agent_config, check_version, describe_security};
+    use super::{Level, check_agent_config, check_server_config, check_version, describe_security};
 
     fn config_file(contents: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -407,6 +446,39 @@ mod tests {
             "{}",
             checks[0].detail
         );
+    }
+
+    #[test]
+    fn the_install_profile_is_read_from_the_disabled_modules() {
+        let detail = |disabled: &str| {
+            let path = config_file(&format!(
+                "[system]\n[software]\n[services]\n[modules]\ndisabled = [{disabled}]\n"
+            ));
+            check_agent_config(&path)[0].detail.clone()
+        };
+        assert!(detail("").contains("profile all,"));
+        assert!(detail("\"software\", \"schedules\"").contains("profile normal,"));
+        assert!(
+            detail("\"update\", \"power\", \"backups\", \"schedules\", \"software\"")
+                .contains("profile lite,")
+        );
+        assert!(detail("\"software\"").contains("profile custom,"));
+    }
+
+    #[test]
+    fn server_toml_modules_are_reported_and_a_typo_fails() {
+        let path = config_file("[modules]\ndisabled = [\"audit\"]\n");
+        let check = check_server_config(&path);
+        assert_eq!(check.level, Level::Ok);
+        assert!(
+            check.detail.contains("modules off: audit"),
+            "{}",
+            check.detail
+        );
+        let broken = config_file("[modules\ndisabled = [");
+        assert_eq!(check_server_config(&broken).level, Level::Fail);
+        let missing = check_server_config(std::path::Path::new("/nonexistent/server.toml"));
+        assert_eq!(missing.level, Level::Ok);
     }
 
     #[test]

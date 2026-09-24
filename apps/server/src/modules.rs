@@ -1,11 +1,19 @@
 //! The Server's own switchable modules — the parts that live on the Server
-//! rather than being passed through to the Agent. Switch them off with
-//! `DECKOX_DISABLED_MODULES=audit,notifications` (comma-separated); a module
-//! that is off answers `404 module_disabled` and starts no background work.
+//! rather than being passed through to the Agent. Switch them off in
+//! `server.toml` (`[modules] disabled = ["audit"]`) or, taking precedence,
+//! with `DECKOX_DISABLED_MODULES=audit,notifications` (comma-separated); a
+//! module that is off answers `404 module_disabled` and starts no background
+//! work.
 //! The Agent's modules are switched in `agent.toml` and reach the Web through
 //! `GET /api/v1/modules`.
 
-use std::{collections::HashSet, env, sync::Arc};
+use std::{
+    collections::HashSet,
+    env, fs,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use axum::http::StatusCode;
 use axum::{
@@ -18,6 +26,49 @@ use deckox_protocol::{
 };
 
 use crate::error_response;
+
+const DEFAULT_CONFIG: &str = "/etc/deckox/server.toml";
+
+pub fn config_path() -> PathBuf {
+    PathBuf::from(env::var("DECKOX_SERVER_CONFIG").unwrap_or_else(|_| DEFAULT_CONFIG.to_owned()))
+}
+
+/// The `[modules] disabled` list of `server.toml`. A missing file, table or
+/// key means nothing is switched off; a file that cannot be read or parsed is
+/// an error, so a typo never silently leaves a module on.
+pub fn disabled_from_file(path: &Path) -> Result<Vec<String>, String> {
+    let text = match fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(format!("cannot read {}: {error}", path.display())),
+    };
+    let value: toml::Value =
+        toml::from_str(&text).map_err(|error| format!("invalid {}: {error}", path.display()))?;
+    let Some(list) = value.get("modules").and_then(|table| table.get("disabled")) else {
+        return Ok(Vec::new());
+    };
+    list.as_array()
+        .ok_or_else(|| format!("{}: [modules] disabled must be a list", path.display()))?
+        .iter()
+        .map(|item| {
+            item.as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| format!("{}: [modules] disabled must list names", path.display()))
+        })
+        .collect()
+}
+
+/// The environment variable wins when it names any module; otherwise the file's list applies.
+fn resolve(from_environment: Option<&str>, from_file: Vec<String>) -> Vec<String> {
+    let listed: Vec<String> = from_environment
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+        .collect();
+    if listed.is_empty() { from_file } else { listed }
+}
 
 const DEFINITIONS: &[ModuleDefinition] = &[
     ModuleDefinition {
@@ -55,14 +106,11 @@ impl ModuleRegistry {
     }
 
     pub fn from_environment() -> Result<Self, String> {
-        let disabled: Vec<String> = env::var("DECKOX_DISABLED_MODULES")
-            .unwrap_or_default()
-            .split(',')
-            .map(str::trim)
-            .filter(|name| !name.is_empty())
-            .map(str::to_owned)
-            .collect();
-        Self::new(&disabled)
+        let from_file = disabled_from_file(&config_path())?;
+        Self::new(&resolve(
+            env::var("DECKOX_DISABLED_MODULES").ok().as_deref(),
+            from_file,
+        ))
     }
 
     pub fn is_enabled(&self, id: &str) -> bool {
@@ -101,7 +149,57 @@ pub async fn gate(
 
 #[cfg(test)]
 mod tests {
-    use super::ModuleRegistry;
+    use super::{ModuleRegistry, disabled_from_file, resolve};
+
+    fn config_file(name: &str, contents: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("deckox-server-config-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join(name);
+        std::fs::write(&path, contents).expect("write");
+        path
+    }
+
+    #[test]
+    fn server_toml_lists_the_modules_to_switch_off() {
+        let listed = config_file(
+            "a.toml",
+            "listen_addr = \"x\"\n[modules]\ndisabled = [\"audit\", \"realtime\"]\n",
+        );
+        assert_eq!(
+            disabled_from_file(&listed).expect("parsed"),
+            ["audit", "realtime"]
+        );
+        let bare = config_file("b.toml", "listen_addr = \"x\"\n");
+        assert!(disabled_from_file(&bare).expect("parsed").is_empty());
+        let missing = std::path::Path::new("/nonexistent/server.toml");
+        assert!(
+            disabled_from_file(missing)
+                .expect("missing is fine")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_broken_server_toml_is_refused() {
+        let broken = config_file("c.toml", "[modules\ndisabled = [");
+        assert!(disabled_from_file(&broken).is_err());
+        let wrong_type = config_file("d.toml", "[modules]\ndisabled = \"audit\"\n");
+        assert!(disabled_from_file(&wrong_type).is_err());
+        let wrong_item = config_file("e.toml", "[modules]\ndisabled = [1]\n");
+        assert!(disabled_from_file(&wrong_item).is_err());
+    }
+
+    #[test]
+    fn the_environment_overrides_the_file_only_when_it_names_a_module() {
+        let file = || vec!["audit".to_owned()];
+        assert_eq!(resolve(None, file()), ["audit"]);
+        assert_eq!(resolve(Some(""), file()), ["audit"]);
+        assert_eq!(resolve(Some(" , "), file()), ["audit"]);
+        assert_eq!(
+            resolve(Some("realtime, notifications"), file()),
+            ["realtime", "notifications"]
+        );
+    }
 
     #[test]
     fn paths_map_to_their_module() {

@@ -86,6 +86,11 @@ impl AgentError {
         }
     }
 
+    /// The machine-readable error code, as the response body carries it.
+    pub const fn code(&self) -> &'static str {
+        self.code
+    }
+
     /// The human-readable message, for callers that need to surface it
     /// somewhere other than an HTTP response body — e.g. a schedule's
     /// `last_result`, which the admin panel displays as-is.
