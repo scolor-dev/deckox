@@ -4,3 +4,10 @@
 listen_addr = "127.0.0.1:8080"
 agent_socket = "/run/deckox/agent.sock"
 web_dir = "/usr/local/share/deckox/web"
+
+# Server features that are switched off. Known modules: audit, realtime,
+# notifications, update-check. A module that is off answers 404 and starts none
+# of its background work. DECKOX_DISABLED_MODULES, when it names any module,
+# takes precedence over this list. Restart the Server after editing.
+[modules]
+disabled = []

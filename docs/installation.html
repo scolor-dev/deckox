@@ -206,7 +206,7 @@ confirm = ["software_action", "system_reboot", "system_update"]</code></pre>
       <section class="section" aria-labelledby="modules-title">
         <h2 id="modules-title">使わない機能を止める(モジュール)</h2>
         <h3>最初のプロファイルを選ぶ</h3>
-        <p>初回インストールの最初の質問で、有効にする機能の範囲を選びます。選んだ内容は、下記のモジュール設定として書き込まれます。あとから<code>agent.toml</code>とServerのユニットを編集すれば、いつでも変えられます。更新(アップデート)では、この選択を再質問も変更もしません。</p>
+        <p>初回インストールの最初の質問で、有効にする機能の範囲を選びます。選んだ内容は、Agentは<code>agent.toml</code>、Serverは<code>server.toml</code>の<code>[modules]</code>として書き込まれます。あとから、この2つのファイルを編集して各サービスを再起動すれば、いつでも変えられます。選んだプロファイルは、<code>sudo -u deckox deckox-server doctor</code>の<code>agent.toml</code>の行に、<code>profile normal</code>のように表示されます。モジュールの一覧を手で変えた場合は<code>profile custom</code>と表示されます。更新(アップデート)では、この選択を再質問も変更もしません。</p>
         <table class="status-table">
           <thead><tr><th>プロファイル</th><th>有効にする機能</th><th>止めるモジュール</th></tr></thead>
           <tbody>
@@ -233,7 +233,10 @@ disabled = ["software", "power"]</code></pre>
             <tr><td><code>software</code></td><td>ソフトウェアの管理</td></tr>
           </tbody>
         </table>
-                <p>Server側の機能も、同じように止められます。Serverのユニット(<code>/etc/systemd/system/deckox-server.service</code>)の<code>Environment=DECKOX_DISABLED_MODULES=</code>に、カンマ区切りで書いて、Serverを再起動します(書き間違いは、理由を表示して起動を拒否します)。</p>
+                <p>Server側の機能も、同じように止められます。<code>/etc/deckox/server.toml</code>の<code>[modules]</code>に、カンマではなくTOMLの配列で書いて、Serverを再起動します(書き間違いは、理由を表示して起動を拒否します)。</p>
+        <pre><code>[modules]
+disabled = ["audit", "realtime"]</code></pre>
+        <p>Serverのユニットの環境変数<code>DECKOX_DISABLED_MODULES</code>(カンマ区切り)でも指定でき、モジュール名が1つでも書かれていれば、こちらが<code>server.toml</code>より優先されます。</p>
         <table class="status-table">
           <thead><tr><th>Serverのモジュール</th><th>内容</th></tr></thead>
           <tbody>
@@ -243,7 +246,6 @@ disabled = ["software", "power"]</code></pre>
             <tr><td><code>update-check</code></td><td>GitHubの最新版の確認</td></tr>
           </tbody>
         </table>
-        <pre><code>Environment=DECKOX_DISABLED_MODULES=audit,realtime</code></pre>
         <p>止めたモジュールの経路は<code>404</code>を返し、そのモジュールだけが使う常駐処理は起動しません。書き間違いや、依存先(例: <code>schedules</code>に対する<code>services</code>)だけを止める設定は、Agentが理由を表示して起動を拒否します。状態は<code>sudo -u deckox deckox-server doctor</code>の<code>agent.toml</code>の行で確認できます。</p>
       </section>
 

@@ -76,7 +76,7 @@ make_archive() {
   printf '#!/bin/sh\necho agent-%s\n' "$label" > "$stage/bin/deckox-agent"
   chmod +x "$stage/bin/deckox-server" "$stage/bin/deckox-agent"
   printf '<!doctype html><title>%s</title>\n' "$label" > "$stage/web/index.html"
-  printf 'listen_addr = "127.0.0.1:8080"\n' > "$stage/config/server.toml"
+  printf 'listen_addr = "127.0.0.1:8080"\n\n[modules]\ndisabled = []\n' > "$stage/config/server.toml"
   printf 'socket = "/run/deckox/agent.sock"\n\n[system]\nallow_reboot = false\nallow_update = false\n\n[modules]\ndisabled = []\n\n[services]\nallowed = []\n' \
     > "$stage/config/agent.toml"
   cp "${root_dir}/packaging/systemd/deckox-agent.service" "$stage/systemd/"
@@ -232,9 +232,7 @@ assert_contains "$wizard_default_root/etc/deckox/agent.toml" "allow_update = fal
 assert_contains "$test_dir/wizard-default.out" "Deckox is listening on http://127.0.0.1:8080/"
 assert_contains "$test_dir/wizard-default.out" "Profile: normal"
 assert_contains "$wizard_default_root/etc/deckox/agent.toml" 'disabled = ["schedules", "software"]'
-if grep -F "DECKOX_DISABLED_MODULES" "$wizard_default_override" >/dev/null; then
-  fail "the normal profile must not disable any Server module"
-fi
+assert_contains "$wizard_default_root/etc/deckox/server.toml" "disabled = []"
 
 # The profile decides which modules the first install switches off.
 lite_root="${test_dir}/profile-lite-root"
@@ -242,8 +240,10 @@ lite_root="${test_dir}/profile-lite-root"
 assert_contains "$test_dir/profile-lite.out" "Profile: lite"
 assert_contains "$lite_root/etc/deckox/agent.toml" 'disabled = ["power", "update", "backups", "schedules", "software"]'
 assert_contains "$lite_root/etc/deckox/agent.toml" "allow_reboot = false"
-assert_contains "$lite_root/etc/systemd/system/deckox-server.service.d/override.conf" \
-  "Environment=DECKOX_DISABLED_MODULES=notifications,update-check"
+assert_contains "$lite_root/etc/deckox/server.toml" 'disabled = ["notifications", "update-check"]'
+if grep -F "DECKOX_DISABLED_MODULES" "$lite_root/etc/systemd/system/deckox-server.service.d/override.conf" >/dev/null; then
+  fail "the Server modules belong in server.toml, not in the systemd override"
+fi
 
 all_root="${test_dir}/profile-all-root"
 (DECKOX_PROFILE=all run_installer "$all_root" "$archive_wizard_v1" 2.0.0 > "$test_dir/profile-all.out")

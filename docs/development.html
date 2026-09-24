@@ -85,6 +85,7 @@ npm run build</code></pre>
           <thead><tr><th>変数</th><th>既定値</th><th>使用プロセス</th></tr></thead>
           <tbody>
             <tr><td><code>DECKOX_LISTEN_ADDR</code></td><td><code>127.0.0.1:8080</code></td><td>Server</td></tr>
+            <tr><td><code>DECKOX_SERVER_CONFIG</code></td><td><code>/etc/deckox/server.toml</code></td><td>Server(<code>[modules] disabled</code>だけを読む)</td></tr>
             <tr><td><code>DECKOX_AGENT_CONFIG</code></td><td><code>/etc/deckox/agent.toml</code></td><td>Agent</td></tr>
             <tr><td><code>DECKOX_AGENT_SOCKET</code></td><td><code>/run/deckox/agent.sock</code></td><td>Server / Agent</td></tr>
             <tr><td><code>DECKOX_SCHEDULES_FILE</code></td><td><code>/var/lib/deckox/schedules.json</code></td><td>Agent</td></tr>
@@ -196,6 +197,8 @@ allowed = [
         <p>ウィジェットは、<code>id</code>(<code>&lt;モジュール&gt;.&lt;名前&gt;</code>)、必要なAgent・Serverのモジュール(<code>requires</code>)、標準・最小・最大のサイズ、設定の項目(<code>config</code>)、枠の種類(<code>frame</code>は題名つきの枠、<code>bare</code>は自分で箱を描く)、コンポーネントを宣言します。文言はモジュールの<code>messages</code>に、日本語と英語で書きます。<code>requires</code>のどれかが<code>GET /api/v1/modules</code>で無効なら、そのウィジェットは出ず、APIも呼びません。Agentに繋がらない間は、状態が分からないので、隠さずに出します。</p>
         <p>格子は12列で、1行は<code>--widget-row</code>(72px)です。ウィジェットは「順番・幅(1から12)・高さ(行数、または<code>auto</code>)」で並べ、座標は持ちません。モジュールを無効にしても、穴が空かずに詰まります。幅が6列(タブレット)、2列(スマホ)に狭まると、幅は自動で縮みます。ページは、縦に伸びる「スクロール」と、画面に収まる「1面」の2種類です。</p>
         <p>配置は、Serverの<code>DECKOX_LAYOUT_FILE</code>(<code>/var/lib/deckox/layout.json</code>)と、各ブラウザの<code>localStorage</code>の両方に保存します。ブラウザに保存があれば、そちらを優先します。Serverに、より新しい配置があるときは、知らせて、選んでもらいます。初期配置は<code>layout/defaults.ts</code>の「おすすめ」で、無効なモジュールのウィジェットだけのページは、ナビに出しません。</p>
+        <p>時間のかかる操作(サービスの起動・停止・再起動・有効化・無効化、ソフトウェアのインストール・削除・更新)は、<code>?async=true</code>のジョブとして始め、完了まで<code>GET /api/v1/jobs/{id}</code>を読みます(<code>api/client.ts</code>の<code>waitForJob</code>)。通常の要求は15秒で打ち切られ、Serverも35秒でAgentを待つのをやめるため、ジョブにしないとインストールなどが途中で失敗して見えます。<code>core.jobs</code>ウィジェットが、実行中・直近のジョブを表示します。Agentが再起動するとジョブの記録は失われ、その場合は<code>job_lost</code>として知らせます。</p>
+        <p>ServerがAgentを見失った、またはAgentと通信規約が違う(片方だけ更新した)ときは、画面の上に知らせます(<code>AgentLinkBanner</code>)。30秒ごとと、タブに戻ったときに読み直します。</p>
         <p>データは<code>data/sources.ts</code>の共有ソースで読みます。同じデータを見るウィジェットが何個あっても、取得は1回で、ページを切り替えても、古くなるまで読み直しません。ウィジェットの中で自分だけが使うデータは、<code>useStaleRefresh</code>で読みます。リアルタイムの指標は<code>data/metrics.ts</code>が、表示中のウィジェットがあるあいだだけ、1本の接続で配ります。</p>
       </section>
 

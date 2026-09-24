@@ -114,6 +114,13 @@
         </dl>
       </section>
 
+      <section class="section" aria-labelledby="pages-title">
+        <h2 id="pages-title">管理画面の構造(ページとウィジェット)</h2>
+        <p>管理画面は、12列のグリッドにウィジェットを並べたページの集まりです。Webのコアはグリッド・ウィジェットの枠・配置の編集画面・デザインシステムを持ち、機能ごとの内容は<code>apps/web/src/modules/&lt;id&gt;/</code>のモジュールが、ウィジェットとして提供します。モジュールのフォルダを追加するだけで、パレットに新しいウィジェットが並びます。</p>
+        <p>ウィジェットは、必要なバックエンドのモジュール(<code>requires</code>)が有効なときだけ描画され、無効なモジュールの経路は呼びません。共有するデータは、複数のウィジェットが1回の取得を使い回します。配置(ページとウィジェットの並び)は<code>GET/PUT /api/v1/layout</code>でServerに保存し、ブラウザにも保存します。ブラウザ側の保存が優先で、Serverの改訂番号で「より新しい配置がある」ことを知らせます。初期状態は、機能ごとにページを分けた推奨配置です。</p>
+        <p>設定(表示・パスワード変更・二要素認証)も、<code>settings</code>モジュールのウィジェットとして「設定」ページに並びます。これらは「固定」のウィジェットで、編集モードでも削除・移動・サイズ変更・パレットからの追加はできず、「設定」ページの削除もできません。保存済みの配置に足りない固定ウィジェットは、読み込み時に自動で戻されます。</p>
+      </section>
+
       <section class="section" aria-labelledby="communication-title">
         <h2 id="communication-title">Server–Agent通信</h2>
         <dl class="definition-list">
@@ -140,7 +147,7 @@
 /etc/systemd/system/
 ├── deckox-server.service
 └── deckox-agent.service</code></pre>
-        <p>Agentは<code>agent.toml</code>を読み込み、ソケットの場所を環境変数で上書きできます。Serverは現在、環境変数から設定を読み込み、<code>server.toml</code>は将来の設定場所として予約されています。<code>admin-password.hash</code>はパスワードハッシュとTOTP設定を含むJSONです(旧形式の生ハッシュ文字列も読み込み時に自動判定します)。<code>audit.log</code>は監査ログのJSON Linesです。</p>
+        <p>Agentは<code>agent.toml</code>を読み込み、ソケットの場所を環境変数で上書きできます。Serverは、待受アドレスなどを環境変数から読み込みます。<code>server.toml</code>からは、いまのところ<code>[modules]</code>の<code>disabled</code>(止めるServer機能)だけを読み、その他のキーは将来の設定場所として予約されています。<code>admin-password.hash</code>はパスワードハッシュとTOTP設定を含むJSONです(旧形式の生ハッシュ文字列も読み込み時に自動判定します)。<code>audit.log</code>は監査ログのJSON Linesです。</p>
       </section>
 
       <section class="section" aria-labelledby="security-title">

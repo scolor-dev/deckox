@@ -543,7 +543,17 @@ cp -R "${release_dir}/web/." "$web_dir/"
 install_file 0644 root root "${release_dir}/VERSION" "$version_file"
 
 if [ ! -f "${config_dir}/server.toml" ]; then
-  install_file 0640 root deckox "${release_dir}/config/server.toml" "${config_dir}/server.toml"
+  server_toml_source="${release_dir}/config/server.toml"
+  if [ -n "$server_disabled" ]; then
+    server_toml_source="${work_dir}/server.toml"
+    awk -v disabled="$(toml_list "$server_disabled")" '
+      /^disabled = / { print "disabled = " disabled; seen = 1; next }
+      { print }
+      END { if (!seen) exit 1 }
+    ' "${release_dir}/config/server.toml" > "$server_toml_source" \
+      || { echo "the packaged server.toml has no [modules] disabled line" >&2; exit 1; }
+  fi
+  install_file 0640 root deckox "$server_toml_source" "${config_dir}/server.toml"
 fi
 if [ ! -f "${config_dir}/agent.toml" ]; then
   agent_toml_source="${release_dir}/config/agent.toml"
@@ -581,9 +591,6 @@ if [ "$install_kind" = "initial" ]; then
   {
     echo "[Service]"
     echo "Environment=DECKOX_LISTEN_ADDR=${chosen_listen_addr}"
-    if [ -n "$server_disabled" ]; then
-      echo "Environment=DECKOX_DISABLED_MODULES=$(printf '%s' "$server_disabled" | tr ' ' ',')"
-    fi
   } > "${work_dir}/override.conf"
   install_file 0644 root root "${work_dir}/override.conf" "${systemd_dir}/deckox-server.service.d/override.conf"
 fi

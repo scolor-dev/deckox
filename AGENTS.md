@@ -30,6 +30,7 @@ The Web is pages of widgets. Core draws the 12-column grid, the widget frame and
 - Read shared data through `data/sources.ts` (`source.use()`), not with per-widget fetches, so several widgets share one request. Read live metrics through `useMetrics()` in `data/metrics.ts`. Use `useStaleRefresh` only for data a single widget owns.
 - A widget whose module is off is not rendered and never calls its endpoints; do not check module state inside a widget for that.
 - The layout is stored on the Server (`/api/v1/layout`) and in the browser, and the browser copy wins. Change the shape only together with `normalizeLayout` and a version bump. The recommended layout is `layout/defaults.ts`.
+- A widget with `locked: true` (the settings widgets) is placed by the recommended layout and cannot be removed, moved, resized, configured or added from the palette; `ensureLockedWidgets` restores any that a stored layout lacks. Use it only for things the admin must always be able to reach.
 - Keep widgets to design-system components and tokens; `literals.test.ts` also scans `modules/` and `widgets/`.
 
 ## Version bump
