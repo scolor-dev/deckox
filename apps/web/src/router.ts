@@ -1,18 +1,12 @@
 import { createRouter, createWebHistory } from "vue-router";
 
 /**
- * Screens are pages of widgets (`/:pageId`), laid out by the user; only
- * settings and the restart wait are routes of their own.
+ * Screens are pages of widgets (`/:pageId`), laid out by the user, settings
+ * included; only the restart wait is a route of its own.
  */
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    {
-      path: "/settings",
-      name: "settings",
-      component: () => import("./views/SettingsView.vue"),
-      meta: { titleKey: "nav.settings" },
-    },
     {
       path: "/restarting",
       name: "restarting",

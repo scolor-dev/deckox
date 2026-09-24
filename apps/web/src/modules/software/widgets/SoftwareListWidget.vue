@@ -3,7 +3,6 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { api, type SoftwarePackage } from "../../../api/client";
 import { softwarePackages } from "../../../data/sources";
-import WidgetHeader from "../../../widgets/WidgetHeader.vue";
 import { apiErrorKey } from "../../../api/errors";
 import PasswordConfirmDialog from "../../../components/PasswordConfirmDialog.vue";
 import {
@@ -11,11 +10,13 @@ import {
   AppIcon,
   AppIconButton,
   AppStack,
+  AppText,
   InfoNote,
   NoticeBanner,
+  SectionHeader,
   StateBadge,
-  TableToolbar,
   TablePanel,
+  TableToolbar,
   TagBadge,
   TagToggle,
   TagToggleGroup,
@@ -145,15 +146,23 @@ async function confirmAction(password: string) {
 
 <template>
   <AppStack gap="4">
-    <WidgetHeader :title="t('software.title')">
-      <small>{{ t("software.subtitle") }}</small>
-      <AppButton
-        :disabled="loading"
-        @click="refresh"
-      >
-        {{ loading ? t("common.loading") : t("common.refresh") }}
-      </AppButton>
-    </WidgetHeader>
+    <SectionHeader :title="t('software.title')">
+      <template #actions>
+        <AppText
+          as="small"
+          tone="muted"
+          size="xs"
+        >
+          {{ t("software.subtitle") }}
+        </AppText>
+        <AppButton
+          :disabled="loading"
+          @click="refresh"
+        >
+          {{ loading ? t("common.loading") : t("common.refresh") }}
+        </AppButton>
+      </template>
+    </SectionHeader>
 
     <NoticeBanner
       v-if="error"
@@ -218,7 +227,14 @@ async function confirmAction(password: string) {
                 >
                   <AppIcon :name="row.expanded ? 'chevron-down' : 'chevron-right'" />
                 </AppIconButton>
-                <strong class="service-name">{{ row.pkg.name }}</strong>
+                <AppText
+                  as="strong"
+                  mono
+                  strong
+                  size="xs"
+                >
+                  {{ row.pkg.name }}
+                </AppText>
                 <TagBadge
                   v-if="row.childCount > 0"
                   category="standard"
@@ -237,7 +253,14 @@ async function confirmAction(password: string) {
               <StateBadge :state="row.pkg.installed ? 'active' : 'inactive'">
                 {{ row.pkg.installed ? t("software.installed") : t("software.notInstalled") }}
               </StateBadge>
-              <small v-if="row.pkg.upgradable">{{ t("software.upgradable") }}</small>
+              <AppText
+                v-if="row.pkg.upgradable"
+                as="small"
+                tone="muted"
+                size="xs"
+              >
+                {{ t("software.upgradable") }}
+              </AppText>
             </td>
             <td>{{ row.pkg.installed_version ?? t("common.none") }}</td>
             <td>{{ row.pkg.available_version ?? t("common.none") }}</td>

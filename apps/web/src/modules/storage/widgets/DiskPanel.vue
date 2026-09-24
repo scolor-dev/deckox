@@ -4,7 +4,9 @@ import { useI18n } from "vue-i18n";
 import { formatBytes, usagePercentage, type StorageDisk } from "../../../api/client";
 import {
   AppCard,
+  AppHeading,
   AppStack,
+  AppText,
   ProgressBar,
   StateBadge,
   StorageAllocationBar,
@@ -74,7 +76,7 @@ function deviceLabel(kind: string) {
           <AppStack
             gap="1"
           >
-            <h2>{{ disk.name }}</h2>
+            <AppHeading>{{ disk.name }}</AppHeading>
             <small class="disk-model">{{ disk.model ?? disk.path }}</small>
           </AppStack>
           <AppStack
@@ -167,7 +169,14 @@ function deviceLabel(kind: string) {
             </td>
             <td>
               <span>{{ partition.filesystem_type ?? t("common.none") }}</span>
-              <small v-if="partition.label">{{ partition.label }}</small>
+              <AppText
+                v-if="partition.label"
+                as="small"
+                tone="muted"
+                size="xs"
+              >
+                {{ partition.label }}
+              </AppText>
             </td>
             <td>
               <strong>{{ formatBytes(partition.size_bytes, locale) }}</strong>
@@ -188,7 +197,11 @@ function deviceLabel(kind: string) {
               >
                 <span class="usage-row">
                   <span>{{ partition.mount.usage_percent.toFixed(0) }}%</span>
-                  <small>{{ t("storage.used", { value: formatBytes(partition.mount.used_bytes, locale) }) }}</small>
+                  <AppText
+                    as="small"
+                    tone="muted"
+                    size="xs"
+                  >{{ t("storage.used", { value: formatBytes(partition.mount.used_bytes, locale) }) }}</AppText>
                 </span>
                 <ProgressBar
                   :value="partition.mount.usage_percent"

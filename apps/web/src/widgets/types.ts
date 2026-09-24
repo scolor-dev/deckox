@@ -44,6 +44,12 @@ export interface WidgetDefinition {
    * draw its own box (metric cards, tables), so it fills the space it is given.
    */
   chrome: "frame" | "bare";
+  /**
+   * A widget that stays where the recommended layout puts it: it cannot be
+   * removed, moved, resized or configured, and the palette does not offer it.
+   * A layout that lacks one gets it back when it is loaded.
+   */
+  locked?: boolean;
   /** A title taken from the configuration (a text block's own heading). */
   titleFromConfig?: (config: WidgetConfig) => string | null;
 }

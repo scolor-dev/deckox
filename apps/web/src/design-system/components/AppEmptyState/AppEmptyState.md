@@ -27,6 +27,7 @@ Centered "nothing here yet" message, with room for a follow-up action.
 | Name | Type | Default | Description |
 |---|---|---|---|
 | `message` | `string` | required | The message text. |
+| `compact` | `boolean` | `false` | Tight 12px padding instead of the generous default, for a message inside a widget or a small panel. |
 
 **Events**
 
@@ -56,7 +57,7 @@ None.
 
 ## Gotchas
 
-- It has generous vertical padding (40px) and is meant to fill a card.
+- It has generous vertical padding (40px) and is meant to fill a card; use `compact` inside a small panel.
 
 ## Migration
 

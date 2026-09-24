@@ -12,15 +12,17 @@ import {
 import { apiErrorKey } from "../../../api/errors";
 import {
   AppButton,
+  AppHeading,
   AppStack,
+  AppText,
   InfoNote,
   NoticeBanner,
   SelectField,
-  TableToolbar,
   TablePanel,
-  TextField,
+  TableToolbar,
   TagToggle,
   TagToggleGroup,
+  TextField,
 } from "../../../design-system/components";
 import { notify } from "../../../notifications";
 
@@ -191,9 +193,9 @@ useStaleRefresh(loadSchedules, 30_000);
       <template #toolbar>
         <TableToolbar :count="t('services.count', { count: schedules.length })">
           <template #filters>
-            <h2>
+            <AppHeading>
               {{ t("services.scheduleTitle") }}
-            </h2>
+            </AppHeading>
           </template>
         </TableToolbar>
       </template>
@@ -224,13 +226,29 @@ useStaleRefresh(loadSchedules, 30_000);
             v-for="schedule in schedules"
             :key="schedule.id"
           >
-            <td><strong class="service-name">{{ schedule.service_id }}</strong></td>
+            <td>
+              <AppText
+                as="strong"
+                mono
+                strong
+                size="xs"
+              >
+                {{ schedule.service_id }}
+              </AppText>
+            </td>
             <td>{{ t(`services.${schedule.action}`) }}</td>
             <td>{{ scheduleWeekdaysLabel(schedule) }}</td>
             <td>{{ scheduleTimeLabel(schedule) }}</td>
             <td>
               <span>{{ scheduleLastRunLabel(schedule) }}</span>
-              <small v-if="schedule.last_result">{{ schedule.last_result }}</small>
+              <AppText
+                v-if="schedule.last_result"
+                as="small"
+                tone="muted"
+                size="xs"
+              >
+                {{ schedule.last_result }}
+              </AppText>
             </td>
             <td>
               <AppStack

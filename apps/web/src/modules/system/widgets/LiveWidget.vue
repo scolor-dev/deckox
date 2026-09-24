@@ -2,7 +2,13 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useMetrics } from "../../../data/metrics";
-import { AppButton, AppCard, AppStack, StateBadge } from "../../../design-system/components";
+import {
+  AppButton,
+  AppCard,
+  AppStack,
+  AppText,
+  StateBadge,
+} from "../../../design-system/components";
 
 defineOptions({ inheritAttrs: false });
 
@@ -35,7 +41,13 @@ async function recover() {
           {{ label }}
         </StateBadge>
       </span>
-      <small>{{ t("overview.lastUpdated", { time: lastUpdated }) }}</small>
+      <AppText
+        as="small"
+        tone="muted"
+        size="xs"
+      >
+        {{ t("overview.lastUpdated", { time: lastUpdated }) }}
+      </AppText>
       <AppButton
         v-if="canRecover"
         :disabled="loading"

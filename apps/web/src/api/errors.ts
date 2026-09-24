@@ -19,6 +19,8 @@ const ERROR_KEYS: Readonly<Record<string, string>> = {
   totp_not_enabled: "errors.totpNotEnabled",
   webhook_not_configured: "errors.webhookNotConfigured",
   webhook_test_failed: "errors.webhookTestFailed",
+  job_lost: "errors.jobLost",
+  job_timeout: "errors.jobTimeout",
 };
 
 export function apiErrorKey(error: unknown, fallbackKey: string): string {

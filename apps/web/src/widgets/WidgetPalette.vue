@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { AppButton, AppModal, AppStack } from "../design-system/components";
+import { AppButton, AppHeading, AppModal, AppStack, AppText } from "../design-system/components";
 import { WEB_MODULES } from "../modules/registry";
 import { backendEnabled } from "../modules/store";
 import type { WidgetDefinition } from "./types";
@@ -15,7 +15,7 @@ const groups = computed(() => WEB_MODULES
   .map((module) => ({
     id: module.id,
     title: t(module.titleKey),
-    widgets: module.widgets.map((definition) => ({
+    widgets: module.widgets.filter((definition) => definition.locked !== true).map((definition) => ({
       definition,
       on: backendEnabled(definition.requires),
       size: `${String(definition.size.default.w)} × ${definition.size.default.h === "auto" ? t("layout.heightAuto") : String(definition.size.default.h)}`,
@@ -39,7 +39,12 @@ const groups = computed(() => WEB_MODULES
         class="palette-group"
         :aria-label="group.title"
       >
-        <h3>{{ group.title }}</h3>
+        <AppHeading
+          level="3"
+          size="md"
+        >
+          {{ group.title }}
+        </AppHeading>
         <ul class="palette-list">
           <li
             v-for="entry in group.widgets"
@@ -47,9 +52,27 @@ const groups = computed(() => WEB_MODULES
             class="palette-item"
           >
             <div>
-              <strong>{{ t(entry.definition.titleKey) }}</strong>
-              <small>{{ t(entry.definition.descriptionKey) }}</small>
-              <small>{{ t("layout.defaultSize", { size: entry.size }) }}</small>
+              <AppText
+                as="strong"
+                strong
+                block
+              >
+                {{ t(entry.definition.titleKey) }}
+              </AppText>
+              <AppText
+                tone="muted"
+                size="sm"
+                block
+              >
+                {{ t(entry.definition.descriptionKey) }}
+              </AppText>
+              <AppText
+                tone="muted"
+                size="sm"
+                block
+              >
+                {{ t("layout.defaultSize", { size: entry.size }) }}
+              </AppText>
             </div>
             <AppButton
               variant="action"

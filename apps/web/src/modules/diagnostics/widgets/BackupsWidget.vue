@@ -5,10 +5,11 @@ import { api, formatBytes, type BackupSummary } from "../../../api/client";
 import { apiErrorKey } from "../../../api/errors";
 import { useStaleRefresh } from "../../../composables/useStaleRefresh";
 import {
-  InfoNote,
+  AppHeading,
   AppStack,
-  TableToolbar,
+  InfoNote,
   TablePanel,
+  TableToolbar,
 } from "../../../design-system/components";
 
 defineOptions({ inheritAttrs: false });
@@ -42,9 +43,9 @@ useStaleRefresh(loadBackups, 60_000);
       v-if="backupsError"
       gap="3"
     >
-      <h2>
+      <AppHeading>
         {{ t("diagnostics.backups") }}
-      </h2>
+      </AppHeading>
       <InfoNote>{{ backupsError }}</InfoNote>
     </AppStack>
     <TablePanel
@@ -55,9 +56,9 @@ useStaleRefresh(loadBackups, 60_000);
       <template #toolbar>
         <TableToolbar>
           <template #filters>
-            <h2>
+            <AppHeading>
               {{ t("diagnostics.backups") }}
-            </h2>
+            </AppHeading>
           </template>
         </TableToolbar>
       </template>

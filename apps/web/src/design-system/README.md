@@ -1,6 +1,6 @@
 # Deckox design system
 
-Tokens, components and a dev-only catalog. Nothing here is wired into the real screens yet; the app still uses `src/style.css` and its own views.
+Tokens, components and a dev-only catalog. Every Web screen and widget is built from these components; `src/style.css` keeps only the page grid and a few legacy table rules.
 
 ## Rules
 
@@ -52,7 +52,10 @@ Tokens, components and a dev-only catalog. Nothing here is wired into the real s
 | Page through a long list | `AppPagination` | `AppButton` ("load more") |
 | Show the user's place in a hierarchy | `AppBreadcrumb` | sidebar links |
 | Open a screen | `PageHeader` | a plain heading |
+| Head a section or widget with its actions | `SectionHeader` | a hand-built flex row |
 | Group content in a bordered panel | `AppCard` | `TablePanel` |
+| Title a section, panel or widget | `AppHeading` (or `AppCard` `title`) | a bare `h2` |
+| Show supporting text or an identifier | `AppText` | a bare `small` or `strong` |
 | Separate two blocks | `AppDivider` | a `gap` between cards |
 | Space siblings in a row or column | `AppStack` | ad-hoc `display: flex` |
 | Flow cards into as many columns as fit | `AppGrid` | fixed-column CSS grids |
@@ -90,10 +93,13 @@ Tokens, components and a dev-only catalog. Nothing here is wired into the real s
 | [`TabBar`](components/TabBar/TabBar.md) | navigation | Tab strip. |
 | [`AppCard`](components/AppCard/AppCard.md) | layout | Bare bordered panel for arbitrary content. |
 | [`AppDataTable`](components/AppDataTable/AppDataTable.md) | data | Table with sortable headers and optional row selection. |
+| [`AppHeading`](components/AppHeading/AppHeading.md) | layout | Section heading inside a screen, panel or widget. |
+| [`SectionHeader`](components/SectionHeader/SectionHeader.md) | layout | Title row of a section or widget: heading left, actions right. |
 | [`AppDivider`](components/AppDivider/AppDivider.md) | layout | Horizontal rule between blocks of content. |
 | [`AppGrid`](components/AppGrid/AppGrid.md) | layout | Responsive grid that fits equal columns to the width. |
 | [`PageHeader`](components/PageHeader/PageHeader.md) | layout | The title row every screen opens with: heading and subtitle left, screen-level actions right. |
 | [`AppStack`](components/AppStack/AppStack.md) | layout | Flex row or column with a scale-based gap. |
+| [`AppText`](components/AppText/AppText.md) | data | Text with a tone, a size and an optional monospace or bold face. |
 | [`AppChip`](components/AppChip/AppChip.md) | data | Pill for a discrete value, optionally removable. |
 | [`DetailList`](components/DetailList/DetailList.md) | data | Two-column label/value grid. |
 | [`LogList`](components/LogList/LogList.md) | data | Scrolling list of journal lines. |

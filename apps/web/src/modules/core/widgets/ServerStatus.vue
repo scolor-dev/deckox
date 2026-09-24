@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { serverStatus } from "../../../data/sources";
-import { AppCard, AppStack, StateBadge } from "../../../design-system/components";
+import { AppCard, AppStack, AppText, StateBadge } from "../../../design-system/components";
 
 defineOptions({ inheritAttrs: false });
 
@@ -17,8 +17,20 @@ const online = computed(() => Boolean(status.value?.agent));
       <StateBadge :state="online ? 'active' : 'failed'">
         {{ online ? t("overview.healthy") : t("overview.agentUnavailable") }}
       </StateBadge>
-      <small>Deckox {{ t("common.version") }} {{ status?.version ?? t("common.none") }}</small>
-      <small>Agent: {{ status?.agent?.hostname ?? t("common.none") }}</small>
+      <AppText
+        as="small"
+        tone="muted"
+        size="xs"
+      >
+        Deckox {{ t("common.version") }} {{ status?.version ?? t("common.none") }}
+      </AppText>
+      <AppText
+        as="small"
+        tone="muted"
+        size="xs"
+      >
+        Agent: {{ status?.agent?.hostname ?? t("common.none") }}
+      </AppText>
     </AppStack>
   </AppCard>
 </template>

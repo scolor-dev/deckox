@@ -22,6 +22,8 @@ export interface AgentLink {
 }
 
 export interface ModuleList {
+  /** The protocol version the Server speaks; the Agent must speak the same one. */
+  protocol_version?: number;
   agent: AgentLink;
   /** The Agent's modules, switched in `agent.toml`. Empty while it is unreachable. */
   modules: ModuleInfo[];
@@ -228,6 +230,22 @@ export interface CommandResult {
   message: string | null;
 }
 
+export type JobState = "queued" | "running" | "succeeded" | "failed";
+
+/** A long-running operation the Agent runs in the background. */
+export interface Job {
+  id: string;
+  kind: string;
+  subject: string;
+  state: JobState;
+  created_ms: number;
+  started_ms: number | null;
+  finished_ms: number | null;
+  message: string | null;
+  error_code: string | null;
+  request_id: string | null;
+}
+
 export interface AuthStatus {
   authenticated: boolean;
   totp_required: boolean;
@@ -366,6 +384,75 @@ async function request<T>(
   return body as T;
 }
 
+export function jobFinished(job: Job): boolean {
+  return job.state === "succeeded" || job.state === "failed";
+}
+
+function isJob(value: unknown): value is Job {
+  return typeof value === "object" && value !== null
+    && typeof (value as Job).id === "string" && typeof (value as Job).state === "string";
+}
+
+type JobObserver = (job: Job) => void;
+let jobObserver: JobObserver | null = null;
+
+/** Tells `observer` about every job this browser starts, as it progresses. */
+export function observeJobs(observer: JobObserver | null) {
+  jobObserver = observer;
+}
+
+const JOB_POLL_MS = 1_000;
+const JOB_GIVE_UP_MS = 30 * 60_000;
+const JOB_MAX_POLL_FAILURES = 5;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => { window.setTimeout(resolve, ms); });
+
+/**
+ * Follows a job to its end. A foreground request is cut off after 15 seconds
+ * (and the Server stops waiting for the Agent after 35), which is too short
+ * for installing or upgrading a package, so long operations run as jobs and
+ * are polled instead. A failed job throws the error it would have answered
+ * with in the foreground.
+ */
+export async function waitForJob(
+  job: Job,
+  pause: (ms: number) => Promise<void> = sleep,
+): Promise<Job> {
+  jobObserver?.(job);
+  const deadline = Date.now() + JOB_GIVE_UP_MS;
+  let current = job;
+  let failures = 0;
+  while (!jobFinished(current)) {
+    if (Date.now() > deadline) throw new ApiError("the operation did not finish in time", 504, "job_timeout");
+    await pause(JOB_POLL_MS);
+    try {
+      current = await request<Job>(`/api/v1/jobs/${encodeURIComponent(job.id)}`);
+      failures = 0;
+      jobObserver?.(current);
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 401) throw cause;
+      // The Agent forgets its jobs when it restarts, so an unknown job means
+      // its outcome can no longer be read.
+      if (cause instanceof ApiError && cause.status === 404) {
+        throw new ApiError(cause.message, 404, "job_lost");
+      }
+      failures += 1;
+      if (failures >= JOB_MAX_POLL_FAILURES) throw cause;
+    }
+  }
+  if (current.state === "failed") {
+    throw new ApiError(current.message ?? "the operation failed", 500, current.error_code ?? "internal_error");
+  }
+  return current;
+}
+
+/** Starts an operation as a job and waits for its end. */
+async function runAsJob(path: string, init: RequestInit): Promise<void> {
+  const started = await request<unknown>(`${path}?async=true`, init);
+  // An Agent or Server that predates jobs answers with the finished result.
+  if (isJob(started)) await waitForJob(started);
+}
+
 async function requestBlob(path: string): Promise<Blob> {
   const response = await fetch(path, {
     headers: { Accept: "application/json" },
@@ -489,11 +576,13 @@ export const api = {
   serviceAction: (
     serviceId: string,
     action: "start" | "stop" | "restart" | "enable" | "disable" | "allow" | "disallow",
-  ) =>
-    request<CommandResult>(
-      `/api/v1/services/${encodeURIComponent(serviceId)}/${action}`,
-      { method: "POST" },
-    ),
+  ) => {
+    const path = `/api/v1/services/${encodeURIComponent(serviceId)}/${action}`;
+    // Changing the allowlist is instant; the rest touch systemd and can wait.
+    if (action === "allow" || action === "disallow") return request<CommandResult>(path, { method: "POST" }).then(() => undefined);
+    return runAsJob(path, { method: "POST" });
+  },
+  jobs: () => request<Job[]>("/api/v1/jobs"),
   software: () => request<SoftwarePackage[]>("/api/v1/software"),
   installedSoftware: () => request<InstalledSoftware[]>("/api/v1/software/installed"),
   softwareAllowlist: (name: string, action: "allow" | "disallow") =>
@@ -506,7 +595,7 @@ export const api = {
     action: "install" | "remove" | "upgrade",
     currentPassword: string,
   ) =>
-    request<CommandResult>(`/api/v1/software/${encodeURIComponent(name)}/${action}`, {
+    runAsJob(`/api/v1/software/${encodeURIComponent(name)}/${action}`, {
       method: "POST",
       body: JSON.stringify({ current_password: currentPassword }),
       headers: { "Content-Type": "application/json" },

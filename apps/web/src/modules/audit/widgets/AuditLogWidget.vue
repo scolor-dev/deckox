@@ -3,16 +3,16 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useStaleRefresh } from "../../../composables/useStaleRefresh";
 import { AUDIT_REPORT_FILENAME, api, type AuditEvent } from "../../../api/client";
-import WidgetHeader from "../../../widgets/WidgetHeader.vue";
 import { apiErrorKey } from "../../../api/errors";
 import {
   AppButton,
   AppStack,
   NoticeBanner,
+  SectionHeader,
   SelectField,
   StateBadge,
-  TableToolbar,
   TablePanel,
+  TableToolbar,
 } from "../../../design-system/components";
 import { notify } from "../../../notifications";
 
@@ -119,8 +119,8 @@ const refresh = useStaleRefresh(fetchData, 30_000);
 
 <template>
   <AppStack gap="4">
-    <WidgetHeader :title="t('audit.title')">
-      <template #default>
+    <SectionHeader :title="t('audit.title')">
+      <template #actions>
         <AppStack
           direction="row"
           gap="2"
@@ -140,7 +140,7 @@ const refresh = useStaleRefresh(fetchData, 30_000);
           </AppButton>
         </AppStack>
       </template>
-    </WidgetHeader>
+    </SectionHeader>
 
     <NoticeBanner
       v-if="error"

@@ -7,6 +7,7 @@ import { softwarePackages } from "../../../data/sources";
 import {
   AppButton,
   AppCard,
+  AppHeading,
   AppStack,
   InfoNote,
   NoticeBanner,
@@ -46,9 +47,9 @@ async function addPackage() {
 <template>
   <AppCard>
     <AppStack gap="3">
-      <h2>
+      <AppHeading>
         {{ t("software.addTitle") }}
-      </h2>
+      </AppHeading>
       <NoticeBanner
         v-if="addError"
         tone="error"

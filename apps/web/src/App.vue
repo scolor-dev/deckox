@@ -3,14 +3,17 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { api } from "./api/client";
+import AgentLinkBanner from "./components/AgentLinkBanner.vue";
 import NotificationRegion from "./components/NotificationRegion.vue";
 import { AppButton } from "./design-system/components";
 import LoginView from "./views/LoginView.vue";
+import { resetJobs } from "./data/jobs";
 import { resetMetrics } from "./data/metrics";
 import { resetSources, serverStatus } from "./data/sources";
 import { forgetLayout, layout, loadLayout } from "./layout/store";
 import { navPages, pageTitle } from "./layout/pages";
-import { loadModules, resetModules } from "./modules/store";
+import { agentState, loadModules, resetModules } from "./modules/store";
+import { passwordChanges } from "./session";
 
 const route = useRoute();
 const router = useRouter();
@@ -51,6 +54,7 @@ function handleUnauthorized() {
   resetModules();
   resetSources();
   resetMetrics();
+  resetJobs();
   forgetLayout();
   menuOpen.value = false;
 }
@@ -59,6 +63,8 @@ function handlePasswordChanged() {
   loginMessage.value = t("app.passwordChanged");
   handleUnauthorized();
 }
+
+watch(passwordChanges, handlePasswordChanged);
 
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === "Escape" && menuOpen.value) menuOpen.value = false;
@@ -98,13 +104,26 @@ watch([() => route.name, () => route.params.pageId, navPages, authenticated], ()
   if (!shown && first && requested !== first.id) void router.replace(`/${first.id}`);
 }, { immediate: true });
 
+// The Agent can stop, restart or come back on another version at any time, so
+// the Server's view of it is read again now and then and when the tab returns.
+const AGENT_CHECK_MS = 30_000;
+let agentCheckTimer: number | null = null;
+
+function checkAgentLink() {
+  if (authenticated.value && document.visibilityState === "visible") void loadModules();
+}
+
 onMounted(() => {
+  agentCheckTimer = window.setInterval(checkAgentLink, AGENT_CHECK_MS);
+  document.addEventListener("visibilitychange", checkAgentLink);
   window.addEventListener("deckox:unauthorized", handleUnauthorized);
   window.addEventListener("keydown", handleKeydown);
   void checkAuthentication();
 });
 
 onBeforeUnmount(() => {
+  if (agentCheckTimer !== null) window.clearInterval(agentCheckTimer);
+  document.removeEventListener("visibilitychange", checkAgentLink);
   window.removeEventListener("deckox:unauthorized", handleUnauthorized);
   window.removeEventListener("keydown", handleKeydown);
 });
@@ -163,9 +182,6 @@ onBeforeUnmount(() => {
         >
           {{ pageTitle(page, t) }}
         </RouterLink>
-        <RouterLink to="/settings">
-          {{ t("nav.settings") }}
-        </RouterLink>
       </nav>
       <div class="agent-state">
         <span :class="['status-dot', status?.agent ? 'online' : 'offline']" />
@@ -187,15 +203,20 @@ onBeforeUnmount(() => {
 
     <main class="main-content">
       <NotificationRegion />
+      <div
+        v-if="agentState === 'unreachable' || agentState === 'incompatible'"
+        class="agent-link-strip"
+      >
+        <AgentLinkBanner />
+      </div>
       <RouterView v-slot="{ Component }">
         <KeepAlive
           :max="10"
-          :exclude="['SettingsView', 'RestartingView']"
+          :exclude="['RestartingView']"
         >
           <component
             :is="Component"
             :key="String(route.name === 'page' ? route.params.pageId : route.name)"
-            @password-changed="handlePasswordChanged"
           />
         </KeepAlive>
       </RouterView>

@@ -13,6 +13,7 @@ import {
   AppDivider,
   AppEmptyState,
   AppGrid,
+  AppHeading,
   AppIcon,
   AppIconButton,
   AppModal,
@@ -23,6 +24,7 @@ import {
   AppSpinner,
   AppStack,
   AppSwitch,
+  AppText,
   AppToast,
   AppTooltip,
   ButtonGroup,
@@ -36,6 +38,7 @@ import {
   MetricCard,
   NoticeBanner,
   PageHeader,
+  SectionHeader,
   ProgressBar,
   RadioGroup,
   SelectField,
@@ -692,6 +695,45 @@ const colorGroups: { name: string; tokens: string[] }[] = [
       <AppCard>
         <p>A bare bordered panel — TablePanel is this same shell plus a toolbar and table.</p>
       </AppCard>
+      <AppCard title="Titled panel">
+        <template #actions>
+          <AppButton variant="action">
+            Refresh
+          </AppButton>
+        </template>
+        <p>The title row holds the heading and its actions.</p>
+      </AppCard>
+    </section>
+
+    <section class="catalog-section">
+      <h2>AppHeading / AppText</h2>
+      <SectionHeader
+        title="Section header"
+        level="3"
+      >
+        <template #actions>
+          <AppButton variant="action">
+            Refresh
+          </AppButton>
+        </template>
+      </SectionHeader>
+      <AppHeading level="3">
+        Section heading
+      </AppHeading>
+      <AppText
+        tone="muted"
+        size="sm"
+      >
+        Supporting text next to a value.
+      </AppText>
+      <AppText
+        as="strong"
+        mono
+        strong
+        size="xs"
+      >
+        nginx.service
+      </AppText>
     </section>
 
     <section class="catalog-section">
@@ -802,6 +844,10 @@ const colorGroups: { name: string; tokens: string[] }[] = [
       <AppDivider />
       <p>Content below</p>
       <AppEmptyState message="No schedules configured." />
+      <AppEmptyState
+        message="Nothing to show."
+        compact
+      />
     </section>
     <section class="catalog-section">
       <h2>LogList / LogEntry</h2>

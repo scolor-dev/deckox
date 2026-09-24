@@ -9,18 +9,20 @@ import {
   type DeckoxServiceDiagnostic,
   type DiagnosticsResponse,
 } from "../../../api/client";
-import WidgetHeader from "../../../widgets/WidgetHeader.vue";
 import { apiErrorKey } from "../../../api/errors";
 import {
   AppButton,
+  AppHeading,
   AppStack,
+  AppText,
   DetailList,
   DetailRow,
   InfoNote,
   NoticeBanner,
+  SectionHeader,
   StateBadge,
-  TableToolbar,
   TablePanel,
+  TableToolbar,
 } from "../../../design-system/components";
 import { notify } from "../../../notifications";
 
@@ -96,8 +98,8 @@ const refresh = useStaleRefresh(fetchData, 60_000);
 
 <template>
   <AppStack gap="4">
-    <WidgetHeader :title="t('diagnostics.title')">
-      <template #default>
+    <SectionHeader :title="t('diagnostics.title')">
+      <template #actions>
         <AppStack
           direction="row"
           gap="2"
@@ -117,7 +119,7 @@ const refresh = useStaleRefresh(fetchData, 60_000);
           </AppButton>
         </AppStack>
       </template>
-    </WidgetHeader>
+    </SectionHeader>
 
     <NoticeBanner
       v-if="error"
@@ -143,9 +145,9 @@ const refresh = useStaleRefresh(fetchData, 60_000);
       <InfoNote>{{ t("diagnostics.generatedAt", { time: generatedAt }) }}</InfoNote>
       <AppStack gap="4">
         <AppStack gap="3">
-          <h2>
+          <AppHeading>
             {{ t("diagnostics.server") }}
-          </h2>
+          </AppHeading>
           <DetailList>
             <DetailRow :term="t('diagnostics.status')">
               <StateBadge :state="stateClass(diagnostics.server.status)">
@@ -158,9 +160,9 @@ const refresh = useStaleRefresh(fetchData, 60_000);
           </DetailList>
         </AppStack>
         <AppStack gap="3">
-          <h2>
+          <AppHeading>
             {{ t("diagnostics.agent") }}
-          </h2>
+          </AppHeading>
           <DetailList>
             <DetailRow :term="t('diagnostics.status')">
               <StateBadge :state="diagnostics.agent.connected ? 'active' : 'inactive'">
@@ -175,9 +177,9 @@ const refresh = useStaleRefresh(fetchData, 60_000);
       </AppStack>
 
       <AppStack gap="3">
-        <h2>
+        <AppHeading>
           {{ t("diagnostics.host") }}
-        </h2>
+        </AppHeading>
         <DetailList v-if="diagnostics.host">
           <DetailRow :term="t('diagnostics.hostname')">
             {{ diagnostics.host.hostname }}
@@ -213,9 +215,9 @@ const refresh = useStaleRefresh(fetchData, 60_000);
         <template #toolbar>
           <TableToolbar>
             <template #filters>
-              <h2>
+              <AppHeading>
                 {{ t("diagnostics.services") }}
-              </h2>
+              </AppHeading>
             </template>
           </TableToolbar>
         </template>
@@ -226,7 +228,16 @@ const refresh = useStaleRefresh(fetchData, 60_000);
               v-for="service in deckoxServices"
               :key="service.id"
             >
-              <td><strong class="service-name">{{ service.id }}</strong></td>
+              <td>
+                <AppText
+                  as="strong"
+                  mono
+                  strong
+                  size="xs"
+                >
+                  {{ service.id }}
+                </AppText>
+              </td>
               <td>
                 <StateBadge :state="stateClass(service.state.active_state)">
                   {{ service.state.active_state }} / {{ service.state.sub_state }}
@@ -239,9 +250,9 @@ const refresh = useStaleRefresh(fetchData, 60_000);
       </TablePanel>
 
       <AppStack gap="3">
-        <h2>
+        <AppHeading>
           {{ t("diagnostics.config") }}
-        </h2>
+        </AppHeading>
         <DetailList v-if="diagnostics.runtime_config">
           <DetailRow :term="t('diagnostics.reboot')">
             {{ enabledLabel(diagnostics.runtime_config.reboot_allowed) }}

@@ -14,6 +14,7 @@ import {
   addPage,
   addWidget,
   moveWidget,
+  moveWidgetTo,
   pageById,
   removePage,
   removeWidget,
@@ -53,6 +54,11 @@ const pageId = computed(() => {
 const page = computed(() => pageById(working.value, pageId.value));
 const title = computed(() => (page.value ? pageTitle(page.value, t) : ""));
 const screen = computed(() => page.value?.kind === "screen");
+const pageLocked = computed(() => page.value?.widgets.some((widget) => widgetById(widget.widget)?.locked === true) ?? false);
+const isLocked = (placementId: string) => {
+  const placed = page.value?.widgets.find((widget) => widget.id === placementId);
+  return placed !== undefined && widgetById(placed.widget)?.locked === true;
+};
 
 const placements = computed(() => {
   const current = page.value;
@@ -108,6 +114,7 @@ function savePage(values: PageDraft) {
 }
 
 function deletePage() {
+  if (pageLocked.value) return;
   change(removePage(working.value, pageId.value));
   pageDialog.value = null;
   void router.replace("/");
@@ -208,10 +215,11 @@ onDeactivated(cancelEditing);
           :screen="screen"
           :first="index === 0"
           :last="index === placements.length - 1"
-          @move="change(moveWidget(working, pageId, placement.id, $event))"
-          @remove="change(removeWidget(working, pageId, placement.id))"
+          @move="!isLocked(placement.id) && change(moveWidget(working, pageId, placement.id, $event))"
+          @reorder="!isLocked($event) && change(moveWidgetTo(working, pageId, $event, placement.id))"
+          @remove="!isLocked(placement.id) && change(removeWidget(working, pageId, placement.id))"
           @configure="configuring = placement.id"
-          @resize="change(resizeWidget(working, pageId, placement.id, $event, widgetById))"
+          @resize="!isLocked(placement.id) && change(resizeWidget(working, pageId, placement.id, $event, widgetById))"
         />
       </div>
       <AppEmptyState
@@ -241,7 +249,7 @@ onDeactivated(cancelEditing);
     <PageDialog
       :open="pageDialog !== null"
       :initial="pageDialog === 'edit' ? pageDraft : null"
-      :can-delete="working.pages.length > 1"
+      :can-delete="working.pages.length > 1 && !pageLocked"
       @close="pageDialog = null"
       @save="savePage"
       @delete="deletePage"

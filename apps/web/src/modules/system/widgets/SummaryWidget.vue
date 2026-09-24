@@ -2,7 +2,7 @@
 import { useI18n } from "vue-i18n";
 import { formatUptime } from "../../../api/client";
 import { systemInfo } from "../../../data/sources";
-import { AppCard, AppStack } from "../../../design-system/components";
+import { AppCard, AppStack, AppText } from "../../../design-system/components";
 
 defineOptions({ inheritAttrs: false });
 
@@ -14,9 +14,27 @@ const { data: system } = systemInfo.use();
   <AppCard>
     <AppStack gap="3">
       <strong>{{ system?.hostname ?? t("overview.loadingHost") }}</strong>
-      <small>{{ system?.operating_system ?? "Linux" }} {{ system?.os_version ?? "" }}</small>
-      <small>{{ t("overview.uptime") }}: {{ formatUptime(system?.uptime_seconds, locale) }}</small>
-      <small>{{ t("overview.architecture") }}: {{ system?.architecture ?? t("common.none") }}</small>
+      <AppText
+        as="small"
+        tone="muted"
+        size="xs"
+      >
+        {{ system?.operating_system ?? "Linux" }} {{ system?.os_version ?? "" }}
+      </AppText>
+      <AppText
+        as="small"
+        tone="muted"
+        size="xs"
+      >
+        {{ t("overview.uptime") }}: {{ formatUptime(system?.uptime_seconds, locale) }}
+      </AppText>
+      <AppText
+        as="small"
+        tone="muted"
+        size="xs"
+      >
+        {{ t("overview.architecture") }}: {{ system?.architecture ?? t("common.none") }}
+      </AppText>
     </AppStack>
   </AppCard>
 </template>

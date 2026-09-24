@@ -16,7 +16,7 @@ import {
 } from "../widgets/types";
 
 /** Page ids that are routes of their own. */
-export const RESERVED_PAGE_IDS: readonly string[] = ["settings", "restarting"];
+export const RESERVED_PAGE_IDS: readonly string[] = ["restarting"];
 
 const PAGE_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const MAX_TITLE = 60;
@@ -224,6 +224,15 @@ export function moveWidget(layout: Layout, pageId: string, placementId: string, 
     ...page,
     widgets: moved(page.widgets, page.widgets.findIndex((widget) => widget.id === placementId), delta),
   }));
+}
+
+export function moveWidgetTo(layout: Layout, pageId: string, placementId: string, targetId: string): Layout {
+  return withPage(layout, pageId, (page) => {
+    const from = page.widgets.findIndex((widget) => widget.id === placementId);
+    const to = page.widgets.findIndex((widget) => widget.id === targetId);
+    if (from < 0 || to < 0) return page;
+    return { ...page, widgets: moved(page.widgets, from, to - from) };
+  });
 }
 
 export function resizeWidget(

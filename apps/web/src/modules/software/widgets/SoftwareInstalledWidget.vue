@@ -6,13 +6,15 @@ import { apiErrorKey } from "../../../api/errors";
 import { installedSoftware, softwarePackages } from "../../../data/sources";
 import {
   AppButton,
+  AppHeading,
   AppStack,
+  AppText,
   InfoNote,
   NoticeBanner,
-  TablePanel,
-  TextField,
   StateBadge,
+  TablePanel,
   TableToolbar,
+  TextField,
 } from "../../../design-system/components";
 import { notify } from "../../../notifications";
 
@@ -65,7 +67,7 @@ async function manageInstalled(pkg: InstalledSoftware) {
 
 <template>
   <AppStack gap="3">
-    <h2>{{ t("software.installedTitle") }}</h2>
+    <AppHeading>{{ t("software.installedTitle") }}</AppHeading>
     <InfoNote>{{ t("software.installedHelp") }}</InfoNote>
     <NoticeBanner
       v-if="installedError"
@@ -108,7 +110,16 @@ async function manageInstalled(pkg: InstalledSoftware) {
             v-for="pkg in installedShown"
             :key="pkg.name"
           >
-            <td><strong class="service-name">{{ pkg.name }}</strong></td>
+            <td>
+              <AppText
+                as="strong"
+                mono
+                strong
+                size="xs"
+              >
+                {{ pkg.name }}
+              </AppText>
+            </td>
             <td>{{ pkg.version }}</td>
             <td>
               <StateBadge

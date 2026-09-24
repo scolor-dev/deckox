@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { recommendedLayout } from "./defaults";
+import { ensureLockedWidgets, recommendedLayout } from "./defaults";
 import {
   addPage,
   addWidget,
   clampSize,
   moveWidget,
+  moveWidgetTo,
   normalizeLayout,
   pageShown,
   removePage,
@@ -59,7 +60,7 @@ describe("normalizeLayout", () => {
             "junk",
           ],
         },
-        { id: "settings", kind: "scroll", widgets: [] },
+        { id: "restarting", kind: "scroll", widgets: [] },
       ],
     });
     expect(layout).not.toBeNull();
@@ -71,7 +72,7 @@ describe("normalizeLayout", () => {
     expect(first.widgets[0]).toMatchObject({ w: 12, h: 1, config: { title: "x", n: 2 } });
     expect(first.widgets[1]).toMatchObject({ w: 1, h: "auto" });
     expect(new Set(first.widgets.map((widget) => widget.id)).size).toBe(2);
-    expect(second.id).not.toBe("settings");
+    expect(second.id).not.toBe("restarting");
   });
 });
 
@@ -85,6 +86,59 @@ describe("sizes", () => {
     expect(spansFor(12)).toEqual({ wide: 12, medium: 6, narrow: 2 });
     expect(spansFor(2)).toEqual({ wide: 2, medium: 2, narrow: 1 });
     expect(spansFor(6)).toEqual({ wide: 6, medium: 3, narrow: 2 });
+  });
+});
+
+describe("locked widgets", () => {
+  const placed = (layout: Layout) => layout.pages.flatMap((page) => page.widgets.map((widget) => widget.widget));
+
+  it("come back to a layout that lacks them, on their own page", () => {
+    const old: Layout = {
+      version: 1,
+      pages: [{ id: "home", title: "Home", kind: "scroll", rows: 8, widgets: [] }],
+    };
+    const fixed = ensureLockedWidgets(old);
+    expect(placed(fixed)).toEqual(["settings.display", "settings.password", "settings.totp"]);
+    expect(fixed.pages.map((page) => page.id)).toEqual(["home", "settings"]);
+  });
+
+  it("are added to the page that already carries their name", () => {
+    const partial: Layout = {
+      version: 1,
+      pages: [{ id: "settings", title: "Mine", kind: "scroll", rows: 8, widgets: [
+        { id: "kept", widget: "settings.password", w: 12, h: "auto", config: {} },
+      ] }],
+    };
+    const fixed = ensureLockedWidgets(partial);
+    expect(fixed.pages).toHaveLength(1);
+    expect(fixed.pages[0].title).toBe("Mine");
+    expect(placed(fixed)).toEqual(["settings.password", "settings.display", "settings.totp"]);
+  });
+
+  it("leave a complete layout alone", () => {
+    const whole = recommendedLayout();
+    expect(ensureLockedWidgets(whole)).toBe(whole);
+  });
+
+  it("are never offered by the palette groups' source data", () => {
+    const definition = widgetById("settings.totp");
+    expect(definition?.locked).toBe(true);
+    expect(definition?.requires).toEqual([]);
+  });
+});
+
+describe("moving by drag and drop", () => {
+  it("puts the dragged widget where the target is", () => {
+    let layout = small();
+    for (let count = 0; count < 3; count += 1) layout = addWidget(layout, "home", cpu());
+    const [first, second, third] = layout.pages[0].widgets.map((widget) => widget.id);
+    const order = (value: Layout) => value.pages[0].widgets.map((widget) => widget.id);
+
+    expect(order(moveWidgetTo(layout, "home", first, third))).toEqual([second, third, first]);
+    expect(order(moveWidgetTo(layout, "home", third, first))).toEqual([third, first, second]);
+    expect(order(moveWidgetTo(layout, "home", first, first))).toEqual([first, second, third]);
+    expect(order(moveWidgetTo(layout, "home", first, "missing"))).toEqual([first, second, third]);
+    expect(order(moveWidgetTo(layout, "home", "missing", first))).toEqual([first, second, third]);
   });
 });
 
@@ -138,7 +192,8 @@ describe("editing", () => {
 
   it("makes unique route-safe slugs", () => {
     expect(slugFor("Services", ["services"])).toBe("services-2");
-    expect(slugFor("Settings", [])).not.toBe("settings");
+    expect(slugFor("Restarting", [])).not.toBe("restarting");
+    expect(slugFor("Settings", [])).toBe("settings");
     expect(slugFor("日本語", [])).toMatch(/^[a-z0-9]+$/);
   });
 });

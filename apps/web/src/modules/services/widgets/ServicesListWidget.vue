@@ -8,20 +8,21 @@ import {
   type ServiceSummary,
 } from "../../../api/client";
 import { servicesList } from "../../../data/sources";
-import WidgetHeader from "../../../widgets/WidgetHeader.vue";
 import { apiErrorKey } from "../../../api/errors";
 import {
   AppButton,
   AppModal,
   AppStack,
+  AppText,
   InfoNote,
   LogEntry,
   LogList,
   NoticeBanner,
+  SectionHeader,
   SelectField,
   StateBadge,
-  TableToolbar,
   TablePanel,
+  TableToolbar,
   TagBadge,
   TagToggle,
   TagToggleGroup,
@@ -282,15 +283,23 @@ function closeLogs() {
 
 <template>
   <AppStack gap="4">
-    <WidgetHeader :title="t('services.title')">
-      <small>{{ t("services.summary", { total: services.length, running: runningCount }) }}</small>
-      <AppButton
-        :disabled="loading"
-        @click="refresh"
-      >
-        {{ loading ? t("common.loading") : t("common.refresh") }}
-      </AppButton>
-    </WidgetHeader>
+    <SectionHeader :title="t('services.title')">
+      <template #actions>
+        <AppText
+          as="small"
+          tone="muted"
+          size="xs"
+        >
+          {{ t("services.summary", { total: services.length, running: runningCount }) }}
+        </AppText>
+        <AppButton
+          :disabled="loading"
+          @click="refresh"
+        >
+          {{ loading ? t("common.loading") : t("common.refresh") }}
+        </AppButton>
+      </template>
+    </SectionHeader>
 
     <NoticeBanner
       v-if="error"
@@ -349,7 +358,14 @@ function closeLogs() {
                 align="center"
                 wrap
               >
-                <strong class="service-name">{{ service.id }}</strong>
+                <AppText
+                  as="strong"
+                  mono
+                  strong
+                  size="xs"
+                >
+                  {{ service.id }}
+                </AppText>
                 <TagBadge
                   v-for="tag in serviceTags(service)"
                   :key="tag"
@@ -358,13 +374,25 @@ function closeLogs() {
                   {{ tagLabel(tag) }}
                 </TagBadge>
               </AppStack>
-              <small>{{ service.description || t("services.noDescription") }}</small>
+              <AppText
+                as="small"
+                tone="muted"
+                size="xs"
+              >
+                {{ service.description || t("services.noDescription") }}
+              </AppText>
             </td>
             <td>
               <StateBadge :state="activeStateClass(service.active_state)">
                 {{ activeStateLabel(service.active_state) }}
               </StateBadge>
-              <small>{{ service.sub_state }}</small>
+              <AppText
+                as="small"
+                tone="muted"
+                size="xs"
+              >
+                {{ service.sub_state }}
+              </AppText>
             </td>
             <td><span class="unit-state">{{ unitStateLabel(service.unit_file_state) }}</span></td>
             <td>

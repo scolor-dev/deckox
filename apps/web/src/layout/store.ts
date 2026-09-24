@@ -1,7 +1,7 @@
 import { ref } from "vue";
 import { api } from "../api/client";
 import { notify } from "../notifications";
-import { recommendedLayout } from "./defaults";
+import { ensureLockedWidgets, recommendedLayout } from "./defaults";
 import { normalizeLayout } from "./model";
 import type { Layout } from "../widgets/types";
 
@@ -65,14 +65,15 @@ export async function loadLayout() {
   try {
     const stored = await api.layout();
     serverRevision = stored.revision;
-    server = stored.layout === null ? null : normalizeLayout(stored.layout);
+    const parsed = stored.layout === null ? null : normalizeLayout(stored.layout);
+    server = parsed === null ? null : ensureLockedWidgets(parsed);
   } catch {
     // Offline or not signed in: the browser's copy or the recommended one is used.
   }
 
   newerServerLayout.value = null;
   if (local) {
-    layout.value = local.layout;
+    layout.value = ensureLockedWidgets(local.layout);
     layoutSource.value = "browser";
     baseRevision = local.revision;
     if (server && serverRevision > local.revision) {

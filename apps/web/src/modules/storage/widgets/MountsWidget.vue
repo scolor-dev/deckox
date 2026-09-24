@@ -5,16 +5,17 @@ import { formatBytes, type StorageMount } from "../../../api/client";
 import {
   AppButton,
   AppStack,
+  AppText,
   NoticeBanner,
   ProgressBar,
-  TableToolbar,
+  SectionHeader,
   TablePanel,
+  TableToolbar,
   TagBadge,
   TagToggle,
   TagToggleGroup,
 } from "../../../design-system/components";
 import { preferences, type StorageTagFilterKey } from "../../../preferences";
-import WidgetHeader from "../../../widgets/WidgetHeader.vue";
 import { useStorageUsage } from "../usage";
 
 defineOptions({ inheritAttrs: false });
@@ -54,14 +55,16 @@ const filteredMounts = computed(() => mounts.value.filter((mount) => {
 
 <template>
   <AppStack gap="3">
-    <WidgetHeader :title="t('storage.title')">
-      <AppButton
-        :disabled="loading"
-        @click="refresh"
-      >
-        {{ loading ? t("common.loading") : t("common.refresh") }}
-      </AppButton>
-    </WidgetHeader>
+    <SectionHeader :title="t('storage.title')">
+      <template #actions>
+        <AppButton
+          :disabled="loading"
+          @click="refresh"
+        >
+          {{ loading ? t("common.loading") : t("common.refresh") }}
+        </AppButton>
+      </template>
+    </SectionHeader>
     <NoticeBanner
       v-if="errorMessage"
       tone="error"
@@ -127,17 +130,33 @@ const filteredMounts = computed(() => mounts.value.filter((mount) => {
             </td>
             <td class="filesystem-cell">
               <span :title="mount.filesystem">{{ mount.filesystem }}</span>
-              <small>{{ mount.filesystem_type }}</small>
+              <AppText
+                as="small"
+                tone="muted"
+                size="xs"
+              >
+                {{ mount.filesystem_type }}
+              </AppText>
             </td>
             <td class="capacity-cell">
               <strong>{{ formatBytes(mount.total_bytes, locale) }}</strong>
-              <small>{{ t("storage.available", { value: formatBytes(mount.available_bytes, locale) }) }}</small>
+              <AppText
+                as="small"
+                tone="muted"
+                size="xs"
+              >
+                {{ t("storage.available", { value: formatBytes(mount.available_bytes, locale) }) }}
+              </AppText>
             </td>
             <td class="storage-usage-cell">
               <AppStack gap="1">
                 <span class="usage-row">
                   <span>{{ mount.usage_percent.toFixed(0) }}%</span>
-                  <small>{{ t("storage.used", { value: formatBytes(mount.used_bytes, locale) }) }}</small>
+                  <AppText
+                    as="small"
+                    tone="muted"
+                    size="xs"
+                  >{{ t("storage.used", { value: formatBytes(mount.used_bytes, locale) }) }}</AppText>
                 </span>
                 <ProgressBar
                   :value="mount.usage_percent"

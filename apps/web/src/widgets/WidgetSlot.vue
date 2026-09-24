@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { computed, onErrorCaptured, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { AppButton, AppIcon, AppIconButton, SelectField } from "../design-system/components";
+import {
+  AppButton,
+  AppCard,
+  AppEmptyState,
+  AppHeading,
+  AppIcon,
+  AppIconButton,
+  AppStack,
+  AppText,
+  SelectField,
+} from "../design-system/components";
 import { spansFor } from "../layout/model";
 import { widgetAvailable } from "../modules/store";
 import { widgetById } from "../modules/registry";
@@ -21,12 +31,16 @@ const emit = defineEmits<{
   remove: [];
   configure: [];
   resize: [size: { w: number; h: number | "auto" }];
+  reorder: [fromId: string];
 }>();
 
 const { t } = useI18n();
 const failed = ref(false);
+const over = ref(false);
+const DRAG_TYPE = "application/x-deckox-widget";
 
 const definition = computed(() => widgetById(props.placement.widget));
+const locked = computed(() => definition.value?.locked === true);
 const available = computed(() => widgetAvailable(props.placement.widget));
 const title = computed(() => {
   const found = definition.value;
@@ -60,6 +74,26 @@ function onHeight(value: string) {
   emit("resize", { w: props.placement.w, h: value === "auto" ? "auto" : Number(value) });
 }
 
+function onDragStart(event: DragEvent) {
+  if (locked.value) return;
+  event.dataTransfer?.setData(DRAG_TYPE, props.placement.id);
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+}
+
+function onDragOver(event: DragEvent) {
+  if (!props.editing || !event.dataTransfer?.types.includes(DRAG_TYPE)) return;
+  event.preventDefault();
+  over.value = true;
+}
+
+function onDrop(event: DragEvent) {
+  over.value = false;
+  const from = event.dataTransfer?.getData(DRAG_TYPE);
+  if (!props.editing || !from || from === props.placement.id) return;
+  event.preventDefault();
+  emit("reorder", from);
+}
+
 onErrorCaptured(() => {
   failed.value = true;
   return false;
@@ -70,116 +104,142 @@ onErrorCaptured(() => {
   <div
     :class="['widget', {
       'widget--editing': editing,
+      'widget--over': over,
       'widget--auto': auto && !screen,
       'widget--bare': definition?.chrome === 'bare',
     }]"
     :style="style"
     :data-widget="placement.widget"
+    @dragover="onDragOver"
+    @dragleave="over = false"
+    @drop="onDrop"
   >
-    <div
+    <AppStack
       v-if="editing"
-      class="widget-edit-bar"
+      :class="{ 'widget-drag': !locked }"
+      direction="row"
+      align="center"
+      gap="1"
+      wrap
+      :draggable="!locked"
+      @dragstart="onDragStart"
+      @dragend="over = false"
     >
-      <strong class="widget-edit-title">{{ title }}</strong>
-      <AppIconButton
-        v-if="!first"
+      <AppHeading
+        level="3"
         size="sm"
-        :label="t('layout.moveEarlier')"
-        @click="emit('move', -1)"
+        truncate
       >
-        <AppIcon name="chevron-left" />
-      </AppIconButton>
-      <AppIconButton
-        v-if="!last"
-        size="sm"
-        :label="t('layout.moveLater')"
-        @click="emit('move', 1)"
+        {{ title }}
+      </AppHeading>
+      <AppText
+        v-if="locked"
+        tone="muted"
+        size="xs"
       >
-        <AppIcon name="chevron-right" />
-      </AppIconButton>
-      <span class="widget-edit-label">{{ t("layout.width") }}</span>
-      <SelectField
-        :id="`width-${placement.id}`"
-        :model-value="String(placement.w)"
-        :label="t('layout.width')"
-        label-hidden
-        compact
-        :options="widthOptions"
-        @update:model-value="onWidth"
-      />
-      <span class="widget-edit-label">{{ t("layout.height") }}</span>
-      <SelectField
-        :id="`height-${placement.id}`"
-        :model-value="String(placement.h)"
-        :label="t('layout.height')"
-        label-hidden
-        compact
-        :options="heightOptions"
-        @update:model-value="onHeight"
-      />
-      <AppButton
-        v-if="definition?.config?.length"
-        variant="action"
-        @click="emit('configure')"
-      >
-        {{ t("layout.configure") }}
-      </AppButton>
-      <AppIconButton
-        size="sm"
-        danger
-        :label="t('layout.removeWidget')"
-        @click="emit('remove')"
-      >
-        <AppIcon name="trash" />
-      </AppIconButton>
-    </div>
+        {{ t("layout.locked") }}
+      </AppText>
+      <template v-else>
+        <AppIconButton
+          v-if="!first"
+          size="sm"
+          :label="t('layout.moveEarlier')"
+          @click="emit('move', -1)"
+        >
+          <AppIcon name="chevron-left" />
+        </AppIconButton>
+        <AppIconButton
+          v-if="!last"
+          size="sm"
+          :label="t('layout.moveLater')"
+          @click="emit('move', 1)"
+        >
+          <AppIcon name="chevron-right" />
+        </AppIconButton>
+        <AppText
+          tone="muted"
+          size="xs"
+        >
+          {{ t("layout.width") }}
+        </AppText>
+        <SelectField
+          :id="`width-${placement.id}`"
+          :model-value="String(placement.w)"
+          :label="t('layout.width')"
+          label-hidden
+          compact
+          :options="widthOptions"
+          @update:model-value="onWidth"
+        />
+        <AppText
+          tone="muted"
+          size="xs"
+        >
+          {{ t("layout.height") }}
+        </AppText>
+        <SelectField
+          :id="`height-${placement.id}`"
+          :model-value="String(placement.h)"
+          :label="t('layout.height')"
+          label-hidden
+          compact
+          :options="heightOptions"
+          @update:model-value="onHeight"
+        />
+        <AppButton
+          v-if="definition?.config?.length"
+          variant="action"
+          @click="emit('configure')"
+        >
+          {{ t("layout.configure") }}
+        </AppButton>
+        <AppIconButton
+          size="sm"
+          danger
+          :label="t('layout.removeWidget')"
+          @click="emit('remove')"
+        >
+          <AppIcon name="trash" />
+        </AppIconButton>
+      </template>
+    </AppStack>
 
-    <div
+    <AppEmptyState
       v-if="!definition"
-      class="widget-message"
-    >
-      {{ t("layout.unknownWidget", { id: placement.widget }) }}
-    </div>
-    <div
+      compact
+      :message="t('layout.unknownWidget', { id: placement.widget })"
+    />
+    <AppEmptyState
       v-else-if="!available"
-      class="widget-message"
-    >
-      {{ t("layout.moduleOff", { name: title }) }}
-    </div>
-    <div
+      compact
+      :message="t('layout.moduleOff', { name: title })"
+    />
+    <AppEmptyState
       v-else-if="failed"
-      class="widget-message"
+      compact
       role="alert"
+      :message="t('layout.widgetFailed', { name: title })"
+    />
+    <div
+      v-else
+      class="widget-body"
     >
-      {{ t("layout.widgetFailed", { name: title }) }}
-    </div>
-    <template v-else>
-      <section
+      <AppCard
         v-if="definition.chrome === 'frame'"
-        class="widget-frame"
-        :aria-label="title"
-      >
-        <h2 class="widget-frame-title">
-          {{ title }}
-        </h2>
-        <div class="widget-body">
-          <component
-            :is="componentOf(definition)"
-            :config="placement.config"
-            :size="{ w: placement.w, h: placement.h }"
-          />
-        </div>
-      </section>
-      <div
-        v-else
-        class="widget-body"
+        :title="title"
       >
         <component
           :is="componentOf(definition)"
           :config="placement.config"
           :size="{ w: placement.w, h: placement.h }"
         />
-      </div>
-    </template>
+      </AppCard>
+      <component
+        :is="componentOf(definition)"
+        v-else
+        :config="placement.config"
+        :size="{ w: placement.w, h: placement.h }"
+      />
+    </div>
   </div>
 </template>

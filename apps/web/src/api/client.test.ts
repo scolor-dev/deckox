@@ -137,12 +137,12 @@ describe("service APIs", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "/api/v1/services/nginx.service/enable",
+      "/api/v1/services/nginx.service/enable?async=true",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/api/v1/services/nginx.service/disable",
+      "/api/v1/services/nginx.service/disable?async=true",
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -198,7 +198,7 @@ describe("software APIs", () => {
     await api.softwareAction("git", "install", "hunter2");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/v1/software/git/install",
+      "/api/v1/software/git/install?async=true",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ current_password: "hunter2" }),
