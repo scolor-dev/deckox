@@ -45,6 +45,13 @@ describe("how the Server sees the Agent", () => {
     expect(agentLink.value).toEqual({ agentVersion: "0.6.8", agentProtocol: 1, serverProtocol: 2 });
   });
 
+  it("shows an Agent from before the protocol was numbered as old", async () => {
+    api.modules.mockResolvedValue(list({ protocol_version: 0, agent_version: "unknown", compatible: false }));
+    await loadModules();
+    expect(agentState.value).toBe("incompatible");
+    expect(agentLink.value).toEqual({ agentVersion: null, agentProtocol: null, serverProtocol: 2 });
+  });
+
   it("keeps the last answer when a later read fails", async () => {
     api.modules.mockResolvedValueOnce(list({ compatible: false }));
     await loadModules();

@@ -14,12 +14,18 @@ const { t } = useI18n();
     {{ t("agentLink.unreachable") }}
   </NoticeBanner>
   <NoticeBanner
+    v-else-if="agentState === 'incompatible' && agentLink.agentProtocol === null"
+    tone="error"
+  >
+    {{ t("agentLink.legacyAgent", { serverProtocol: agentLink.serverProtocol ?? t("common.none") }) }}
+  </NoticeBanner>
+  <NoticeBanner
     v-else-if="agentState === 'incompatible'"
     tone="error"
   >
     {{ t("agentLink.incompatible", {
       agent: agentLink.agentVersion ?? t("common.none"),
-      agentProtocol: agentLink.agentProtocol ?? t("agentLink.legacy"),
+      agentProtocol: agentLink.agentProtocol ?? t("common.none"),
       serverProtocol: agentLink.serverProtocol ?? t("common.none"),
     }) }}
   </NoticeBanner>

@@ -23,11 +23,19 @@ export const agentState = computed<AgentState>(() => {
   return link.compatible ? "ready" : "incompatible";
 });
 
-export const agentLink = computed(() => ({
-  agentVersion: manifest.value?.agent.agent_version ?? null,
-  agentProtocol: manifest.value?.agent.protocol_version ?? null,
-  serverProtocol: manifest.value?.protocol_version ?? null,
-}));
+/**
+ * What to say about a mismatch. An Agent from before the protocol was numbered
+ * reports version `unknown` and protocol `0`; those are shown as "old" (null).
+ */
+export const agentLink = computed(() => {
+  const link = manifest.value?.agent;
+  const known = link !== undefined && link.protocol_version !== 0 && link.agent_version !== "unknown";
+  return {
+    agentVersion: known ? (link.agent_version ?? null) : null,
+    agentProtocol: known ? (link.protocol_version ?? null) : null,
+    serverProtocol: manifest.value?.protocol_version ?? null,
+  };
+});
 
 /** Read inside a `computed` or a template so it follows the manifest. */
 export function backendEnabled(requires: readonly string[]) {

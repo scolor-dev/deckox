@@ -164,6 +164,11 @@ fn parse_lsblk(input: &str, mounts: &[StorageMount]) -> Vec<StorageDisk> {
             if name.starts_with("zram") || name.starts_with("ram") {
                 return None;
             }
+            // A device with no size is not there to be managed: an unconnected
+            // network block device, or an empty card reader.
+            if number(device, "size") == 0 {
+                return None;
+            }
             let mut partitions = Vec::new();
             collect_partitions(device, mounts, &mut partitions);
             let path = text(device, "path").unwrap_or_else(|| format!("/dev/{name}"));
@@ -272,7 +277,8 @@ mod tests {
                     "children":[{"name":"vg-data","kname":"dm-0","path":"/dev/mapper/vg-data","type":"lvm","size":400000000,"fstype":"xfs"}]}]},
                 {"name":"sdb","kname":"sdb","path":"/dev/sdb","type":"disk","size":"2000398934016","model":null,"rota":"1","tran":"usb","rm":"1","children":[]},
                 {"name":"loop0","kname":"loop0","path":"/dev/loop0","type":"loop","size":1000},
-                {"name":"zram0","kname":"zram0","path":"/dev/zram0","type":"disk","size":1000}
+                {"name":"zram0","kname":"zram0","path":"/dev/zram0","type":"disk","size":1000},
+                {"name":"nbd0","kname":"nbd0","path":"/dev/nbd0","type":"disk","size":0}
             ]}"#,
             &mounts,
         );
@@ -300,6 +306,10 @@ mod tests {
                 .as_ref()
                 .map(|mount| mount.mount_point.as_str()),
             Some("/data")
+        );
+        assert!(
+            disks.iter().all(|disk| disk.name != "nbd0"),
+            "a disk with no size is left out"
         );
         assert_eq!(disks[1].size_bytes, 2_000_398_934_016);
         assert_eq!(disks[1].rotational, Some(true));

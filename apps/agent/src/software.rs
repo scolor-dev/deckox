@@ -149,7 +149,10 @@ impl PackageManager {
                     20,
                 )
                 .await?;
-                let names = parse_name_lines(&String::from_utf8_lossy(&output.stdout));
+                let mut names = parse_name_lines(&String::from_utf8_lossy(&output.stdout));
+                for protected in dnf_protected_names().await {
+                    names.remove(&protected);
+                }
                 Some(rpm_detection(names).await)
             }
             Self::Zypper => None,
@@ -1017,6 +1020,34 @@ async fn apt_get(args: &[&str], timeout_seconds: u64) -> Result<String, AgentErr
 
 // --- dnf / rpm backend --------------------------------------------------
 
+/// The packages dnf itself refuses to remove (`/etc/dnf/protected.d/*.conf`),
+/// which is dnf's own list of what the system cannot do without. They play the
+/// part apt's essential packages do: never adopted for management.
+async fn dnf_protected_names() -> HashSet<String> {
+    let mut names = HashSet::new();
+    let Ok(mut entries) = tokio::fs::read_dir("/etc/dnf/protected.d").await else {
+        return names;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        if entry
+            .path()
+            .extension()
+            .is_some_and(|extension| extension == "conf")
+            && let Ok(text) = tokio::fs::read_to_string(entry.path()).await
+        {
+            names.extend(parse_protected_names(&text));
+        }
+    }
+    names
+}
+
+fn parse_protected_names(text: &str) -> impl Iterator<Item = String> + '_ {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(str::to_owned)
+}
+
 async fn dnf_installed_version(package: &str) -> Option<String> {
     dnf_list(package).await.0
 }
@@ -1046,12 +1077,14 @@ fn parse_dnf_list(output: &str) -> (Option<String>, Option<String>) {
 
     for line in output.lines() {
         let trimmed = line.trim();
-        match trimmed {
-            "Installed Packages" => {
+        // dnf4 titles the sections "Installed Packages"; dnf5 writes
+        // "Installed packages".
+        match trimmed.to_ascii_lowercase().as_str() {
+            "installed packages" => {
                 section = Some("installed");
                 continue;
             }
-            "Available Packages" => {
+            "available packages" => {
                 section = Some("available");
                 continue;
             }
@@ -1252,8 +1285,8 @@ mod tests {
     use super::{
         PackageManager, SoftwareManager, is_installed_status, parse_apt_detection,
         parse_candidate_version, parse_dependency_names, parse_dnf_list, parse_dpkg_installed,
-        parse_labeled_version, parse_rpm_detection, parse_space_pairs, parse_tab_pairs,
-        parse_zypper_list_updates, validate_package_name,
+        parse_labeled_version, parse_protected_names, parse_rpm_detection, parse_space_pairs,
+        parse_tab_pairs, parse_zypper_list_updates, validate_package_name,
     };
 
     fn test_manager(allowed: Vec<String>) -> Result<SoftwareManager, crate::error::AgentError> {
@@ -1467,6 +1500,27 @@ mod tests {
         let (installed, available) = parse_dnf_list(output);
         assert_eq!(installed.as_deref(), Some("2.39.3-1.el9"));
         assert_eq!(available.as_deref(), Some("2.43.0-1.el9"));
+    }
+
+    #[test]
+    fn parses_dnf5_list_whose_section_titles_are_lowercase() {
+        let output = "Installed packages\n\
+             jq.aarch64 1.8.1-3.fc44 updates\n";
+        assert_eq!(parse_dnf_list(output).0.as_deref(), Some("1.8.1-3.fc44"));
+
+        let available = "Available packages\n\
+             tree.aarch64 2.2.1-4.fc44 fedora\n";
+        assert_eq!(
+            parse_dnf_list(available),
+            (None, Some("2.2.1-4.fc44".to_owned()))
+        );
+    }
+
+    #[test]
+    fn reads_dnf_protected_package_names() {
+        let names: Vec<String> =
+            parse_protected_names("# kept\nsystemd\n\n  sudo  \ndnf5\n").collect();
+        assert_eq!(names, ["systemd", "sudo", "dnf5"]);
     }
 
     #[test]

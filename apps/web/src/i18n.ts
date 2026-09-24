@@ -181,8 +181,8 @@ export const messages = {
     },
     agentLink: {
       unreachable: "Agentに接続できません。ホストで、Agentのサービスが動いているか確認してください(sudo systemctl status deckox-agent)。Agentが必要な機能は、つながるまで使えません。",
-      incompatible: "ServerとAgentのバージョンが合っていません(Agent: {agent}、通信規約 {agentProtocol}。Serverの通信規約は {serverProtocol})。Agentが必要な機能は使えません。ServerとAgentを同じバージョンに更新して、再起動してください。",
-      legacy: "旧形式",
+      incompatible: "ServerとAgentのバージョンが合っていません(Agent: {agent}、通信規約 {agentProtocol}。Serverの通信規約は {serverProtocol})。Agentが必要な機能は、正しく動かないことがあります。ServerとAgentを同じバージョンに更新して、再起動してください。",
+      legacyAgent: "Agentが古いバージョンです(通信規約を持たない旧形式。Serverの通信規約は {serverProtocol})。Agentが必要な機能は、正しく動かないことがあり、パスワードの再確認やジョブも使えません。ServerとAgentを同じバージョンに更新して、再起動してください。",
     },
     jobs: {
       empty: "実行中の操作はありません。", state: { queued: "待機中", running: "実行中", succeeded: "完了", failed: "失敗" },
@@ -368,8 +368,8 @@ export const messages = {
     },
     agentLink: {
       unreachable: "The Agent cannot be reached. On the host, check that its service is running (sudo systemctl status deckox-agent). Features that need the Agent are unavailable until it connects.",
-      incompatible: "The Server and the Agent are on different versions (Agent: {agent}, protocol {agentProtocol}; the Server speaks protocol {serverProtocol}). Features that need the Agent are unavailable. Update the Server and the Agent to the same version and restart them.",
-      legacy: "old format",
+      incompatible: "The Server and the Agent are on different versions (Agent: {agent}, protocol {agentProtocol}; the Server speaks protocol {serverProtocol}). Features that need the Agent may not work correctly. Update the Server and the Agent to the same version and restart them.",
+      legacyAgent: "The Agent is an old version that predates the protocol (the Server speaks protocol {serverProtocol}). Features that need the Agent may not work correctly, and password re-checks and jobs are not available. Update the Server and the Agent to the same version and restart them.",
     },
     jobs: {
       empty: "No operations are in progress.", state: { queued: "Waiting", running: "Running", succeeded: "Done", failed: "Failed" },

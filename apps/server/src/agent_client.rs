@@ -124,8 +124,16 @@ fn parse_response(response: &[u8]) -> Result<AgentResponse, String> {
         .and_then(|value| value.parse::<u16>().ok())
         .and_then(|value| StatusCode::from_u16(value).ok())
         .ok_or_else(|| "Agent returned an invalid HTTP status".to_owned())?;
-    let body = serde_json::from_slice(&response[header_end + 4..])
-        .map_err(|error| format!("Agent returned invalid JSON: {error}"))?;
+    // An Agent from before the standard error form answers an unknown route
+    // with an empty 404. Keep the status rather than failing to read a body,
+    // so the caller can tell "no such route" from "cannot reach the Agent".
+    let raw = &response[header_end + 4..];
+    let body = if raw.iter().all(u8::is_ascii_whitespace) {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(raw)
+            .map_err(|error| format!("Agent returned invalid JSON: {error}"))?
+    };
 
     Ok(AgentResponse { status, body })
 }
@@ -145,6 +153,20 @@ mod tests {
 
         assert_eq!(response.status, StatusCode::OK);
         assert_eq!(response.body["status"], "ok");
+    }
+
+    #[test]
+    fn keeps_the_status_of_an_empty_reply() {
+        let response = parse_response(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n")
+            .expect("an empty body is not an error");
+
+        assert_eq!(response.status, StatusCode::NOT_FOUND);
+        assert!(response.body.is_null());
+    }
+
+    #[test]
+    fn still_rejects_a_body_that_is_not_json() {
+        assert!(parse_response(b"HTTP/1.1 200 OK\r\n\r\nnot json").is_err());
     }
 
     #[test]
